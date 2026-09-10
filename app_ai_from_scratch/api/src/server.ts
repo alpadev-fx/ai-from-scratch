@@ -1066,7 +1066,11 @@ app.post('/api/subscriptions/cancel', async (req, reply) => {
 // metodo y pulsar «Suscribirme», con un aviso generico de error.
 app.get('/api/payments/estado', async () => {
   const response = await callPayments('/health');
-  return { disponible: response.ok };
+  if (!response.ok) return { disponible: false };
+  const body = await response.json().catch(() => ({})) as { provider?: unknown };
+  // A live payments process with no MP_ACCESS_TOKEN cannot create a preference
+  // (501 provider_not_configured). `disponible` is that fact, not process.ok.
+  return { disponible: body.provider === 'configured' };
 });
 
 app.get('/api/admin/payments', async (req, reply) => {

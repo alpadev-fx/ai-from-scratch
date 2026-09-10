@@ -144,7 +144,7 @@ const hayCobro = cobros.data?.disponible === true;
 
       <div id="brick" style="border:1px solid var(--hair);padding:20px;min-height:220px;display:flex;flex-direction:column;gap:12px">
         <span class="lbl">{P.datos}</span>
-        <p class="s" style="color:var(--l2)">{P.brickNota}</p>
+        <p class="s" style="color:var(--l2)">{P.brickCarga}</p>
       </div>
 
       <div id="pse-note" hidden class="card" style="border-color:var(--or)">
@@ -268,7 +268,7 @@ const hayCobro = cobros.data?.disponible === true;
     document.getElementById('pay').addEventListener('click', async () => {
       if (!logged) { toast('warn', P.sinCuenta, P.sinCuentaB); return; }
       const terms = document.getElementById('terms');
-      if (terms && !('checked' in terms && terms.checked)) { toast('warn', P.terminosL, P.terminosB); terms.focus(); return; }
+      if (terms && !('checked' in terms && terms.checked)) { toast('warn', P.terminosWarn, P.terminosWarnB); terms.focus(); return; }
       const mode = renew.checked ? 'subscription' : 'one_time';
       // Renovacion encendida sin la casilla marcada: no se cobra. La casilla ES la
       // autorizacion del cobro recurrente; el interruptor solo la hace visible.

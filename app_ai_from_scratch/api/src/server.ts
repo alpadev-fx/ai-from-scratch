@@ -31,7 +31,8 @@ import {
   chatTokGlobalKey,
   leagueDay,
 } from './chat-brake.ts';
-import { clientIp, countWindow, slidingWindowKey } from './brake.ts';
+import { clientIp } from './brake.ts';
+import { authThrottle } from './auth-throttle.ts';
 import { mailer } from './mail.ts';
 import { coachState } from './coach.ts';
 import { publish as publishEvent } from './bus.ts';
@@ -124,21 +125,9 @@ app.addHook('onRequest', async (req, reply) => {
   if (req.method === 'OPTIONS') reply.code(204).send();
 });
 
-const AUTH_LIMITS: Record<string, number> = {
-  '/api/auth/login': 10,
-  '/api/auth/register': 5,
-  '/api/auth/recover': 5,
-  '/api/auth/reset': 5,
-  '/api/account/delete': 5,
-};
-
 app.addHook('onRequest', async (req, reply) => {
-  if (req.method !== 'POST') return;
-  const path = req.url.split('?')[0]!.replace(/^\/api\/v\d+\//, '/api/');
-  const limit = AUTH_LIMITS[path];
-  if (limit === undefined) return;
   const ip = clientIp(req.headers as Record<string, unknown>, req.ip);
-  const result = countWindow(slidingWindowKey('auth', `${path}:${ip}`, 60_000), limit, 60_000);
+  const result = authThrottle(req.method, req.url, ip);
   if (!result.ok) {
     reply.header('retry-after', String(result.retryAfterS));
     return reply.code(429).send({ error: 'too_many_attempts', retryAfterS: result.retryAfterS });

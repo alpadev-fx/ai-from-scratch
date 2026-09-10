@@ -2,7 +2,7 @@
 import { icon } from '../lib/icons';
 import { initials, satisface, type User } from '../lib/session';
 import { t, resolveLang, IDIOMAS, NOMBRE_IDIOMA, type Lang } from '../lib/i18n';
-import { TOKENS, LANG_FX } from '../lib/theme-css';
+import { TOKENS, LANG_FX, SKELETON } from '../lib/theme-css';
 import { jsonSafe } from '../lib/json-safe';
 import { aiFlags } from '../lib/ai-mode';
 import { sidebarCollapsed, sidebarRail } from '../lib/sidebar';
@@ -73,7 +73,7 @@ const actionHtml = hasAction ? await Astro.slots.render('action') : '';
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" sizes="any">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <title>{title} · IA desde cero</title>
-  <style is:global set:html={TOKENS + LANG_FX}></style>
+  <style is:global set:html={TOKENS + LANG_FX + SKELETON}></style>
   <style is:global>
     *{box-sizing:border-box}
     body{margin:0;background:var(--bg);font-family:var(--f);color:var(--l1);-webkit-font-smoothing:antialiased;transition:background .2s,color .2s}

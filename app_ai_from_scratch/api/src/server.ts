@@ -13,7 +13,7 @@ import type { BestAttempt, PublicLabSource } from './grading.ts';
 import { examGate, ofPack, packScore, publicQuestion } from './assess.ts';
 import type { QuestionBest, QuestionRow } from './assess.ts';
 import { achievementsFor, rankLevel } from './achievements.ts';
-import { LEAGUE_ZONE, closeWeek, leaguesState } from './leagues.ts';
+import { closeWeek, leaguesState } from './leagues.ts';
 // INTERMEDIATE STATE, said on purpose: the agent LOOP already lives in Python
 // (ai/), and the TOOLS are still here — Python asks for them through
 // /api/interno/herramienta and this process runs them with the userId from the
@@ -25,8 +25,14 @@ import { catalog, families, run as runTool } from './tools/index.ts';
 import { AI_SECRET, AI_URL, aiHealth, hasAi, talkToAi } from './ai-bridge.ts';
 import { forgetTurns, loadTurns, rememberTurn, type ChatSource } from './messages-bridge.ts';
 import { increment, readCounter, queueState } from './jobs.ts';
-import { tokenCeiling } from './chat-ceiling.ts';
-import { clientIp, countWindow, slidingWindowKey } from './brake.ts';
+import {
+  chatBrake,
+  chatTokDayKey,
+  chatTokGlobalKey,
+  leagueDay,
+} from './chat-brake.ts';
+import { clientIp } from './brake.ts';
+import { authThrottle } from './auth-throttle.ts';
 import { mailer } from './mail.ts';
 import { coachState } from './coach.ts';
 import { publish as publishEvent } from './bus.ts';
@@ -119,21 +125,9 @@ app.addHook('onRequest', async (req, reply) => {
   if (req.method === 'OPTIONS') reply.code(204).send();
 });
 
-const AUTH_LIMITS: Record<string, number> = {
-  '/api/auth/login': 10,
-  '/api/auth/register': 5,
-  '/api/auth/recover': 5,
-  '/api/auth/reset': 5,
-  '/api/account/delete': 5,
-};
-
 app.addHook('onRequest', async (req, reply) => {
-  if (req.method !== 'POST') return;
-  const path = req.url.split('?')[0]!.replace(/^\/api\/v\d+\//, '/api/');
-  const limit = AUTH_LIMITS[path];
-  if (limit === undefined) return;
   const ip = clientIp(req.headers as Record<string, unknown>, req.ip);
-  const result = countWindow(slidingWindowKey('auth', `${path}:${ip}`, 60_000), limit, 60_000);
+  const result = authThrottle(req.method, req.url, ip);
   if (!result.ok) {
     reply.header('retry-after', String(result.retryAfterS));
     return reply.code(429).send({ error: 'too_many_attempts', retryAfterS: result.retryAfterS });
@@ -532,95 +526,18 @@ const CHAT_TOKENS_DAY = Math.max(1, Number(process.env.CHAT_TOPE_TOKENS_DIA ?? 2
 const CHAT_TOKENS_DAY_GLOBAL = Math.max(1, Number(process.env.CHAT_TOPE_TOKENS_DIA_GLOBAL ?? 5_000_000));
 const WINDOW_MS = 60_000;
 
-const FMT_DAY = new Intl.DateTimeFormat('en-CA', { timeZone: LEAGUE_ZONE, year: 'numeric', month: '2-digit', day: '2-digit' });
-const FMT_TIME = new Intl.DateTimeFormat('en-GB', { timeZone: LEAGUE_ZONE, hourCycle: 'h23', hour: '2-digit', minute: '2-digit', second: '2-digit' });
-export const leagueDay = (): string => FMT_DAY.format(new Date());
-export const chatDayKey = (userId: number, day = leagueDay()): string => `chat:u${userId}:${day}`;
-export const chatGlobalKey = (day = leagueDay()): string => `chat:global:${day}`;
-export const chatFreeDayKey = (userId: number, day = leagueDay()): string => `chat:free:u${userId}:${day}`;
-export const chatFreeGlobalKey = (day = leagueDay()): string => `chat:free:global:${day}`;
-export const chatTokDayKey = (userId: number, day = leagueDay()): string => `chat:tok:u${userId}:${day}`;
-export const chatTokGlobalKey = (day = leagueDay()): string => `chat:tok:global:${day}`;
+export { leagueDay, chatDayKey, chatGlobalKey, chatFreeDayKey, chatFreeGlobalKey, chatTokDayKey, chatTokGlobalKey } from './chat-brake.ts';
 
-/** Seconds until the day rolls over in LEAGUE_ZONE — the retry-after for a daily cap. */
-function secondsToMidnight(): number {
-  const p = Object.fromEntries(FMT_TIME.formatToParts(new Date())
-    .filter((x) => x.type !== 'literal').map((x) => [x.type, Number(x.value)])) as Record<string, number>;
-  return Math.max(1, 86400 - ((p.hour ?? 0) * 3600 + (p.minute ?? 0) * 60 + (p.second ?? 0)));
-}
-
-// Sliding window per person, in memory on purpose: a burst limiter that hits
-// Postgres on every message is a second cost added to fix the first one.
-const windows = new Map<number, number[]>();
-function minuteBucket(userId: number): { ok: boolean; esperaS?: number } {
-  const now = Date.now();
-  const w = (windows.get(userId) ?? []).filter((t) => now - t < WINDOW_MS);
-  windows.set(userId, w);
-  if (w.length >= CHAT_PER_MINUTE) {
-    return { ok: false, esperaS: Math.max(1, Math.ceil((WINDOW_MS - (now - w[0]!)) / 1000)) };
-  }
-  w.push(now);
-  // The map holds one entry per person who ever chatted; swept when it grows.
-  if (windows.size > 5000) {
-    for (const [k, v] of windows) if (!v.some((t) => now - t < WINDOW_MS)) windows.delete(k);
-  }
-  return { ok: true };
-}
-
-/** The 429 payload. Keys read by web/src/lib/chat-client.ts. */
-interface Brake { limite: string; esperaS: number; tope: number; msg: string }
-
-/**
- * Returns null when the message may proceed, or the 429 payload when it may not.
- *
- * The daily counters are INCREMENTED and then compared, in one atomic statement
- * each, so two simultaneous messages cannot both read 119 and both pass. A
- * rejected message still counts, deliberately: hammering the endpoint after the
- * ceiling must not be free.
- */
-async function chatBrake(userId: number, unpaid: boolean): Promise<Brake | null> {
-  const min = minuteBucket(userId);
-  if (!min.ok) {
-    return { limite: 'minuto', esperaS: min.esperaS ?? 1, tope: CHAT_PER_MINUTE,
-             msg: 'Vas muy rápido. Espera un momento y vuelve a preguntar.' };
-  }
-  const day = leagueDay();
-  const dayCap = unpaid ? CHAT_DAY_CAP_FREE : CHAT_DAY_CAP;
-  const globalCap = unpaid ? CHAT_GLOBAL_DAY_CAP_FREE : CHAT_GLOBAL_DAY_CAP;
-  const own = await increment(unpaid ? chatFreeDayKey(userId, day) : chatDayKey(userId, day));
-  if (own > dayCap) {
-    return { limite: 'dia', esperaS: secondsToMidnight(), tope: dayCap,
-             msg: 'Llegaste al tope de preguntas de hoy. Mañana se reinicia.' };
-  }
-  const global = await increment(unpaid ? chatFreeGlobalKey(day) : chatGlobalKey(day));
-  if (global > globalCap) {
-    app.log.error({ day, global, unpaid }, 'chat: platform-wide daily cap reached');
-    return { limite: 'dia_global', esperaS: secondsToMidnight(), tope: globalCap,
-             msg: 'El chat alcanzó su tope de hoy para toda la plataforma. Vuelve mañana.' };
-  }
-  // THE TOKEN CEILING, WHICH UNTIL NOW STOPPED NOTHING. CHAT_TOKENS_DAY and
-  // CHAT_TOKENS_DAY_GLOBAL were declared, incremented after each call, compared
-  // once, and the only consequence of exceeding them was an `app.log.warn`
-  // (still below, deliberately: it is the post-call record). Nothing read those
-  // counters before the billed call, so 120 questions a day at `esfuerzo: alto`
-  // on the priciest provider could spend 18x the declared 200 000 per-person
-  // ceiling and the only cap that ever bound was the question COUNT.
-  //
-  // Read, never incremented: a request's cost is unknowable before it runs, so
-  // the gate is "already over the line", checked here, before talkToAi. The
-  // overshoot is bounded by one turn.
-  const tokOwn = await readCounter(chatTokDayKey(userId, day));
-  const tokGlobal = await readCounter(chatTokGlobalKey(day));
-  const tok = tokenCeiling(tokOwn, tokGlobal,
-    { own: CHAT_TOKENS_DAY, global: CHAT_TOKENS_DAY_GLOBAL }, secondsToMidnight());
-  if (tok) {
-    if (tok.limite === 'tokens_dia_global') {
-      app.log.error({ day, tokGlobal }, 'chat: platform-wide token cap reached');
-    }
-    return tok;
-  }
-  return null;
-}
+const CHAT_BRAKE_CAPS = {
+  perMinute: CHAT_PER_MINUTE,
+  dayCap: CHAT_DAY_CAP,
+  globalDayCap: CHAT_GLOBAL_DAY_CAP,
+  dayCapFree: CHAT_DAY_CAP_FREE,
+  globalDayCapFree: CHAT_GLOBAL_DAY_CAP_FREE,
+  tokensDay: CHAT_TOKENS_DAY,
+  tokensDayGlobal: CHAT_TOKENS_DAY_GLOBAL,
+  windowMs: WINDOW_MS,
+};
 
 app.get('/api/chat/estado', async (req, reply) => {
   const u = await requireUser(req, reply); if (!u) return;
@@ -813,7 +730,7 @@ app.post<{ Body: ChatBody }>('/api/chat', { schema: SCHEMA_CHAT }, async (req, r
   // BEFORE talkToAi so a refused message costs a Postgres increment instead of
   // four model calls.
   const unpaid = !u.paid;
-  const brake = await chatBrake(u.id, unpaid);
+  const brake = await chatBrake(u.id, unpaid, increment, readCounter, app.log, CHAT_BRAKE_CAPS);
   if (brake) {
     reply.header('retry-after', String(brake.esperaS));
     return reply.code(429).send({ error: 'demasiadas_preguntas', ...brake });

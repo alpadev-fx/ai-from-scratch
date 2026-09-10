@@ -258,8 +258,14 @@ async function deliverMetaOne(): Promise<boolean> {
 
 async function healthBody(): Promise<Record<string, unknown>> {
   const queue = await store.queueCounts();
+  // `ok` is process liveness. Checkout needs a token: without it /v1/checkout
+  // already answers 501 provider_not_configured (same sentinel as the webhook
+  // secret). Surface that here so /api/payments/estado does not tell /pago
+  // that a payment can be created when it cannot.
+  const provider = config.mpAccessToken ? 'configured' : 'not_configured';
   return {
     ok: true, compiler: 'tsgo', service: 'payments',
+    provider,
     meta: meta ? 'enabled' : 'disabled',
     mode: config.production ? 'live' : (config.mpAccessToken ? 'test' : 'off'),
     queue,

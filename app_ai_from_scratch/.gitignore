@@ -10,3 +10,7 @@ scripts/keys/
 ai/.venv/
 __pycache__/
 .pytest_cache/
+
+# Playwright rewrites this on every e2e run; the evidence directory holds
+# committed reports, not runner state.
+docs/readiness/evidence/e2e/.last-run.json

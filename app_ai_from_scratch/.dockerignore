@@ -48,6 +48,12 @@
 !api/init/
 !api/src/
 !api/files/
+# scripts/ is not app code, but tsconfig `include`s it and the cron-leagues
+# Railway service runs the emitted dist/api/scripts/close-leagues.mjs. Left out
+# of this allowlist the COPY in the build stage fails with
+# `"/api/scripts": not found` -- the context, not the Dockerfile, is what is
+# missing the directory.
+!api/scripts/
 !auth/
 
 # Never, under any allowlist. Listed explicitly because a future `!something`

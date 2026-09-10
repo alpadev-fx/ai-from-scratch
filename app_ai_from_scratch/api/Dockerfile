@@ -26,8 +26,19 @@ RUN pnpm install --frozen-lockfile
 COPY api/tsconfig.json ./
 COPY api/src ./src
 COPY api/init ./init
+# scripts/ is in tsconfig's `include` (allowJs + checkJs), so it must travel into
+# the build tree or `pnpm build` emits no dist/api/scripts/. The `cron-leagues`
+# Railway service runs dist/api/scripts/close-leagues.mjs from the runtime image,
+# which carries dist/ and nothing else. Without this COPY the cron resolves
+# nothing and the weekly league close never runs.
+COPY api/scripts ./scripts
 COPY auth /app/auth
 RUN pnpm build
+# league-demo.mjs creates seven accounts with a hardcoded password. It is
+# typechecked by `pnpm build` on purpose but must not exist in a deployed image:
+# the runtime guard added to it refuses NODE_ENV=production, and this makes the
+# file itself absent so an unset NODE_ENV cannot become an exposure.
+RUN rm -f dist/api/scripts/league-demo.mjs dist/api/scripts/league-demo.mjs.map
 
 # ---------------------------------------------------------------------------
 # migrate: carries the Prisma CLI. Used by the one-shot `init` service in

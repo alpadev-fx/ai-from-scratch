@@ -78,7 +78,19 @@ export default defineRailway((ctx) => {
       // `sonnet` (reasoning) — from a single credential (providers.py:122-136).
       // OPENROUTER_API_KEY is the cheap fallback. Empty stays inert.
       ANTHROPIC_API_KEY: preserve,
+      // Declared so an apply does not DELETE them: Railway IaC removes every
+      // variable this file omits. These were set out of band and each lands in
+      // its correct slot — Moonshot at providers.py:129-131, DeepSeek at :127.
+      KIMI_API_KEY: preserve,
+      DEEPSEEK_API_KEY: preserve,
+      // Deliberately kept empty. The OPENROUTER_* pair in the workspace .env is
+      // NOT OpenRouter: the key is the Moonshot/Kimi one and the base URL is
+      // https://api.moonshot.ai/v1. providers.py:139-140 would build a request
+      // to that host with no /chat/completions path and model `openrouter/auto`
+      // — a 404 on every call. An empty key deactivates the row (providers.py:154).
+      // Fill it only with a real sk-or- OpenRouter key and no base-URL override.
       OPENROUTER_API_KEY: preserve,
+      OPENROUTER_BASE_URL: preserve,
     },
   });
 

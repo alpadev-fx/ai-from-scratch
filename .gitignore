@@ -113,3 +113,23 @@ app_ai_from_scratch/output/
 # dentro. Un worktree commiteado deja un .git anidado en el arbol y rompe el
 # clon de quien venga detras. Nada de aqui es del proyecto.
 .claude/
+
+# Creative and experiment output. Kept on disk, out of the repo: these are
+# gigabytes of rendered video, audio and design handoffs that no build reads,
+# and every one of them was shipping in the clone and in every build context.
+# The app's own assets stay tracked (api/files/curso-es.pdf is served by
+# /api/pdf/:lang).
+promocional/
+promotional/
+output/
+outputs/
+design_handoff_noticias_tutoriales/
+music/
+iot/
+tmp/
+.playwright-cli/
+.playwright-mcp/
+*.mp3
+*.m4a
+*.mp4
+*.zip

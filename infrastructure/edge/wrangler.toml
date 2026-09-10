@@ -1,0 +1,18 @@
+name = "dev-gate"
+main = "dev-gate.js"
+compatibility_date = "2026-09-01"
+
+# The hostname is deliberately a hex string. It is NOT a secret: see README.
+# `pattern` needs the zone, and `zone_name` avoids hardcoding the zone id.
+[[routes]]
+pattern = "436f726e656c6975732056616e64657262696c74.aifromscratch.shop/*"
+zone_name = "aifromscratch.shop"
+
+[vars]
+DEV_GATE_USER = "dev"
+# The Railway service domain for `web` in DEV. Changing environments means
+# changing this, and nothing else in the Worker.
+ORIGIN_HOST = "web-dev-a8ad.up.railway.app"
+
+# DEV_GATE_PASSWORD is a secret, never a [vars] entry:
+#   wrangler secret put DEV_GATE_PASSWORD

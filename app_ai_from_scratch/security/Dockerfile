@@ -58,8 +58,20 @@ COPY security/cmd ./cmd
 # actions. An image that violates any of those is not built.
 # ---------------------------------------------------------------------------
 FROM build AS test
+# `go test ./...` used to run here as well. It was removed on 2026-09-10 because
+# this image would not build on Railway: two deployments failed with exactly one
+# log line, `scheduling build on Metal builder`, and no diagnostic of any kind.
+# The same source builds locally under BuildKit, so the stage is not broken --
+# what is left consistent with a silent kill is the builder running out of memory
+# or time, and compiling a test binary for every package in the module is the
+# heaviest thing this stage did.
+#
+# Nothing is now unverified: scripts/verify.mjs:192 runs
+# `go build ./... && go vet ./... && gofmt -l && go test ./... -race` in the
+# `security-build` gate, which strictly dominates `-count=1`. `security verify`
+# stays because it is the assertion the comment above is about, and it is cheap:
+# it reads a static allowlist table rather than compiling anything.
 RUN go vet ./... \
- && go test ./... -count=1 \
  && go run ./cmd/security verify
 
 # ---------------------------------------------------------------------------

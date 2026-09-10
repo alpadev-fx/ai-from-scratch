@@ -69,6 +69,9 @@ RUN pnpm install --frozen-lockfile --prod
 
 COPY --from=build /app/api/dist ./dist
 COPY api/files ./files
+COPY api/prisma.config.ts ./prisma.config.ts
+COPY api/prisma ./prisma
+RUN chown -R node:node /app/api/node_modules /app/api/prisma /app/api/prisma.config.ts
 
 ENV HOST=0.0.0.0 PORT=8787
 EXPOSE 8787

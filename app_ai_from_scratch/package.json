@@ -49,6 +49,8 @@
     "security:topology": "cd security && go run ./cmd/security topology",
     "security:audit": "cd security && go run ./cmd/security audit verify",
     "security:nft": "cd security && go run ./cmd/trinity nft",
-    "security:scan": "cd security && DEFENSE_AUDIT=/tmp/defense-audit.jsonl APP_ENV=development go run ./cmd/smith --once"
+    "security:scan": "cd security && DEFENSE_AUDIT=/tmp/defense-audit.jsonl APP_ENV=development go run ./cmd/smith --once",
+    "purge:cache": "sh scripts/purge-cache.sh",
+    "health": "sh scripts/health-check.sh"
   }
 }

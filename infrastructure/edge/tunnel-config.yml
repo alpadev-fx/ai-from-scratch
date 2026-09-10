@@ -1,0 +1,61 @@
+# Cloudflare Tunnel ingress for aifromscratch.shop.
+#
+# WHY THIS FILE EXISTS. On 2026-09-10 the site answered `Error 1033`. That code
+# means the hostname IS routed to a tunnel and no connector is running. There
+# was no config.yml anywhere on the operator's machine, so even with a connector
+# up the tunnel had no ingress rules and answered 503 instead. Both halves were
+# missing: the process and the routing.
+#
+# httpHostHeader is NOT optional. Railway routes by Host header, so without it
+# cloudflared arrives at Railway announcing `Host: aifromscratch.shop`, Railway
+# has no service registered under that name, and every request comes back 404 —
+# a working tunnel serving nothing. originServerName is what lets TLS to the
+# Railway edge verify.
+#
+# TEMPORARY, and the cost is specific: this points production traffic at the
+# DEV service. DEV has empty Mercado Pago credentials, so checkout fails and
+# nothing can be sold, and password recovery answers 503 because Resend is unset
+# there. It buys a visible site instead of an error page; it does not restore
+# the business. Repoint `service:` at the PROD service the moment PROD exists.
+#
+# It also pins the site to one laptop. The connector runs here, so the site is
+# down whenever this machine sleeps. The real fix is a CNAME straight to Railway
+# and deleting this tunnel, which needs a Cloudflare token for the account that
+# owns the zone — see README, "The DEV access gate", for why the token on this
+# machine cannot do it.
+#
+#   cloudflared tunnel --config edge/tunnel-config.yml run aifromscratch
+#
+tunnel: 2dba40db-65ea-41ee-a493-96034f19a1d1
+credentials-file: /Users/alpadev/.cloudflared/2dba40db-65ea-41ee-a493-96034f19a1d1.json
+
+ingress:
+  # DEV, behind HTTP Basic auth. It does NOT go straight to Railway: it goes to
+  # edge/dev-gate-local.mjs on this machine, which asks for the password and then
+  # proxies. Railway has no way to password-protect a service, and Astro
+  # middleware cannot do it either (see edge/dev-gate-local.mjs for why).
+  #
+  # If the gate process is not running this answers 502, which is the correct
+  # failure: a misconfiguration must not turn into an open DEV environment.
+  #
+  # The hostname is hex for a name. That is obfuscation, not a secret — but the
+  # record is a PROXIED CNAME to this tunnel, so it is served under Cloudflare's
+  # existing *.aifromscratch.shop certificate and no new certificate is issued
+  # for it. Nothing lands in the Certificate Transparency logs. Registering the
+  # same name as a Railway custom domain would make Railway issue one, and CT is
+  # append-only, so that step is irreversible.
+  - hostname: 436f726e656c6975732056616e64657262696c74.aifromscratch.shop
+    service: http://127.0.0.1:8790
+
+  - hostname: aifromscratch.shop
+    service: https://web-dev-a8ad.up.railway.app
+    originRequest:
+      httpHostHeader: web-dev-a8ad.up.railway.app
+      originServerName: web-dev-a8ad.up.railway.app
+  - hostname: www.aifromscratch.shop
+    service: https://web-dev-a8ad.up.railway.app
+    originRequest:
+      httpHostHeader: web-dev-a8ad.up.railway.app
+      originServerName: web-dev-a8ad.up.railway.app
+  # Anything else that reaches this tunnel is a misconfiguration, not traffic.
+  - service: http_status:404

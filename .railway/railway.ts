@@ -61,9 +61,12 @@ export default defineRailway((ctx) => {
     build: node,
     start: "sh -c '.venv/bin/uvicorn course_ai.app:app --host 0.0.0.0 --port ${PORT:-8799}'",
     healthcheck: "/salud",
-    // Python container with no traffic when nobody is testing. Sleeping it in
-    // DEV trades a cold start for real money; PROD never sleeps.
-    deploy: prod ? undefined : { sleepApplication: true },
+    // No sleepApplication. It was set here to save DEV compute, but every route
+    // that reaches this service sits behind requireUser (api/src/server.ts:794)
+    // and DEV has no seeded user, so whether a private-network call from `api`
+    // wakes a sleeping container could not be tested. An unverified sleep makes
+    // the AI path fail intermittently in the environment that is supposed to be
+    // the staging gate. Restore it only after proving the wake path.
     env: { NODE_URL: INTERNAL("api"), IA_SECRETO: preserve },
   });
 

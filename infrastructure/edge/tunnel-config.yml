@@ -12,11 +12,19 @@
 # a working tunnel serving nothing. originServerName is what lets TLS to the
 # Railway edge verify.
 #
-# TEMPORARY, and the cost is specific: this points production traffic at the
-# DEV service. DEV has empty Mercado Pago credentials, so checkout fails and
-# nothing can be sold, and password recovery answers 503 because Resend is unset
-# there. It buys a visible site instead of an error page; it does not restore
-# the business. Repoint `service:` at the PROD service the moment PROD exists.
+# The apex and www now point at the PRODUCTION web service, not DEV. They pointed
+# at DEV while Production had no working deployment; that is over -- Production
+# `web` is SUCCESS on main and answers 200 in 0.34 s with 19 occurrences of
+# 39.990 and no `99.999` anchor, and Production `api` answers /api/health 200.
+#
+# Pointing the public apex at DEV was worse than slow: DEV tracks the `dev`
+# branch, so every push to `dev` went straight to whoever visited the site.
+#
+# What is still broken here is checkout, in BOTH environments, and repointing
+# does not fix it: Production `payments` crash-loops on
+# `production requires MP_ACCESS_TOKEN to start with APP_USR-` and DEV's Mercado
+# Pago variables are empty. Nothing can be sold until the owner issues new
+# Mercado Pago credentials.
 #
 # It also pins the site to one laptop. The connector runs here, so the site is
 # down whenever this machine sleeps. The real fix is a CNAME straight to Railway
@@ -48,14 +56,14 @@ ingress:
     service: http://127.0.0.1:8790
 
   - hostname: aifromscratch.shop
-    service: https://web-dev-a8ad.up.railway.app
+    service: https://web-production-486c3.up.railway.app
     originRequest:
-      httpHostHeader: web-dev-a8ad.up.railway.app
-      originServerName: web-dev-a8ad.up.railway.app
+      httpHostHeader: web-production-486c3.up.railway.app
+      originServerName: web-production-486c3.up.railway.app
   - hostname: www.aifromscratch.shop
-    service: https://web-dev-a8ad.up.railway.app
+    service: https://web-production-486c3.up.railway.app
     originRequest:
-      httpHostHeader: web-dev-a8ad.up.railway.app
-      originServerName: web-dev-a8ad.up.railway.app
+      httpHostHeader: web-production-486c3.up.railway.app
+      originServerName: web-production-486c3.up.railway.app
   # Anything else that reaches this tunnel is a misconfiguration, not traffic.
   - service: http_status:404

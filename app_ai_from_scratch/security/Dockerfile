@@ -136,7 +136,24 @@ ENV DEFENSE_MODE=propose \
     DEFENSE_STATE=/var/lib/defense \
     PORT=8795
 
-VOLUME ["/var/lib/defense"]
+# No VOLUME instruction for /var/lib/defense, deliberately. Railway rejects the
+# whole Dockerfile before it builds anything:
+#
+#   dockerfile invalid: docker VOLUME at Line 139 is not supported, use Railway Volumes
+#
+# That rejection is why five deployments failed with a single build-log line and
+# no diagnostic: the failure happens in SNAPSHOT_CODE, before BUILD_IMAGE emits
+# any step. The line is only visible if buildLogs is queried with an explicit
+# startDate earlier than the "scheduling build" timestamp; the default window
+# starts at that line and hides everything before it.
+#
+# Nothing is lost by dropping it. The path is mounted explicitly by both
+# platforms: docker-compose.yml binds `defenseaudit:/var/lib/defense` at lines
+# 528, 552 and 580 (one per agent), and Railway mounts its own volume there
+# (volumeMounts: ["/var/lib/defense"] on the oracle service). A VOLUME
+# instruction would only matter for a bare `docker run` with no -v, and in that
+# case an anonymous volume silently discarding the audit log on container
+# removal is worse than writing into the image layer.
 
 # The binary probes itself: a scratch image has no curl, no wget and no shell, so
 # a CMD-SHELL healthcheck could never run -- and a healthcheck that cannot run is

@@ -38,7 +38,27 @@ export default defineRailway((ctx) => {
   // `redis` is reserved by an orphaned template service in the Railway
   // project; use a project-unique name while retaining the Redis role.
   const cache = redis("cache");
-  const files = bucket(prod ? "prod-files" : "dev-files", { region: "iad" });
+  // Buckets are PROJECT-level, not environment-level: both live in the same
+  // project and every plan sees both. Declaring only the current environment's
+  // bucket leaves the other one undeclared, and IaC PRUNES buckets -- unlike
+  // volumes and domains, which it leaves alone. Planning against Production
+  // with `bucket(prod ? "prod-files" : "dev-files")` emitted:
+  //
+  //     - Delete bucket dev-files
+  //
+  // A production apply would have destroyed the DEV bucket. Declare both
+  // unconditionally and list BOTH in `resources` at the bottom of this file --
+  // declaring them is not enough on its own, because `resources` is an explicit
+  // list and a bucket missing from it is a bucket this file does not declare.
+  //
+  // Nothing here selects between them, and nothing needs to: which bucket a
+  // service writes to is decided by AWS_S3_BUCKET_NAME and the other AWS_*
+  // variables on `api`, and those are `preserve`d per environment. Railway
+  // leaves `bundled-taco-LGCj` alone in this same plan because it was not
+  // created by an apply, which is how you can tell the pruning is scoped to
+  // IaC-managed buckets rather than to everything in the project.
+  const prodFiles = bucket("prod-files", { region: "iad" });
+  const devFiles = bucket("dev-files", { region: "iad" });
 
   // ---------- source ----------
   // PROD tracks `main`. It must NEVER track a feature branch: every push to a
@@ -57,7 +77,24 @@ export default defineRailway((ctx) => {
   //   railway variable set AMQP_URL='amqp://app:<pass>@rabbitmq.railway.internal:5672/' --service rabbitmq
   // A volume is not optional. Without it a broker restart drops every queued
   // message, so a paid webhook can vanish before enrolment.
-  const brokerData = volume("rabbitmq-data", { sizeMB: 1024, region: "iad" });
+  // The size is per environment because the two environments genuinely differ,
+  // and declaring one number for both moves data either way.
+  //
+  // 1024 MB is what this deployment wants: the broker holds a few thousand
+  // small envelopes. DEV's volume IS 1024, because this file created it -- which
+  // is also the proof that Railway honours `sizeMB` on create. Production's is
+  // 50000, Railway Pro's maximum, because that volume predates this file and
+  // was created with the platform default. Declaring 1024 for both produced
+  //
+  //     ~ Update rabbitmq-data config.sizeMB (50000 -> 1024)
+  //
+  // in the Production plan. Railway does not shrink a volume in place, and this
+  // one holds undelivered messages: a paid webhook that has not been consumed
+  // yet lives here, so a shrink that recreates the volume loses an enrolment.
+  // Downsizing Production is a migration -- new volume, drain the queues, swap
+  // the mount -- and needs the owner to authorise it. It is not a side effect of
+  // an apply run to create the defence agents.
+  const brokerData = volume("rabbitmq-data", { sizeMB: prod ? 50000 : 1024, region: "iad" });
   const broker = service("rabbitmq", {
     source: image("rabbitmq:4-management-alpine"),
     replicas: 1,
@@ -132,9 +169,35 @@ export default defineRailway((ctx) => {
     build: node,
     healthcheck: "/health",
     // MercadoPago posts webhooks from the internet: this service needs a
-    // reachable origin or the money path cannot complete. Railway IaC cannot
-    // register custom domains, so pagos.aifromscratch.shop is added out of
-    // band with `railway domain` after the PROD service exists.
+    // reachable origin or the money path cannot complete.
+    //
+    // WEBHOOK_PUBLIC_ORIGIN must be the **api** origin, not a payments one.
+    // payments/src/mercadopago.ts:72 builds
+    //   `${webhookPublicOrigin}/api/payments/mercadopago/webhook`
+    // and that path is served by api/src/server.ts:1080, which forwards to
+    // payments' own `/v1/webhooks/mercadopago` carrying `x-signature`.
+    // payments/src/server.ts exposes only /health and three /v1/admin routes,
+    // so a payments-shaped origin 404s the notification even when it resolves.
+    //
+    // Both previous values were broken, for two different reasons:
+    //   prod: "https://pagos.aifromscratch.shop" -- `dig +short` returns
+    //         NOTHING. The comment here used to say the domain was added out of
+    //         band with `railway domain`; it never was. Every Mercado Pago
+    //         notification went to a hostname that does not exist, so with
+    //         credentials in place checkout would take money and the buyer
+    //         would never be granted access.
+    //   dev:  "https://payments-dev.up.railway.app" -- payments-shaped, so 404
+    //         on the gateway path per the paragraph above.
+    //
+    // The api origins are the generated Railway domains on purpose. A webhook
+    // must not depend on the Cloudflare Tunnel: that connector runs on the
+    // operator's laptop and died once already today, and a lost notification is
+    // a paid enrolment that never lands. Verified reachable end to end -- a POST
+    // with an empty body returns 400 {"error":"missing_data_id"}, which is
+    // payments' own error, so the api -> payments hop works.
+    //
+    // If a branded webhook host is wanted later it has to be a Railway custom
+    // domain on `api`, not a tunnel hostname, and this value moves with it.
     env: {
       DATABASE_URL: paymentsDb.env.DATABASE_URL,
       ENTITLEMENTS_URL: INTERNAL("api"),
@@ -150,7 +213,7 @@ export default defineRailway((ctx) => {
       MP_PUBLIC_KEY: preserve,
       MP_WEBHOOK_SECRET: preserve,
       PUBLIC_ORIGIN: prod ? "https://aifromscratch.shop" : "https://web-dev-a8ad.up.railway.app",
-      WEBHOOK_PUBLIC_ORIGIN: prod ? "https://pagos.aifromscratch.shop" : "https://payments-dev.up.railway.app",
+      WEBHOOK_PUBLIC_ORIGIN: prod ? "https://api-production-ed82c.up.railway.app" : "https://api-dev-f4c1.up.railway.app",
       META_PIXEL_ID: preserve,
       META_CAPI_TOKEN: preserve,
       NODE_ENV: prod ? "production" : "development",
@@ -293,7 +356,14 @@ export default defineRailway((ctx) => {
   // DEFENSE_MODE stays `propose`: it emits proposals, it does not act.
   // The audit trail is append-only state, so it needs a volume — the same
   // mistake as the broker running without one.
-  const defenseAudit = volume("defense-audit", { sizeMB: 512, region: "iad" });
+  // Per environment for the same reason as rabbitmq-data above: DEV's volume is
+  // 512 because this file created it, Production's is 50000 because it predates
+  // this file. Declaring 512 for both emitted `~ Update defense-audit
+  // config.sizeMB (50000 -> 512)`, and this volume holds the append-only audit
+  // log the agents write -- the one artefact that says what the defence system
+  // decided and why. Shrinking in place is not a thing Railway does, and
+  // recreating the volume discards that history.
+  const defenseAudit = volume("defense-audit", { sizeMB: prod ? 50000 : 512, region: "iad" });
   const oracle = service("oracle", {
     ...common,
     root: "app_ai_from_scratch",
@@ -457,7 +527,7 @@ export default defineRailway((ctx) => {
       group("core", [web, api, data, ai]),
       group("async", [worker, aiWorker, payments, messages, broker, oracle, cronLeagues]),
       group("defense", [morpheus, trinity, smith, neo]),
-      db, paymentsDb, messagesDb, cache, files, brokerData, defenseAudit, neoState,
+      db, paymentsDb, messagesDb, cache, prodFiles, devFiles, brokerData, defenseAudit, neoState,
     ],
   });
 });

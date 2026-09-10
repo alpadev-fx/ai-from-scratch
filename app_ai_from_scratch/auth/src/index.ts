@@ -28,7 +28,7 @@ export interface AuthDependencies {
   writeAuthorized(operation: string, args: Record<string, unknown>, actor: number, authority: number): Promise<number>;
   origin: string;
   production: boolean;
-  log: { info(...args: unknown[]): void; warn(...args: unknown[]): void };
+  log: { info(...args: unknown[]): void; warn(...args: unknown[]): void; error(...args: unknown[]): void };
   signal?: (name: string, payload: Record<string, unknown>) => Promise<void> | void;
   mailer?: { send(input: { to: string; subject: string; text: string }): Promise<void> };
   forgetTurns?: (userId: number) => Promise<{ ok: true } | { error: string }>;
@@ -53,6 +53,44 @@ const pref = (value: unknown, allowed: readonly string[]): string =>
   typeof value === 'string' && allowed.includes(value) ? value : 'auto';
 const subject = (email: unknown): string =>
   `account:${createHash('sha256').update(String(email).trim().toLowerCase()).digest('hex').slice(0, 20)}`;
+
+// The welcome mail on successful registration (AI-36). Spanish is the
+// product-copy default everywhere else server-side (lesson-meta.ts,
+// assess.ts, grading.ts all key off `lang === 'en'` with Spanish as the
+// fallback for everything else, including 'auto'); English is an explicit
+// overlay, never the other way around. Plain text only -- mail.ts's Mailer
+// has no HTML layer today.
+//
+// Content is deliberately narrow: what they signed up for, the one link to
+// get in, and the 14-day guarantee -- and nothing this platform cannot keep.
+// It must never promise a heads-up email before a charge: no job in this
+// codebase sends one, so that promise would be a lie the first time someone
+// tested it.
+const WELCOME_MAIL: Record<'es' | 'en', { subject: string; body: (name: string, link: string) => string }> = {
+  es: {
+    subject: 'Bienvenida a IA desde cero',
+    body: (name, link) => [
+      `Hola, ${name}.`,
+      'Tu cuenta en IA desde cero ya está lista. Empiezas con la lección 1, gratis; el curso completo son 12 lecciones y 36 labs, en español e inglés.',
+      `Entra aquí: ${link}`,
+      'Si más adelante te llevas el curso completo, tienes 14 días de garantía desde el primer cobro, sin explicar por qué.',
+    ].join('\n\n'),
+  },
+  en: {
+    subject: 'Welcome to IA desde cero',
+    body: (name, link) => [
+      `Hi ${name},`,
+      'Your IA desde cero account is ready. You start with lesson 1, free; the full course is 12 lessons and 36 labs, in Spanish and English.',
+      `Log in here: ${link}`,
+      'If you take the full course later, you get a 14-day guarantee from the first charge, no reason needed.',
+    ].join('\n\n'),
+  },
+};
+
+const welcomeMailFor = (lang: string, origin: string, name: string): { subject: string; text: string } => {
+  const copy = lang === 'en' ? WELCOME_MAIL.en : WELCOME_MAIL.es;
+  return { subject: copy.subject, text: copy.body(name, `${origin}/login`) };
+};
 
 export const shapeUser = (user: AuthUser) => ({
   id: user.id, email: user.email, name: user.name, role: user.role,
@@ -158,6 +196,20 @@ export function createAuth(deps: AuthDependencies) {
       });
       reply.setCookie(COOKIE, sign({ sub: user!.id, role: user!.role, v: user!.token_version }), cookieOpts);
       await emit('auth.account_registered', { subject: String(user!.id), target: String(user!.id) });
+      // Never on the critical path: the account is already committed above, and
+      // a 500 here because Resend is down would be worse than a signup with no
+      // welcome mail. `mailer` undefined is the fail-closed "unconfigured" state
+      // (see mail.ts) -- logged, never a silent miss and never a fallback sender.
+      if (deps.mailer) {
+        const { subject: welcomeSubject, text: welcomeText } = welcomeMailFor(user!.lang, deps.origin, user!.name);
+        try {
+          await deps.mailer.send({ to: mail, subject: welcomeSubject, text: welcomeText });
+        } catch (error) {
+          deps.log.error({ error, userId: user!.id }, 'welcome mail failed to send');
+        }
+      } else {
+        deps.log.info({ userId: user!.id }, 'welcome mail skipped: no mail provider configured');
+      }
       return reply.code(201).send({ user: shapeUser(user!) });
     });
 

@@ -13,7 +13,7 @@ import type { BestAttempt, PublicLabSource } from './grading.ts';
 import { examGate, ofPack, packScore, publicQuestion } from './assess.ts';
 import type { QuestionBest, QuestionRow } from './assess.ts';
 import { achievementsFor, rankLevel } from './achievements.ts';
-import { LEAGUE_ZONE, closeWeek, leaguesState } from './leagues.ts';
+import { closeWeek, leaguesState } from './leagues.ts';
 // INTERMEDIATE STATE, said on purpose: the agent LOOP already lives in Python
 // (ai/), and the TOOLS are still here — Python asks for them through
 // /api/interno/herramienta and this process runs them with the userId from the
@@ -25,7 +25,6 @@ import { catalog, families, run as runTool } from './tools/index.ts';
 import { AI_SECRET, AI_URL, aiHealth, hasAi, talkToAi } from './ai-bridge.ts';
 import { forgetTurns, loadTurns, rememberTurn, type ChatSource } from './messages-bridge.ts';
 import { increment, readCounter, queueState } from './jobs.ts';
-import { tokenCeiling } from './chat-ceiling.ts';
 import {
   chatBrake,
   chatTokDayKey,

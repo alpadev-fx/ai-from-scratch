@@ -14,6 +14,19 @@ import { hashPassword } from '../src/auth.ts';
 
 // `--borrar` is still accepted so an old shell history keeps working.
 const remove = process.argv.includes('--delete') || process.argv.includes('--borrar');
+
+// Every account this creates carries the same published password, so creating
+// them anywhere a browser can reach is handing out seven logins. NODE_ENV is
+// `production` on BOTH Railway environments (.railway/railway.ts sets it on DEV
+// and PROD alike), so this one check covers both and still leaves a laptop --
+// where NODE_ENV is development -- able to see the leagues work. It runs before
+// the first query, like the SEED_ROOT_USER guard in src/seed.ts, so a misdirected
+// run stops here instead of connecting first. DELETING is never blocked: that is
+// the cleanup path and it must work everywhere.
+if (!remove && process.env.NODE_ENV === 'production') {
+  throw new Error('league-demo creates accounts with a published password. It is local-only; NODE_ENV=production refuses it. Use --delete to clean up.');
+}
+
 await ready();
 
 if (remove) {

@@ -169,9 +169,35 @@ export default defineRailway((ctx) => {
     build: node,
     healthcheck: "/health",
     // MercadoPago posts webhooks from the internet: this service needs a
-    // reachable origin or the money path cannot complete. Railway IaC cannot
-    // register custom domains, so pagos.aifromscratch.shop is added out of
-    // band with `railway domain` after the PROD service exists.
+    // reachable origin or the money path cannot complete.
+    //
+    // WEBHOOK_PUBLIC_ORIGIN must be the **api** origin, not a payments one.
+    // payments/src/mercadopago.ts:72 builds
+    //   `${webhookPublicOrigin}/api/payments/mercadopago/webhook`
+    // and that path is served by api/src/server.ts:1080, which forwards to
+    // payments' own `/v1/webhooks/mercadopago` carrying `x-signature`.
+    // payments/src/server.ts exposes only /health and three /v1/admin routes,
+    // so a payments-shaped origin 404s the notification even when it resolves.
+    //
+    // Both previous values were broken, for two different reasons:
+    //   prod: "https://pagos.aifromscratch.shop" -- `dig +short` returns
+    //         NOTHING. The comment here used to say the domain was added out of
+    //         band with `railway domain`; it never was. Every Mercado Pago
+    //         notification went to a hostname that does not exist, so with
+    //         credentials in place checkout would take money and the buyer
+    //         would never be granted access.
+    //   dev:  "https://payments-dev.up.railway.app" -- payments-shaped, so 404
+    //         on the gateway path per the paragraph above.
+    //
+    // The api origins are the generated Railway domains on purpose. A webhook
+    // must not depend on the Cloudflare Tunnel: that connector runs on the
+    // operator's laptop and died once already today, and a lost notification is
+    // a paid enrolment that never lands. Verified reachable end to end -- a POST
+    // with an empty body returns 400 {"error":"missing_data_id"}, which is
+    // payments' own error, so the api -> payments hop works.
+    //
+    // If a branded webhook host is wanted later it has to be a Railway custom
+    // domain on `api`, not a tunnel hostname, and this value moves with it.
     env: {
       DATABASE_URL: paymentsDb.env.DATABASE_URL,
       ENTITLEMENTS_URL: INTERNAL("api"),
@@ -187,7 +213,7 @@ export default defineRailway((ctx) => {
       MP_PUBLIC_KEY: preserve,
       MP_WEBHOOK_SECRET: preserve,
       PUBLIC_ORIGIN: prod ? "https://aifromscratch.shop" : "https://web-dev-a8ad.up.railway.app",
-      WEBHOOK_PUBLIC_ORIGIN: prod ? "https://pagos.aifromscratch.shop" : "https://payments-dev.up.railway.app",
+      WEBHOOK_PUBLIC_ORIGIN: prod ? "https://api-production-ed82c.up.railway.app" : "https://api-dev-f4c1.up.railway.app",
       META_PIXEL_ID: preserve,
       META_CAPI_TOKEN: preserve,
       NODE_ENV: prod ? "production" : "development",

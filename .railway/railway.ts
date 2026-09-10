@@ -229,6 +229,42 @@ export default defineRailway((ctx) => {
     },
   });
 
+  // ---------- defense ----------
+  // api publishes `defense.signal.*` on every auth event (api/src/server.ts:160)
+  // and Oracle is its only consumer (security/cmd/oracle/main.go:104,
+  // security/binding/binding.go:83 binds "defense.signal.#"). Without Oracle
+  // the broker answers `unroutable: no queue bound for
+  // "defense.signal.auth.login_succeeded"` (api/src/bus.ts:435), the publisher
+  // logs it at INFO and the request still succeeds — so every registration and
+  // login was dropping its security signal in silence.
+  //
+  // This is NOT one of the host-namespace defense containers: morpheus needs
+  // the host network to inspect real listeners, Oracle does not
+  // (docker-compose.yml:592-604 sets no network_mode).
+  //
+  // DEFENSE_MODE stays `propose`: it emits proposals, it does not act.
+  // The audit trail is append-only state, so it needs a volume — the same
+  // mistake as the broker running without one.
+  const defenseAudit = volume("defense-audit", { sizeMB: 512 });
+  const oracle = service("oracle", {
+    ...common,
+    root: "app_ai_from_scratch",
+    build: { builder: "DOCKERFILE", dockerfilePath: "security/Dockerfile", watchPatterns: ["security/**"] },
+    // security/Dockerfile:97 is FROM scratch with USER 10001 — no shell, so the
+    // binary is the whole command. No healthcheck either: Oracle is a bus
+    // consumer with no HTTP surface and Railway healthchecks are HTTP-only.
+    start: "/oracle",
+    volumeMounts: { "/var/lib/defense": defenseAudit },
+    deploy: { restartPolicyType: "ON_FAILURE" },
+    env: {
+      AMQP_URL: broker.env.AMQP_URL,
+      APP_ENV: prod ? "PROD" : "DEV",
+      DEFENSE_MODE: "propose",
+      DEFENSE_WATCH_WINDOW: "5m",
+      DEFENSE_AUDIT: "/var/lib/defense/audit.jsonl",
+    },
+  });
+
   // ---------- web ----------
   const web = service("web", {
     ...common,
@@ -264,8 +300,8 @@ export default defineRailway((ctx) => {
   return project("ai-from-scratch", {
     resources: [
       group("core", [web, api, data, ai]),
-      group("async", [worker, aiWorker, payments, messages, broker]),
-      db, paymentsDb, messagesDb, cache, files, brokerData,
+      group("async", [worker, aiWorker, payments, messages, broker, oracle]),
+      db, paymentsDb, messagesDb, cache, files, brokerData, defenseAudit,
     ],
   });
 });

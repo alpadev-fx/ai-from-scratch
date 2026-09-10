@@ -67,7 +67,19 @@ export default defineRailway((ctx) => {
     // wakes a sleeping container could not be tested. An unverified sleep makes
     // the AI path fail intermittently in the environment that is supposed to be
     // the staging gate. Restore it only after proving the wake path.
-    env: { NODE_URL: INTERNAL("api"), IA_SECRETO: preserve },
+    env: {
+      NODE_URL: INTERNAL("api"),
+      IA_SECRETO: preserve,
+      // Without a provider key the tutor answers 501 `sin_proveedor`
+      // (ai/src/course_ai/agent/loop.py:115). providers.py:154 activates a
+      // provider only when its key is non-empty, and every *_MODEL has a
+      // default, so the key alone is enough. ANTHROPIC_API_KEY is the one that
+      // matters: it powers BOTH lanes — `anthropic` (Haiku, flash) and
+      // `sonnet` (reasoning) — from a single credential (providers.py:122-136).
+      // OPENROUTER_API_KEY is the cheap fallback. Empty stays inert.
+      ANTHROPIC_API_KEY: preserve,
+      OPENROUTER_API_KEY: preserve,
+    },
   });
 
   const messages = service("messages", {
@@ -118,7 +130,19 @@ export default defineRailway((ctx) => {
     ...common,
     root: "app_ai_from_scratch",
     build: apiBuild,
-    preDeploy: "pnpm db:deploy",
+    // Migrations AND content. `db:deploy` alone leaves an empty catalogue:
+    // /api/lessons answered {"lessons":[]} and /api/progress totalLessons 0 in
+    // DEV. api/Dockerfile:56 runs the seed in its `migrate` stage, which
+    // Railway never builds. The seed is idempotent by design
+    // (api/src/seed.ts:1-2) and its root/demo accounts stay off because
+    // SEED_ROOT_USER and SEED_DEMO_USERS are unset (seed.ts:19, :443), so only
+    // lessons, labs and quizzes are written. If it fails the deploy aborts,
+    // which is the intended fail-closed behaviour.
+    // `sh -c` on purpose. `&&` needs a real shell: in exec form it is passed as
+    // a literal argument. docker-compose.yml:198-203 records the same bug in
+    // this repo's RabbitMQ healthcheck ("the exec form passes `&&` as a literal
+    // ARGUMENT ... too many arguments"). Not worth re-learning.
+    preDeploy: "sh -c 'pnpm db:deploy && node dist/api/src/seed.js'",
     healthcheck: "/api/health",
     env: {
       DATABASE_URL: db.env.DATABASE_URL,

@@ -146,9 +146,20 @@ const mpKey = cobros.data?.publicKey ?? '';
         {mercado === 'co' && <button class="chip" data-m="cash">{P.efectivo}</button>}
       </div>
 
+      <!-- El estado inicial de esta caja NO puede ser siempre "cargando": montarBrick()
+           sale temprano cuando falta la sesion o la llave publica (ver el guard de
+           `!mpKey || !logged`), y entonces nadie vuelve a tocar este nodo. Dejar el
+           texto de carga ahi convierte una condicion conocida en un spinner eterno:
+           el aviso de arriba dice "crea tu cuenta" mientras esta caja promete un
+           formulario que jamas va a llegar. Se decide en el servidor, que ya sabe
+           las dos cosas. -->
       <div id="brick" style="border:1px solid var(--hair);padding:20px;min-height:220px;display:flex;flex-direction:column;gap:12px">
         <span class="lbl">{P.datos}</span>
-        <p class="s" style="color:var(--l2)">{P.brickCarga}</p>
+        {!user
+          ? <p class="s" style="color:var(--l2)">{P.sinCuentaB} <a href="/registro">{P.registrarme}</a></p>
+          : mpKey
+            ? <p class="s" style="color:var(--l2)">{P.brickCarga}</p>
+            : <p class="s" style="color:var(--l2)">{P.brickNoCarga}</p>}
       </div>
 
       <div id="pse-note" hidden class="card" style="border-color:var(--or)">

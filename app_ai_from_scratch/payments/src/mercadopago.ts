@@ -7,6 +7,23 @@ export interface CheckoutOffer { totalMinor: number; couponRedemptionId?: number
 export type CheckoutMode = 'one_time' | 'subscription';
 
 /**
+ * Lo que el Payment Brick entrega en `onSubmit`, ya validado por la ruta.
+ *
+ * NO lleva importe. El Brick manda uno y se ignora: el precio lo pone el
+ * servidor (ver `cardPayment`). Que este tipo no tenga el campo es
+ * deliberado -- asi no se puede colar por descuido.
+ */
+export interface CardCharge {
+  /** Token de un solo uso de la tarjeta. La plataforma nunca ve el numero. */
+  token: string;
+  paymentMethodId: string;
+  issuerId?: string;
+  installments: number;
+  payerEmail: string;
+  identification?: { type: string; number: string };
+}
+
+/**
  * Un rechazo de Mercado Pago, con su codigo y su cuerpo separados del mensaje.
  *
  * Antes esto era un `Error` con todo concatenado, la ruta lo relanzaba y
@@ -106,6 +123,49 @@ export class MercadoPago {
     }) });
     return { mode, preferenceId: result.id ?? null, initPoint: result.init_point ?? null,
       sandboxInitPoint: result.sandbox_init_point ?? null, publicKey: this.config.mpPublicKey };
+  }
+
+  /**
+   * Cobro con tarjeta SIN salir de la pagina. El Payment Brick tokeniza la
+   * tarjeta dentro del iframe de Mercado Pago y nos entrega un `token` de un
+   * solo uso; aqui se cambia ese token por un pago real.
+   *
+   * EL IMPORTE NO VIENE DEL NAVEGADOR. Sale de `price.ts` igual que en
+   * `checkout()`, o del cupon que el servidor ya reservo. Es la unica defensa
+   * que hay: si `transaction_amount` se tomara de lo que manda el cliente,
+   * cualquiera edita el cuerpo de la peticion y compra el curso por un peso.
+   * El Brick manda tambien su propio `transaction_amount` y se DESCARTA a
+   * proposito -- no se lee de `charge` en ninguna rama.
+   *
+   * `x-idempotency-key` es `orderKey`: si el navegador reintenta (red mala, el
+   * usuario pulsa dos veces) Mercado Pago devuelve el MISMO pago en vez de
+   * cobrar dos veces. Sin eso un doble clic son dos cargos a la tarjeta.
+   */
+  async cardPayment(actor: CheckoutActor, orderKey: string, charge: CardCharge,
+    offer?: CheckoutOffer): Promise<Record<string, unknown>> {
+    const webhookOrigin = this.config.webhookPublicOrigin;
+    const webhook = webhookOrigin.startsWith('https://')
+      ? { notification_url: `${webhookOrigin}/api/payments/mercadopago/webhook?source_news=webhooks` }
+      : {};
+    const result = await this.request('/v1/payments', {
+      method: 'POST',
+      headers: { 'x-idempotency-key': orderKey },
+      body: JSON.stringify({
+        transaction_amount: providerAmount(offer?.totalMinor ?? PRICE_MINOR),
+        token: charge.token,
+        installments: charge.installments,
+        payment_method_id: charge.paymentMethodId,
+        ...(charge.issuerId ? { issuer_id: charge.issuerId } : {}),
+        description: 'IA desde cero · Fundamentos Vol. 1',
+        external_reference: orderKey,
+        metadata: { user_id: actor.userId, order_key: orderKey,
+          ...(offer?.couponRedemptionId ? { coupon_redemption_id: offer.couponRedemptionId } : {}) },
+        payer: { email: charge.payerEmail,
+          ...(charge.identification ? { identification: charge.identification } : {}) },
+        ...webhook,
+      }),
+    });
+    return result;
   }
 
   payment(id: string): Promise<Record<string, unknown>> { return this.request(`/v1/payments/${encodeURIComponent(id)}`); }

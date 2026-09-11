@@ -1063,6 +1063,14 @@ app.post<{ Body: { code?: unknown; percent?: unknown; max?: unknown; days?: unkn
   return relay(reply, response);
 });
 
+app.post<{ Params: { code: string } }>('/api/admin/cupones/:code/liberar', async (req, reply) => {
+  const user = await requireRole(req, reply, ['admin']); if (!user) return;
+  const response = await callPayments(`/v1/admin/coupons/${encodeURIComponent(req.params.code)}/release`,
+    { method: 'POST' });
+  req.log.info({ adminId: user.id, code: req.params.code, status: response.status }, 'admin coupon release');
+  return relay(reply, response);
+});
+
 app.post<{ Params: { code: string }; Body: { active?: unknown } }>(
   '/api/admin/cupones/:code/estado', async (req, reply) => {
   const user = await requireRole(req, reply, ['admin']); if (!user) return;

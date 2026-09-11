@@ -646,6 +646,14 @@ app.post<{ Params: { code: string }; Body: { active?: unknown } }>(
   return { ok: true, active };
 });
 
+app.post<{ Params: { code: string } }>('/v1/admin/coupons/:code/release',
+  async (request, reply) => {
+  if (!authorized(request)) return reply.code(401).send({ error: 'unauthorized' });
+  const released = await store.releaseCouponHolds(String(request.params.code ?? ''));
+  app.log.info({ code: request.params.code, released }, 'coupon holds released from admin');
+  return { ok: true, released };
+});
+
 app.post('/v1/admin/reconcile', async (request, reply) => {
   if (!authorized(request)) return reply.code(401).send({ error: 'unauthorized' });
   if (!config.mpAccessToken) return reply.code(501).send({ error: 'provider_not_configured' });

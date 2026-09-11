@@ -18,7 +18,7 @@ import { COOKIE, sign } from '../../auth/src/core.ts';
 import { get, run, pool } from '../src/db.ts';
 import { many, one, write, writeAuthorized } from '../src/data.ts';
 
-const log = { info: () => {}, warn: () => {} };
+const log = { info: () => {}, warn: () => {}, error: () => {} };
 const auth = createAuth({ one, many, write, writeAuthorized,
   origin: 'http://localhost', production: false, log });
 

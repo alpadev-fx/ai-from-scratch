@@ -5,7 +5,11 @@ const PAPER = `--bg:#F2F2F2;--panel:#fff;color-scheme:light;
   --l1:#000;--l2:rgba(0,0,0,.66);--l3:rgba(0,0,0,.58);
   --hair:rgba(0,0,0,.22);--hair2:rgba(0,0,0,.08);--fill:rgba(120,120,128,.20);
   --ac:#0A5AD6;--ac-solid:#0A5AD6;--ok:#0C6B3E;--or:#8A5000;--rd:#C21B12;
-  --btn-bg:#000;--btn-fg:#fff;`;
+  --btn-bg:#000;--btn-fg:#fff;
+  /* El destello del esqueleto. Va aqui y no calculado a partir de --fill porque
+     papel esta calibrado a mano: sobre #F2F2F2 un blanco casi puro se pierde y
+     hace falta bajar a negro translucido para que la barrida se vea. */
+  --sk-glint:rgba(0,0,0,.07);`;
 
 export const TOKENS = `
 :root{
@@ -21,6 +25,8 @@ export const TOKENS = `
      literal #fff in .btn:hover and .segb[aria-pressed]. Paper does not redefine
      it: the value is the same there. */
   --on-ac:#fff;
+  /* Ver la nota en PAPER: cada tema calibra su propio destello. */
+  --sk-glint:rgba(255,255,255,.07);
 }
 /* papel: calibrado a mano sobre #F2F2F2, >=4.5:1 medido en texto de 10px */
 html[data-theme="paper"]{${PAPER}}
@@ -48,8 +54,49 @@ body.lang-saliendo{opacity:.4;transition:opacity .42s ease-out}
 }
 `;
 
+// Esqueletos de carga. Los usan LOS DOS lados: la app (App.astro) y las páginas
+// públicas (vía PUBLIC_BASE), por eso viven aquí y no en un layout.
+//
+// EL PUNTO NO ES LA ANIMACIÓN, ES RESERVAR EL SITIO. Un hueco vacío que luego se
+// llena empuja el contenido hacia abajo y el botón se mueve bajo el dedo justo
+// cuando se va a pulsar — el mismo fallo que .fnota arregla con su min-height.
+// Un esqueleto que no mide lo que va a medir el contenido real no sirve de nada:
+// es un spinner con forma de caja.
+//
+// La barrida se mueve con transform y NO con background-position. Un esqueleto
+// se pinta exactamente mientras el hilo principal está ocupado parseando e
+// hidratando, que es cuando una animación que no va al compositor se entrecorta.
+// translateX sí va al compositor; background-position no.
+export const SKELETON = `
+@keyframes sk-barrido{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
+.sk{position:relative;overflow:hidden;background:var(--fill);border-radius:3px;flex:none}
+.sk::after{content:'';position:absolute;inset:0;transform:translateX(-100%);
+  background:linear-gradient(90deg,transparent,var(--sk-glint),transparent);
+  animation:sk-barrido 1.4s linear infinite}
+/* Alturas por defecto tomadas del tipo que sustituyen: .s son 13px, .h3 15px,
+   .h1 44px. --sk-w y --sk-h se fijan en línea porque son geometría del caso
+   concreto, igual que los anchos de barra del resto de la hoja. */
+.sk-line{height:var(--sk-h,13px);width:var(--sk-w,100%)}
+.sk-title{height:var(--sk-h,22px);width:var(--sk-w,60%)}
+.sk-box{height:var(--sk-h,120px);width:var(--sk-w,100%)}
+.sk-round{height:var(--sk-h,26px);width:var(--sk-h,26px);border-radius:50%}
+.sk-btn{height:44px;width:var(--sk-w,140px);border-radius:6px}
+/* Pila de líneas: el hueco va aquí y no en cada barra, para que una línea suelta
+   no arrastre un margen que nadie pidió. */
+.sk-stack{display:flex;flex-direction:column;gap:10px}
+/* La región que está cargando. aria-busy lo anuncia UNA vez; las barras se
+   ocultan del árbol de accesibilidad porque doce cajas vacías leídas en voz alta
+   son ruido, no información. */
+[aria-busy="true"] .sk{pointer-events:none}
+@media (prefers-reduced-motion: reduce){
+  /* Queda el relleno quieto. Un pulso sigue siendo movimiento: quien pide menos
+     movimiento no está pidiendo un movimiento más suave. */
+  .sk::after{animation:none;display:none}
+}
+`;
+
 // Componentes compartidos por las páginas públicas.
-export const PUBLIC_BASE = LANG_FX + `
+export const PUBLIC_BASE = LANG_FX + SKELETON + `
 *{box-sizing:border-box}
 /* overflow-wrap:break-word en el cuerpo entero.
    Una direccion de correo no ofrece ningun punto de corte que 'normal' acepte,

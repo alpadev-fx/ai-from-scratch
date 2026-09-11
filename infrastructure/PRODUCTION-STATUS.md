@@ -1,6 +1,6 @@
 # Production: GO / NO-GO
 
-Cut 2026-09-10 07:20 UTC. Environment `Production`
+Cut 2026-09-10 08:05 UTC. Environment `Production`
 (`d96fbafe-7f4b-4cad-9feb-260562dd4b48`), project `ai-from-scratch`
 (`4015473a-e3f1-4bad-b2c0-6969428c2d65`).
 
@@ -10,20 +10,40 @@ replacing it.
 
 ## Where the two environments stand
 
+Updated 08:05 UTC, after PR #3 was merged and the IaC applied.
+
 | | Production | Devevelopment |
 |---|---|---|
 | services | 19 | 19 |
-| `SUCCESS` | **12** | **19** |
-| `FAILED` | **2** — `oracle`, `payments` | 0 |
-| no deployment yet | 5 — `morpheus`, `trinity`, `smith`, `neo`, `cron-leagues` | 0 |
-| commit | `a12778bb` (main) | `c52dd42e` (dev) |
+| `SUCCESS` | **19** | **19** |
+| `FAILED` | 0 | 0 |
+| no deployment yet | 0 | 0 |
+| commit | `4d08efb2` (main) | `4d08efb2` (dev) |
 
-DEV is green end to end. Production is three actions away from matching it, and
-one of the three needs a credential only the owner has.
+Both environments are green end to end. Measured, not inferred:
+
+```
+https://aifromscratch.shop/                              200  0.88s   19x 39.990, no 35.000, no 99.999
+https://api-production-ed82c.up.railway.app/api/health   200  0.31s
+436f...74.aifromscratch.shop/                            401  0.37s   (DEV gate asking for the password)
+```
+
+`railway config plan` against Production: **`0 to add, 43 to change, 0 to destroy`**.
+Nothing is missing and nothing is at risk, but the apply did not converge the
+config. `deploy.restartPolicyType` is still `null` on `oracle`, `morpheus`,
+`trinity`, `smith`, `neo` and `api-worker`, where the file declares `ON_FAILURE`
+— **a crash on any of those is not retried**, and for the defence agents that
+means going quiet while the dashboard stays green. A second `railway config
+apply` closes it. The rest of the 43 is `buildCommand → null` on seven
+DOCKERFILE-built services, which Railway ignores anyway, plus `preserve()`
+variable rows.
+
+Tracked in Linear: [IA desde cero · Railway Pro](https://linear.app/ledgerfi/project/ia-desde-cero-railway-pro-9dd642d03984)
+(LED-3049 … LED-3064).
 
 ## The three failures, and what each one actually was
 
-### `oracle` — diagnosed, fixed, proven. Waiting on a merge.
+### `oracle` — diagnosed, fixed, landed in Production.
 
 Five deployments across two environments and two Metal builders failed with
 **one** build-log line, `scheduling build on Metal builder`, and no diagnostic.
@@ -61,8 +81,12 @@ identical context Railway uses and `--platform linux/amd64`: `BUILD_EXIT: 0`,
 neo)`). The only change in `docker image inspect` is `Config.Volumes` going from
 `{"/var/lib/defense":{}}` to `{}`.
 
-**Proven, not assumed:** DEV now runs `oracle`, `morpheus`, `trinity`, `smith`
-and `neo` — five services building that same image — all `SUCCESS`.
+**Proven, not assumed:** `main` is `4d08efb` and
+`git show alpadev-fx/main:app_ai_from_scratch/security/Dockerfile | grep -c '^VOLUME'`
+returns 0. Railway rebuilt on its own (`watchPatterns: ["security/**"]` matched)
+and `oracle` is `SUCCESS` on `4d08efb2`. The four agents that build the same
+image — `morpheus`, `trinity`, `smith`, `neo` — are `SUCCESS` too. Six failed
+builds, then five services green off one deleted line.
 
 ### `api` — was down, is fixed.
 
@@ -88,20 +112,49 @@ password recovery answers 503. That is fail-closed and correct — there is no
 Resend key to send with. It is not a fix for email; it is a fix for `api` being
 dead.
 
-### `payments` — needs a credential. Nothing else.
+### `payments` — was a credential. Now up, and the webhook was pointed at nowhere.
 
 ```
 file:///app/dist/config.js:46
 Error: production requires MP_ACCESS_TOKEN to start with APP_USR-
 ```
 
-`MP_ACCESS_TOKEN`, `MP_PUBLIC_KEY` and `MP_WEBHOOK_SECRET` are all present and
-empty in Production. The service crash-loops, the healthcheck burns its 5-minute
-window (307.8 s from create to `FAILED`), and no deploy will change that.
+All three Mercado Pago variables were present and empty, the service crash-looped
+and the healthcheck burned its full 5-minute window (307.8 s from create to
+`FAILED`). No deploy was ever going to change that.
 
-DEV's `payments` is `SUCCESS` with the same empty variables because the
-`APP_USR-` check only fires in production. **Do not read DEV green as checkout
-working.** Nothing can be sold in either environment.
+Live `APP_USR-` credentials are now set **in Production only** and `payments` is
+`SUCCESS`. Not in DEV, deliberately: `payments/src/config.ts:79` throws when an
+`APP_USR-` token runs outside production without
+`MP_ALLOW_LIVE_OUTSIDE_PRODUCTION=1`, so setting them there breaks DEV *and*
+leaves DEV charging real cards. DEV's `payments` is green with empty variables
+because the `APP_USR-` check only fires in production — **do not read DEV green
+as checkout working.**
+
+**The part that would have cost money.** With credentials in place checkout takes
+money, and `WEBHOOK_PUBLIC_ORIGIN` was `https://pagos.aifromscratch.shop`, which
+does not resolve — `dig +short` returns nothing. This file used to claim the
+domain was added out of band with `railway domain`; it never was. A charge would
+have succeeded and the notification would have been lost, so the buyer pays and
+is never granted access.
+
+The DEV value was wrong too, differently: it pointed at the payments service, but
+`payments/src/mercadopago.ts:72` builds
+`${origin}/api/payments/mercadopago/webhook`, served by `api/src/server.ts:1080`.
+`payments/src/server.ts` exposes only `/health` and three `/v1/admin` routes.
+
+Both now point at the **api** origin, and at the generated Railway domains rather
+than a tunnel hostname — a webhook must not depend on the connector on a laptop.
+Verified: a `POST` with an empty body returns `400 {"error":"missing_data_id"}`,
+which is payments' own error, so the `api → payments` hop works.
+
+Checked and dropped: whether `api` needs `MP_WEBHOOK_SECRET`. It does not — it is
+a pure gateway forwarding `x-signature`, and the signature is verified in
+`payments`.
+
+**Two things still open.** The three credentials were pasted into a chat and are
+compromised; they must be rotated. And no real purchase has been made end to end,
+so the money path is configured but not yet observed working.
 
 ## The IaC was about to destroy three things
 
@@ -139,11 +192,11 @@ decided.
 
 | Area | Verdict | The evidence, and what is missing |
 |---|---|---|
-| Application | **NO-GO, close** | 12 of 19 `SUCCESS` on `a12778bb`. `oracle` fixed but the fix is on `dev`, not `main`. The 4 defence agents and `cron-leagues` exist as service records with no Production deployment, because the apply only ran against DEV. |
+| Application | **GO, with one gap** | 19 of 19 `SUCCESS` on `4d08efb2`. The gap is `restartPolicyType` still `null` on six services — a crash is not retried. One more apply. |
 | Public site | **GO, on a laptop** | `https://aifromscratch.shop` answers 200 and is **byte-identical** to `web-production-486c3.up.railway.app` (53868 bytes both), differing from DEV by 4 lines. It answered **530** before 07:13 UTC today because the tunnel connector had died. See DNS/TLS. |
-| Payments | **NO-GO** | Credential. See above. |
+| Payments | **GO, credentials compromised** | Live `APP_USR-` credentials are set in Production only and `payments` is `SUCCESS`. `WEBHOOK_PUBLIC_ORIGIN` was pointing at `pagos.aifromscratch.shop`, which does not resolve, so a charge would have succeeded with the notification lost; it now points at the `api` origin and the `api → payments` hop is verified (`400 missing_data_id`). The three credentials were pasted into a chat and **must be rotated**. No real purchase has been made end to end yet. |
 | Email | **NO-GO** | `RESEND_API_KEY` unset, deliberately, so `api` boots. Deeper: the 20 templates in `design/saas-emails/templates.ts` are unreachable — `saas-emails`, `renderEmailHtml` and `EMAIL_SPECS` return zero matches across every service — and `api/src/mail.ts:15` declares `send({ to, subject, text })` with no `html` field, so the transport could not carry them. |
-| Defence agents | **NO-GO, unblocked** | All five `SUCCESS` in DEV. Production needs the merge, then an apply. |
+| Defence agents | **GO, with the restart gap** | All five `SUCCESS` in both environments. But `restartPolicyType` is `null` on all five in Production, so a crashed agent is never restarted — the exact silent-failure shape the agents exist to catch. |
 | Railway Bucket — connectivity | **GO** | Verified against `prod-files-fbfvpaewjuomum` at `https://t3.storageapi.dev` through `railway run --service api`: write, read back byte-identical, delete, absent afterwards. |
 | Railway Bucket — actually used | **NO-GO** | The bucket is empty and no code path touches it. `api/files` is 2.4 MB in two files, baked into the image and served behind the paywall at `api/src/server.ts:868`. |
 | DNS / TLS | **NO-GO** | Production has no custom domain. The apex is a Cloudflare Tunnel whose connector runs on the operator's laptop: it died today and the site answered 530 until restarted, and it will do that again on the next sleep. Needs a Cloudflare API token for the account owning the zone (`0d7ce2fb5340a4e778d2e9f1e6c1d838`); the token on this machine belongs to a different account and sees only `alpadev.xyz`. |
@@ -155,9 +208,8 @@ decided.
 
 ## What only the owner can do
 
-1. **Merge PR #3.** `gh pr merge` and `gh api … /merge` are both blocked for the
-   agent by the tool classifier. Nothing about `oracle` reaches Production until
-   this happens.
+1. ~~Merge PR #3.~~ **Done** — merged as `4d08efb`, and the IaC applied. Run one
+   more `railway config apply` to set the six missing restart policies.
 2. Mercado Pago `MP_ACCESS_TOKEN` (`APP_USR-`), `MP_PUBLIC_KEY`,
    `MP_WEBHOOK_SECRET` — newly issued, because the previous values were pasted
    into a chat and must be treated as compromised.

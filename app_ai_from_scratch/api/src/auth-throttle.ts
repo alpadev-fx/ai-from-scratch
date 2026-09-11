@@ -20,6 +20,17 @@ export const AUTH_LIMITS: Record<string, number> = {
   '/api/auth/recover': 5,
   '/api/auth/reset': 5,
   '/api/account/delete': 5,
+  // NO es una ruta de auth, y aun asi va aqui: este mapa es el unico freno por
+  // IP que existe, y un endpoint que cambia un token de tarjeta por un cargo es
+  // el blanco clasico de prueba de tarjetas robadas. El atacante tokeniza en el
+  // navegador (la clave publica lo es por definicion) y machaca la ruta para ver
+  // cuales responden `approved`. Cada intento es una autorizacion real contra el
+  // adquirente, en la cuenta del comercio: eso son multas y suspension.
+  //
+  // 5 por minuto por IP. Un comprador de verdad necesita uno, o tres si se
+  // equivoca con el CVV. Por IP no para un ataque repartido entre muchas: para
+  // eso hace falta contar tambien por usuario, y eso todavia no esta.
+  '/api/payments/mercadopago/card': 5,
 };
 
 export const AUTH_WINDOW_MS = 60_000;

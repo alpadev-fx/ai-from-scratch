@@ -266,6 +266,13 @@ async function healthBody(): Promise<Record<string, unknown>> {
   return {
     ok: true, compiler: 'tsgo', service: 'payments',
     provider,
+    // La clave PUBLICA de Mercado Pago. Va aqui porque /pago tiene que montar el
+    // Payment Brick ANTES de que el comprador pulse nada, y hasta ahora la unica
+    // forma de conseguirla era crear una preferencia -- es decir, al reves.
+    // Es publica por diseno: viaja al navegador de todos modos, solo sirve para
+    // tokenizar una tarjeta contra esta cuenta y no autoriza ningun cobro. La
+    // que cobra es MP_ACCESS_TOKEN y esa no sale de este proceso.
+    publicKey: config.mpPublicKey ?? null,
     meta: meta ? 'enabled' : 'disabled',
     mode: config.production ? 'live' : (config.mpAccessToken ? 'test' : 'off'),
     queue,
@@ -398,6 +405,95 @@ app.post<{ Body: { userId?: unknown; email?: unknown; mode?: unknown; couponCode
       app.log.error({ status: error.status, body: error.body, userId, mode },
         'entitlement callback refused the grant');
       return reply.code(502).send({ error: 'grant_failed' });
+    }
+    throw error;
+  }
+});
+
+/**
+ * Cobro con tarjeta SIN salir de la pagina. El Payment Brick tokeniza la tarjeta
+ * dentro del iframe de Mercado Pago y manda aqui un token de un solo uso: el
+ * numero de la tarjeta no pasa por este proceso ni por el api ni por el web.
+ *
+ * ESTA RUTA NO CONCEDE ACCESO, a proposito. Mercado Pago emite webhook tambien
+ * para un pago directo, con el mismo `external_reference` y el mismo
+ * `metadata.user_id`, asi que `processPaymentItem` lo recoge por el camino de
+ * siempre. Duplicar la concesion aqui daria DOS sitios donde decidir si un pago
+ * da derecho, y el dia que uno cambie el otro miente. Lo que devuelve esta ruta
+ * es solo lo que hace falta para que la pagina reaccione en el momento.
+ *
+ * El desfase entre «aprobado» y «acceso concedido» no es nuevo: el flujo de
+ * redireccion ya tiene exactamente el mismo, porque MP devuelve al comprador
+ * mas o menos cuando dispara el webhook.
+ */
+app.post<{ Body: { userId?: unknown; email?: unknown; termsVersion?: unknown;
+  couponCode?: unknown; context?: unknown; card?: Record<string, unknown> } }>('/v1/checkout/card',
+  async (request, reply) => {
+  if (!authorized(request)) return reply.code(401).send({ error: 'unauthorized' });
+  const userId = Number(request.body?.userId);
+  const email = String(request.body?.email ?? '').trim().toLowerCase();
+  if (!Number.isSafeInteger(userId) || userId < 1 || !email.includes('@')) {
+    return reply.code(400).send({ error: 'invalid_actor' });
+  }
+  const termsVersion = request.body?.termsVersion;
+  if (typeof termsVersion !== 'string' || termsVersion.length < 1 || termsVersion.length > 32) {
+    return reply.code(400).send({ error: 'terms_required' });
+  }
+  // Los cupones NO pasan por aqui todavia, y es deliberado. El descuento vive en
+  // una reserva que hay que liberar en cada rama de fallo; equivocarse deja el
+  // cupon quemado, el cupo gastado y al comprador sin acceso -- eso ya paso una
+  // vez y por eso el orden de /v1/checkout esta como esta. Un segundo camino de
+  // cupones duplica ese riesgo para ahorrarle un salto a una minoria. La UI cae
+  // a la redireccion, que ya lo hace bien.
+  if (typeof request.body?.couponCode === 'string' && request.body.couponCode.trim() !== '') {
+    return reply.code(422).send({ error: 'cupon_requiere_redireccion' });
+  }
+  if (!config.mpAccessToken) return reply.code(501).send({ error: 'provider_not_configured' });
+
+  const card = request.body?.card ?? {};
+  const token = typeof card.token === 'string' ? card.token.trim() : '';
+  const paymentMethodId = typeof card.paymentMethodId === 'string' ? card.paymentMethodId.trim() : '';
+  const installments = Number(card.installments);
+  if (!token || token.length > 128 || !paymentMethodId || paymentMethodId.length > 64) {
+    return reply.code(400).send({ error: 'invalid_card_payload' });
+  }
+  // 1..36: el maximo que ofrece MP Colombia. Sin techo, un `installments`
+  // absurdo se lo come el proveedor y devuelve un 400 que aqui seria un 502.
+  if (!Number.isSafeInteger(installments) || installments < 1 || installments > 36) {
+    return reply.code(400).send({ error: 'invalid_card_payload' });
+  }
+  const issuerId = typeof card.issuerId === 'string' && card.issuerId.trim() !== ''
+    ? card.issuerId.trim() : undefined;
+  const ident = card.identification as { type?: unknown; number?: unknown } | undefined;
+  const identification = ident && typeof ident.type === 'string' && typeof ident.number === 'string'
+    && ident.type.length <= 16 && ident.number.length <= 32
+    ? { type: ident.type, number: ident.number } : undefined;
+
+  await store.saveCheckoutContext(userId, email, sanitizeContext(request.body?.context), { version: termsVersion });
+  const orderKey = randomUUID();
+  await store.createOrder({ orderKey, userId, mode: 'one_time', expectedMinor: PRICE_MINOR,
+    currency: CURRENCY, expiresAt: new Date(Date.now() + 86_400_000) });
+
+  try {
+    // El email del pagador sale del actor que el api ya autentico, NO del cuerpo
+    // que manda el navegador: si viniera del cliente, el recibo de Mercado Pago
+    // se podria emitir a nombre de otra persona.
+    const result = await provider.cardPayment({ userId, email }, orderKey, {
+      token, paymentMethodId, issuerId, installments, payerEmail: email, identification,
+    });
+    const paymentId = String(result.id ?? '');
+    const status = String(result.status ?? '');
+    if (paymentId) await store.attachOrderRef(orderKey, paymentId);
+    // `status_detail` es de Mercado Pago y es lo unico que distingue «fondos
+    // insuficientes» de «codigo de seguridad mal». La UI lo traduce; aqui viaja
+    // crudo porque inventarle un codigo propio a cada motivo del proveedor es
+    // una tabla que se queda vieja sola.
+    return { status, paymentId, detail: String(result.status_detail ?? ''), orderKey };
+  } catch (error) {
+    if (error instanceof MercadoPagoError) {
+      app.log.error({ status: error.status, body: error.body, sent: error.sent, userId },
+        'mercadopago rejected card payment');
+      return reply.code(502).send({ error: 'provider_rejected' });
     }
     throw error;
   }

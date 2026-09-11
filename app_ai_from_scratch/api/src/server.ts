@@ -948,6 +948,30 @@ function matchesEntitlementBearer(bearer: string): boolean {
   return (Boolean(a) && eqA) || (Boolean(b) && eqB);
 }
 
+/**
+ * Cobro con tarjeta dentro de la pagina. El cuerpo es lo que el Payment Brick
+ * entrega en `onSubmit`, reenviado tal cual al servicio de pagos.
+ *
+ * Aqui NO se valida la forma del pago ni se toca el importe: las dos cosas son
+ * de `payments`, que es quien tiene el precio y quien habla con Mercado Pago.
+ * Este proxy solo pone la identidad -- `user.id` y `user.email` salen de la
+ * sesion, nunca del cuerpo -- para que nadie pueda cobrar a nombre de otro.
+ *
+ * El freno por IP esta en AUTH_LIMITS: 5/min. Ver el comentario de alli para
+ * por que una ruta de cobro lo necesita mas que una de login.
+ */
+app.post<{ Body: { termsVersion?: unknown; couponCode?: unknown; card?: unknown } }>('/api/payments/mercadopago/card', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  const termsVersion = typeof req.body?.termsVersion === 'string' ? req.body.termsVersion.slice(0, 32) : '';
+  const couponCode = typeof req.body?.couponCode === 'string' ? req.body.couponCode : '';
+  const response = await callPayments('/v1/checkout/card', { method: 'POST', body: JSON.stringify({
+    userId: user.id, email: user.email, termsVersion,
+    ...(couponCode ? { couponCode } : {}), card: req.body?.card ?? {},
+    context: checkoutContextOf(req),
+  }) });
+  return relay(reply, response);
+});
+
 app.post<{ Body: { mode?: unknown; couponCode?: unknown; termsVersion?: unknown } }>('/api/payments/mercadopago/preference', async (req, reply) => {
   const user = await requireUser(req, reply); if (!user) return;
   const mode = req.body?.mode === 'subscription' ? 'subscription' : 'one_time';
@@ -984,10 +1008,17 @@ app.post('/api/subscriptions/cancel', async (req, reply) => {
 app.get('/api/payments/estado', async () => {
   const response = await callPayments('/health');
   if (!response.ok) return { disponible: false };
-  const body = await response.json().catch(() => ({})) as { provider?: unknown };
+  const body = await response.json().catch(() => ({})) as { provider?: unknown; publicKey?: unknown };
   // A live payments process with no MP_ACCESS_TOKEN cannot create a preference
   // (501 provider_not_configured). `disponible` is that fact, not process.ok.
-  return { disponible: body.provider === 'configured' };
+  //
+  // `publicKey` rides along so /pago can mount the Payment Brick on load rather
+  // than having to create a preference first just to learn the key. It is the
+  // public half of the credential pair and authorises nothing on its own.
+  return {
+    disponible: body.provider === 'configured',
+    publicKey: typeof body.publicKey === 'string' ? body.publicKey : null,
+  };
 });
 
 app.get('/api/admin/payments', async (req, reply) => {

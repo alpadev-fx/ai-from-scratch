@@ -37,8 +37,12 @@ const jsonld = grafo(org(), curso(lang));
 // pintaba los metodos, el cupon y «Suscribirme» igual, y el usuario solo se
 // enteraba tras rellenarlo todo y pulsar: un 503 convertido en «hubo un error».
 // Un boton que no puede cobrar no se dibuja.
-const cobros = await apiTry<{ disponible: boolean }>('/api/payments/estado', Astro.request);
+const cobros = await apiTry<{ disponible: boolean; publicKey: string | null }>('/api/payments/estado', Astro.request);
 const hayCobro = cobros.data?.disponible === true;
+// La clave PUBLICA de Mercado Pago, para montar el Payment Brick al cargar en
+// vez de tener que crear una preferencia solo para averiguarla. Es publica: no
+// autoriza ningun cobro, solo tokeniza una tarjeta contra esta cuenta.
+const mpKey = cobros.data?.publicKey ?? '';
 ---
 <!doctype html>
 <html lang={lang} data-theme={theme}>
@@ -200,7 +204,7 @@ const hayCobro = cobros.data?.disponible === true;
   </div>
   <div id="toasts"></div>
 
-  <script define:vars={{ P, logged: !!user, moneda: MONEDA, precioMenor: PRECIO_MENOR, loc: lang === 'en' ? 'en-US' : 'es-CO' }}>
+  <script define:vars={{ P, logged: !!user, moneda: MONEDA, precioMenor: PRECIO_MENOR, mpKey, loc: lang === 'en' ? 'en-US' : 'es-CO' }}>
     const COLOR = { ok: 'var(--ok)', bad: 'var(--rd)', warn: 'var(--or)', info: 'var(--ac)' };
     const box = document.getElementById('toasts');
     const toast = (k, tt, b) => {
@@ -263,8 +267,88 @@ const hayCobro = cobros.data?.disponible === true;
       document.querySelectorAll('[data-m]').forEach((x) => x.removeAttribute('data-on'));
       b.setAttribute('data-on', '');
       document.getElementById('pse-note').hidden = b.dataset.m !== 'pse';
+      // Tarjeta monta el Brick; los demas metodos lo quitan, porque van por
+      // redireccion y un formulario de tarjeta encima solo confunde.
+      if (b.dataset.m === 'card') { void montarBrick(); }
+      else if (brickCtrl) { void brickCtrl.unmount(); brickCtrl = null; brickBox.innerHTML = ''; }
       paint();
     }));
+    // ── Payment Brick: la tarjeta se rellena AQUI, sin salir de la pagina ──
+    //
+    // El iframe es de Mercado Pago y el numero de la tarjeta nunca entra en este
+    // documento: el Brick devuelve un token de un solo uso. El PAN no toca este
+    // servidor en ningun momento, igual que con la redireccion.
+    //
+    // Solo tarjeta. PSE, efectivo y billetera siguen saliendo a la pagina de
+    // Mercado Pago: PSE abre el banco del comprador y efectivo genera un cupon,
+    // dos flujos que no caben en un formulario incrustado.
+    //
+    // La API de abajo esta MEDIDA contra el SDK real, no recordada:
+    //   bricks()    -> isInitialized, create
+    //   controlador -> getFormData, getAdditionalData, update, unmount
+    //   y `customization.visual.hidePaymentButton` funciona (el controlador
+    //   expone `paymentButtonHidden` despues de montar).
+    // Por eso el boton de pagar sigue siendo el de la pagina y no el del Brick:
+    // el del Brick se saltaria la casilla de terminos y la de renovacion.
+    const brickBox = document.getElementById('brick');
+    let brickCtrl = null;
+    let brickCargando = false;
+
+    const metodoActual = () => document.querySelector('[data-m][data-on]')?.dataset.m ?? 'card';
+
+    const sdkListo = () => new Promise((ok, fail) => {
+      if (window.MercadoPago) { ok(); return; }
+      const el = document.createElement('script');
+      el.src = 'https://sdk.mercadopago.com/js/v2';
+      el.onload = () => ok();
+      el.onerror = () => fail(new Error('sdk'));
+      document.head.append(el);
+    });
+
+    const montarBrick = async () => {
+      if (!mpKey || !logged || brickCargando || brickCtrl) return;
+      if (metodoActual() !== 'card') return;
+      brickCargando = true;
+      // Esqueleto mientras carga el iframe: es una espera de red real y sin esto
+      // el recuadro se queda vacio unos segundos y parece roto.
+      brickBox.innerHTML = '<span class="lbl">' + P.datos + '</span>'
+        + '<span class="sk-stack" aria-busy="true" role="status">'
+        + '<span class="sk-voz">' + P.brickCarga + '</span>'
+        + '<span class="sk sk-line" style="--sk-h:44px"></span>'
+        + '<span class="sk sk-line" style="--sk-h:44px;--sk-w:70%"></span>'
+        + '<span class="sk sk-line" style="--sk-h:44px"></span></span>';
+      try {
+        await sdkListo();
+        const mp = new window.MercadoPago(mpKey, { locale: loc === 'en-US' ? 'en-US' : 'es-CO' });
+        brickBox.innerHTML = '<span class="lbl">' + P.datos + '</span><div id="brick-mp"></div>';
+        brickCtrl = await mp.bricks().create('cardPayment', 'brick-mp', {
+          // El importe que se PINTA. El que se COBRA lo pone el servidor desde
+          // price.ts y este valor se descarta alli: si no, se edita en el
+          // navegador y se compra el curso por un peso.
+          initialization: { amount: precioMenor },
+          customization: {
+            visual: { hidePaymentButton: true },
+            paymentMethods: { maxInstallments: 1 },
+          },
+          callbacks: {
+            onReady: () => {},
+            onError: () => { toast('bad', P.mpErr, P.mpErrB); },
+            // Obligatorio aunque el boton este oculto: sin el, create() falla.
+            // El envio de verdad lo dispara el boton de la pagina con
+            // getFormData(), que es donde estan las dos casillas legales.
+            onSubmit: async () => {},
+          },
+        });
+      } catch {
+        // El SDK no cargo (bloqueador, red). No se deja un cargando eterno: se
+        // dice, y queda la redireccion como salida.
+        brickBox.innerHTML = '<span class="lbl">' + P.datos + '</span>'
+          + '<p class="s" style="color:var(--l2)">' + P.brickNoCarga + '</p>';
+      } finally { brickCargando = false; }
+    };
+
+    void montarBrick();
+
     document.getElementById('pay').addEventListener('click', async () => {
       if (!logged) { toast('warn', P.sinCuenta, P.sinCuentaB); return; }
       const terms = document.getElementById('terms');
@@ -278,6 +362,55 @@ const hayCobro = cobros.data?.disponible === true;
         return;
       }
       if (window.iaTrack) window.iaTrack('InitiateCheckout', PRODUCTO);
+
+      // ── Tarjeta: se cobra aqui mismo ──────────────────────────────────────
+      // Llega despues de las dos puertas legales a proposito: getFormData()
+      // solo se llama cuando los terminos estan aceptados y, si hay renovacion,
+      // tambien el consentimiento del cobro recurrente.
+      if (metodoActual() === 'card' && brickCtrl && mode === 'one_time') {
+        const btn = document.getElementById('pay');
+        btn.disabled = true;
+        try {
+          // Lanza si el formulario esta incompleto; el Brick ya pinta el error
+          // en el campo, asi que aqui solo hay que no seguir.
+          const fd = await brickCtrl.getFormData();
+          if (!fd || !fd.token) return;
+          const r = await fetch('/api/payments/mercadopago/card', { method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ termsVersion: '2026-09-07',
+              ...(couponCode() ? { couponCode: couponCode() } : {}),
+              card: {
+                token: fd.token,
+                paymentMethodId: fd.payment_method_id,
+                issuerId: fd.issuer_id,
+                installments: fd.installments,
+                identification: fd.payer?.identification,
+              } }) });
+          if (r.status === 429) { toast('warn', P.frenoT, P.frenoB); return; }
+          // El servicio no cobra con cupon todavia: ese descuento solo lo sabe
+          // manejar la redireccion, asi que se cae a ella en vez de fallar.
+          if (r.status === 422) { toast('info', P.cuponRedir, P.cuponRedirB); }
+          else if (r.status === 501 || r.status === 503) { toast('warn', P.sinCred, P.sinCredB); return; }
+          else if (!r.ok) { toast('bad', P.mpErr, P.mpErrB); return; }
+          else {
+            const d = await r.json();
+            if (d.status === 'approved') { window.location.assign('/pago/gracias'); return; }
+            if (d.status === 'in_process' || d.status === 'pending') {
+              window.location.assign('/pago/gracias?estado=pendiente'); return;
+            }
+            // Rechazada. El motivo real lo tiene `d.detail` (CVV mal, sin
+            // fondos, vencida). No se traduce uno por uno: esa tabla se queda
+            // vieja sola y un motivo nuevo saldria en blanco.
+            toast('bad', P.tarjetaNo, P.tarjetaNoB);
+            return;
+          }
+        } catch {
+          // getFormData lanza con el formulario incompleto. El Brick ya marco
+          // el campo; un toast encima seria decir lo mismo dos veces.
+          return;
+        } finally { btn.disabled = false; }
+      }
+
       const res = await fetch('/api/payments/mercadopago/preference', { method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ mode, termsVersion: '2026-09-07', ...(mode === 'one_time' && couponCode() ? { couponCode: couponCode() } : {}) }) });

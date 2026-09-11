@@ -544,7 +544,20 @@ const actionHtml = hasAction ? await Astro.slots.render('action') : '';
     }));
 
     document.getElementById('logout')!.onclick = async () => {
-      await fetch('/api/auth/logout', { method: 'POST' });
+      // `content-type: application/json` NO es decoracion. Sin el, la
+      // comprobacion de origen de Astro trata este POST como envio de
+      // formulario y responde 403 «Cross-site POST form submissions are
+      // forbidden» ANTES de llegar al servicio de auth: la cookie no se
+      // borraba. Medido en produccion -- sin la cabecera 403, con ella 200.
+      //
+      // Y la respuesta SE COMPRUEBA. Antes esto cantaba «sesion cerrada» y
+      // saltaba a /login pasara lo que pasara, asi que el 403 era invisible:
+      // el usuario leia que habia salido, aterrizaba en el login, y seguia con
+      // la sesion viva. En un ordenador prestado eso no es un fallo de
+      // pantalla. Un cierre de sesion que falla tiene que decirlo.
+      const r = await fetch('/api/auth/logout', { method: 'POST',
+        headers: { 'content-type': 'application/json' }, body: '{}' }).catch(() => null);
+      if (!r?.ok) { (window as any).toast('bad', T.salioNo, T.salioNoB); return; }
       (window as any).toast('info', T.salio, T.salioB);
       setTimeout(() => location.assign('/login'), 500);
     };

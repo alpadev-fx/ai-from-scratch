@@ -95,11 +95,17 @@ const rango = (lecciones: number) => (lecciones ? G.rangos[Math.min(lecciones, 1
       else window.toast('bad', R.tMalo, R.tMaloB);
     });
     document.getElementById('salir')?.addEventListener('click', async () => {
-      const res = await fetch('/api/ranking/optin', { method: 'DELETE' });
+      // Igual que el logout: sin content-type esto era un 403 del guardia de
+      // origen de Astro (que tambien cubre DELETE). Medido en produccion.
+      const res = await fetch('/api/ranking/optin', { method: 'DELETE',
+        headers: { 'content-type': 'application/json' } });
       if (res.ok) {
         window.toast('info', R.tFuera, R.tFueraB);
         setTimeout(() => location.reload(), 700);
+        return;
       }
+      // Antes no habia rama de fallo: el boton no hacia nada y no lo decia.
+      window.toast('bad', R.tMalo, R.tMaloB);
     });
   </script>
 </App>

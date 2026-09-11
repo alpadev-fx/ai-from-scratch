@@ -108,7 +108,11 @@ const labPct = prog ? Math.round((prog.solvedLabs / prog.totalLabs) * 100) : 0;
     fetch('/api/subscriptions/me').then(async (r) => { if (r.ok) pintar(await r.json()); }).catch(() => {});
     cancelBtn.addEventListener('click', async () => {
       cancelBtn.disabled = true; cancelBtn.textContent = A.cancelando;
-      const r = await fetch('/api/subscriptions/cancel', { method: 'POST' }).catch(() => null);
+      // Sin la cabecera, la comprobacion de origen de Astro devolvia 403 y
+      // NADIE podia cancelar su renovacion desde aqui: el toast de error salia
+      // siempre. Medido en produccion.
+      const r = await fetch('/api/subscriptions/cancel', { method: 'POST',
+        headers: { 'content-type': 'application/json' }, body: '{}' }).catch(() => null);
       if (r?.ok) { pintar(await r.json()); window.toast('ok', A.cancelarRenovacion, A.cancelada); }
       else { window.toast('bad', A.cancelarRenovacion, A.cancelarErr); }
       cancelBtn.disabled = false; cancelBtn.textContent = A.cancelarRenovacion;

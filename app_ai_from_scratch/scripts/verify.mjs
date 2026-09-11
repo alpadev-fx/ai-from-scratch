@@ -166,6 +166,9 @@ const GATES = [
   { id: 'web-i18n', what: 'every i18n key exists in both languages',
     cmd: ['pnpm', ['--dir', 'web', 'i18n']] },
 
+  { id: 'mutating-fetch', what: "every browser mutation sends content-type (Astro's origin check 403s without it)",
+    cmd: ['node', ['scripts/mutating-fetch.mjs']] },
+
   { id: 'web-unit', what: 'attribution and proxy-guard unit tests',
     cmd: ['pnpm', ['--dir', 'web', 'test']] },
 

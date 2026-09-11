@@ -309,6 +309,23 @@ const open = flags.mode && flags.open;
   const dice = (quien: 'yo' | 'bot' | 'bad', texto: string): HTMLElement =>
     burbuja(quien, `<span>${esc(texto)}</span>`);
 
+  // La UNICA espera real de la app. Todo lo demas se renderiza en el servidor:
+  // no hay islas de cliente ni una pagina que cargue datos al montarse. Aqui si
+  // se espera a un modelo, y puede tardar segundos.
+  //
+  // Antes era la palabra «Pensando…», que ocupa una linea y luego la sustituye
+  // una respuesta de cinco: el hilo daba un salto justo cuando el ojo volvia.
+  // Dos barras insinuan la forma de lo que viene y reservan parte del sitio.
+  //
+  // El texto sigue estando para el lector de pantalla (.sk-voz) y el contenedor
+  // lleva aria-busy, asi que se anuncia una vez y las barras no se leen.
+  const pensandoBurbuja = (): HTMLElement =>
+    burbuja('bot', `<span class="sk-stack" aria-busy="true" role="status">`
+      + `<span class="sk-voz">${esc(T.pensando)}</span>`
+      + `<span class="sk sk-line" style="--sk-w:94%"></span>`
+      + `<span class="sk sk-line" style="--sk-w:68%"></span>`
+      + `</span>`);
+
   const conAccion = (texto: string, accion: { txt: string; href: string } | null): HTMLElement =>
     burbuja('bot', `<span>${esc(texto)}</span>${accion
       ? `<a class="btn ghost ia-mini" style="margin-top:10px" href="${esc(accion.href)}">${esc(accion.txt)}</a>`
@@ -485,7 +502,7 @@ const open = flags.mode && flags.open;
 
     historial.push({ role: 'user', content: q });
     enviarBtn.disabled = true;
-    const pensando = dice('bot', T.pensando);
+    const pensando = pensandoBurbuja();
     try {
       const d = await preguntarIA(historial, cfg.lang, 'panel', leerPick());
       pensando.remove();

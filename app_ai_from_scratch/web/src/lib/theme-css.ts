@@ -77,13 +77,21 @@ export const SKELETON = `
    .h1 44px. --sk-w y --sk-h se fijan en línea porque son geometría del caso
    concreto, igual que los anchos de barra del resto de la hoja. */
 .sk-line{height:var(--sk-h,13px);width:var(--sk-w,100%)}
-.sk-title{height:var(--sk-h,22px);width:var(--sk-w,60%)}
-.sk-box{height:var(--sk-h,120px);width:var(--sk-w,100%)}
-.sk-round{height:var(--sk-h,26px);width:var(--sk-h,26px);border-radius:50%}
-.sk-btn{height:44px;width:var(--sk-w,140px);border-radius:6px}
+/* Solo .sk-line. Habia cuatro variantes mas -- title, box, round, btn -- y
+   ninguna tenia un solo uso: esta app se renderiza entera en el servidor, no
+   hay islas de cliente ni una sola pagina que espere datos al montarse, asi
+   que no existe el hueco que rellenarian. Se sirvian 1.555 bytes en cada carga
+   de cada pagina para nada. Cuando aparezca una pagina que cargue en cliente,
+   se vuelven a anadir; mientras tanto no se paga por ellas. */
 /* Pila de líneas: el hueco va aquí y no en cada barra, para que una línea suelta
    no arrastre un margen que nadie pidió. */
 .sk-stack{display:flex;flex-direction:column;gap:10px}
+/* El esqueleto no dice nada en voz alta: es geometria. Quien va con lector de
+   pantalla necesita la frase que sustituye, y esta es la unica forma de darsela
+   sin pintarla. clip-path y no display:none -- lo segundo tambien lo esconde
+   del lector, que es justo lo contrario de lo que hace falta. */
+.sk-voz{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;
+  clip-path:inset(50%);white-space:nowrap;border:0}
 /* La región que está cargando. aria-busy lo anuncia UNA vez; las barras se
    ocultan del árbol de accesibilidad porque doce cajas vacías leídas en voz alta
    son ruido, no información. */

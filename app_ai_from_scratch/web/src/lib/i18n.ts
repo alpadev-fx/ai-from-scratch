@@ -327,7 +327,7 @@ export const STR = {
     },
     avisos: { noGuardo: 'No se pudo guardar', noGuardoB: 'Reintenta en un momento.',
       temaOk: 'Tema actualizado', temaSig: ' · siguiendo al equipo',
-      salio: 'Sesión cerrada', salioB: 'Cerramos en este dispositivo.',
+      salioNo: 'No se pudo cerrar la sesión', salioNoB: 'Sigues dentro. Reintenta; si vuelve a fallar, cierra el navegador.', salio: 'Sesión cerrada', salioB: 'Cerramos en este dispositivo.',
       cerrar: 'Cerrar' },
     curso: {
       crumb: 'CURSO / FUNDAMENTOS VOL. 1', titulo: 'Fundamentos Vol. 1',
@@ -945,7 +945,7 @@ export const STR = {
     },
     avisos: { noGuardo: 'Could not save', noGuardoB: 'Try again in a moment.',
       temaOk: 'Theme updated', temaSig: ' · following your device',
-      salio: 'Signed out', salioB: 'Closed on this device.',
+      salioNo: 'Could not sign out', salioNoB: 'You are still signed in. Try again; if it keeps failing, close the browser.', salio: 'Signed out', salioB: 'Closed on this device.',
       cerrar: 'Close' },
     curso: {
       crumb: 'COURSE / FUNDAMENTALS VOL. 1', titulo: 'Fundamentals Vol. 1',

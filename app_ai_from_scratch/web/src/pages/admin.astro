@@ -256,7 +256,7 @@ const cobrado = [...porMoneda.entries()]
         b.disabled = true;
         try {
           const res = await fetch(`/api/admin/cupones/${encodeURIComponent(b.dataset.liberar!)}/liberar`,
-            { method: 'POST' });
+            { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
           const d = await res.json().catch(() => ({}));
           if (!res.ok) { window.toast('bad', 'No se pudo soltar', 'El servidor lo rechazó.'); return; }
           window.toast('ok', 'Reservas liberadas', `${d.released} uso(s) vuelven a estar disponibles.`);

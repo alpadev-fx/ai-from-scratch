@@ -31,6 +31,9 @@ export const AUTH_LIMITS: Record<string, number> = {
   // equivoca con el CVV. Por IP no para un ataque repartido entre muchas: para
   // eso hace falta contar tambien por usuario, y eso todavia no esta.
   '/api/payments/mercadopago/card': 5,
+  // Cotizar es gratis y sin efectos, pero adivinar codigos de cupon tambien:
+  // sin freno son 1000 intentos/min contra una tabla de 25 cupos al 95%.
+  '/api/payments/cupon/cotizar': 12,
 };
 
 export const AUTH_WINDOW_MS = 60_000;

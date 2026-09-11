@@ -306,6 +306,30 @@ async function reconcileOnce(): Promise<string[]> {
 
 app.get('/health', async () => healthBody());
 
+/**
+ * Cuanto queda a pagar con un cupon, SIN reservarlo ni cobrar nada.
+ *
+ * Existe porque el boton «Aplicar» de /pago mentia: pintaba «Cupon listo para
+ * redimir» en verde para cualquier texto, sin preguntarle al servidor. El
+ * comprador escribia un codigo invalido, veia verde, metia la tarjeta y solo
+ * al final se enteraba -- o peor, pagaba el precio entero creyendo el descuento
+ * aplicado.
+ *
+ * No reserva a proposito (ver Store.quoteCoupon): cotizar no gasta cupo.
+ */
+app.post<{ Body: { userId?: unknown; couponCode?: unknown } }>('/v1/coupons/quote',
+  async (request, reply) => {
+  if (!authorized(request)) return reply.code(401).send({ error: 'unauthorized' });
+  const userId = Number(request.body?.userId);
+  if (!Number.isSafeInteger(userId) || userId < 1) return reply.code(400).send({ error: 'invalid_actor' });
+  const code = typeof request.body?.couponCode === 'string' ? request.body.couponCode : '';
+  if (code.trim() === '') return reply.code(400).send({ error: 'missing_coupon' });
+  const offer = await store.quoteCoupon(code, userId);
+  if (!offer) return reply.code(422).send({ error: 'invalid_coupon' });
+  return { code: offer.code, discountPercent: offer.percent,
+    discountMinor: offer.discountMinor, totalMinor: offer.totalMinor, currency: CURRENCY };
+});
+
 app.post<{ Body: { userId?: unknown; email?: unknown; mode?: unknown; couponCode?: unknown;
   context?: unknown; termsVersion?: unknown } }>('/v1/checkout', async (request, reply) => {
   if (!authorized(request)) return reply.code(401).send({ error: 'unauthorized' });
@@ -439,15 +463,7 @@ app.post<{ Body: { userId?: unknown; email?: unknown; termsVersion?: unknown;
   if (typeof termsVersion !== 'string' || termsVersion.length < 1 || termsVersion.length > 32) {
     return reply.code(400).send({ error: 'terms_required' });
   }
-  // Los cupones NO pasan por aqui todavia, y es deliberado. El descuento vive en
-  // una reserva que hay que liberar en cada rama de fallo; equivocarse deja el
-  // cupon quemado, el cupo gastado y al comprador sin acceso -- eso ya paso una
-  // vez y por eso el orden de /v1/checkout esta como esta. Un segundo camino de
-  // cupones duplica ese riesgo para ahorrarle un salto a una minoria. La UI cae
-  // a la redireccion, que ya lo hace bien.
-  if (typeof request.body?.couponCode === 'string' && request.body.couponCode.trim() !== '') {
-    return reply.code(422).send({ error: 'cupon_requiere_redireccion' });
-  }
+  const couponCode = typeof request.body?.couponCode === 'string' ? request.body.couponCode : '';
   if (!config.mpAccessToken) return reply.code(501).send({ error: 'provider_not_configured' });
 
   const card = request.body?.card ?? {};
@@ -470,26 +486,53 @@ app.post<{ Body: { userId?: unknown; email?: unknown; termsVersion?: unknown;
     ? { type: ident.type, number: ident.number } : undefined;
 
   await store.saveCheckoutContext(userId, email, sanitizeContext(request.body?.context), { version: termsVersion });
+
+  // EL ORDEN IMPORTA, igual que en /v1/checkout: la validacion de la tarjeta y
+  // la de los terminos ya pasaron, asi que reservar aqui no quema un cupo por
+  // un formulario a medio llenar. A partir de esta linea TODA rama de salida
+  // tiene que liberar la reserva -- por eso el try envuelve desde aqui.
+  const reservation = couponCode ? await store.reserveCoupon(couponCode, userId) : null;
+  if (couponCode && !reservation) return reply.code(422).send({ error: 'invalid_coupon' });
   const orderKey = randomUUID();
-  await store.createOrder({ orderKey, userId, mode: 'one_time', expectedMinor: PRICE_MINOR,
-    currency: CURRENCY, expiresAt: new Date(Date.now() + 86_400_000) });
 
   try {
+    await store.createOrder({ orderKey, userId, mode: 'one_time',
+      expectedMinor: reservation ? reservation.offer.totalMinor : PRICE_MINOR,
+      currency: CURRENCY, couponRedemptionId: reservation?.id,
+      expiresAt: new Date(Date.now() + 86_400_000) });
+    // Un cupon del 100% no deja nada que cobrar y Mercado Pago rechaza un
+    // transaction_amount de 0. Ese caso ya lo resuelve /v1/checkout, que
+    // concede el acceso sin proveedor; aqui se manda alli en vez de gastar un
+    // token de tarjeta contra un 400 seguro.
+    if (reservation?.offer.totalMinor === 0) {
+      await store.releaseCoupon(reservation.id);
+      return reply.code(422).send({ error: 'cupon_cubre_el_total' });
+    }
     // El email del pagador sale del actor que el api ya autentico, NO del cuerpo
     // que manda el navegador: si viniera del cliente, el recibo de Mercado Pago
     // se podria emitir a nombre de otra persona.
     const result = await provider.cardPayment({ userId, email }, orderKey, {
       token, paymentMethodId, issuerId, installments, payerEmail: email, identification,
-    });
+    }, reservation ? { totalMinor: reservation.offer.totalMinor,
+      couponRedemptionId: reservation.id } : undefined);
     const paymentId = String(result.id ?? '');
     const status = String(result.status ?? '');
     if (paymentId) await store.attachOrderRef(orderKey, paymentId);
+    // La redencion la cierra el webhook (processPaymentItem), igual que en la
+    // redireccion: aqui solo se ata la reserva al id del pago para que la
+    // encuentre. Si MP RECHAZO la tarjeta no hay nada que atar y la reserva se
+    // libera -- un rechazo no puede gastar el cupon del comprador.
+    if (reservation) {
+      if (paymentId && status !== 'rejected') await store.attachCoupon(reservation.id, paymentId);
+      else await store.releaseCoupon(reservation.id);
+    }
     // `status_detail` es de Mercado Pago y es lo unico que distingue «fondos
     // insuficientes» de «codigo de seguridad mal». La UI lo traduce; aqui viaja
     // crudo porque inventarle un codigo propio a cada motivo del proveedor es
     // una tabla que se queda vieja sola.
     return { status, paymentId, detail: String(result.status_detail ?? ''), orderKey };
   } catch (error) {
+    if (reservation) await store.releaseCoupon(reservation.id);
     if (error instanceof MercadoPagoError) {
       app.log.error({ status: error.status, body: error.body, sent: error.sent, userId },
         'mercadopago rejected card payment');

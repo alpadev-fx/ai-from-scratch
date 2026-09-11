@@ -972,6 +972,21 @@ app.post<{ Body: { termsVersion?: unknown; couponCode?: unknown; card?: unknown 
   return relay(reply, response);
 });
 
+/**
+ * Cuanto queda a pagar con un cupon. No reserva, no cobra, no concede nada.
+ *
+ * Lleva el mismo freno por IP que la ruta de tarjeta: sin el, este endpoint es
+ * un oraculo gratis para adivinar codigos de cupon a 1000 intentos por minuto.
+ */
+app.post<{ Body: { couponCode?: unknown } }>('/api/payments/cupon/cotizar', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  const couponCode = typeof req.body?.couponCode === 'string' ? req.body.couponCode.slice(0, 64) : '';
+  const response = await callPayments('/v1/coupons/quote', { method: 'POST', body: JSON.stringify({
+    userId: user.id, couponCode,
+  }) });
+  return relay(reply, response);
+});
+
 app.post<{ Body: { mode?: unknown; couponCode?: unknown; termsVersion?: unknown } }>('/api/payments/mercadopago/preference', async (req, reply) => {
   const user = await requireUser(req, reply); if (!user) return;
   const mode = req.body?.mode === 'subscription' ? 'subscription' : 'one_time';

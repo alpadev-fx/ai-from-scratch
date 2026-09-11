@@ -402,6 +402,42 @@ export class Store {
       [data.providerId, data.userId, data.status, data.periodEnd, data.raw]);
   }
 
+  /**
+   * Lo que vale un cupon, SIN reservarlo. Es lo que responde el boton
+   * «Aplicar»: el comprador tiene que ver el total antes de escribir la
+   * tarjeta, y hasta ahora ese boton solo pintaba «Cupon listo» para
+   * cualquier texto -- «PENDEJADA» incluido -- sin preguntarle a nadie.
+   *
+   * NO cuenta como intento y NO toca coupon_redemptions a proposito: si
+   * cotizar gastara cupo, mirar el precio dos veces quemaria dos de los 25.
+   * Las mismas puertas que reserveCoupon (activo, ventana de fechas, cupo,
+   * ya redimido por este usuario) para que el total que se ve sea el total
+   * que se cobra; la carrera entre cotizar y reservar la cierra reserveCoupon,
+   * que es quien manda.
+   */
+  async quoteCoupon(code: string, userId: number): Promise<CouponOffer | null> {
+    const normalized = normalizeCode(code);
+    if (!normalized || normalized.length > 64) return null;
+    const result = await this.pool.query(
+      `SELECT id, code, percent, max_redemptions, active, starts_at, ends_at
+         FROM coupons WHERE code=$1`, [normalized]);
+    const row = result.rows[0];
+    const now = Date.now();
+    if (!row || !row.active || (row.starts_at && new Date(row.starts_at).getTime() > now) ||
+        (row.ends_at && new Date(row.ends_at).getTime() <= now)) return null;
+    const prior = await this.pool.query(
+      `SELECT 1 FROM coupon_redemptions WHERE coupon_id=$1 AND user_id=$2 AND state='redeemed' LIMIT 1`,
+      [row.id, userId]);
+    if (prior.rowCount) return null;
+    const used = await this.pool.query(
+      `SELECT COUNT(*)::int AS count FROM coupon_redemptions WHERE coupon_id=$1 AND state IN ('reserved','redeemed')`,
+      [row.id]);
+    if (row.max_redemptions !== null && Number(used.rows[0]?.count ?? 0) >= Number(row.max_redemptions)) return null;
+    const discountMinor = Math.floor(PRICE_MINOR * Number(row.percent) / 100);
+    return { id: Number(row.id), code: String(row.code), percent: Number(row.percent),
+      discountMinor, totalMinor: PRICE_MINOR - discountMinor };
+  }
+
   async reserveCoupon(code: string, userId: number): Promise<CouponReservation | null> {
     const normalized = normalizeCode(code);
     if (!normalized || normalized.length > 64) return null;

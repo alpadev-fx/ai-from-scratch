@@ -258,10 +258,31 @@ const mpKey = cobros.data?.publicKey ?? '';
     // row, the button and the consent still showed the one-time state -- and the
     // pay click would send mode=subscription under a button saying «Pagar … 30 días».
     paint();
-    document.getElementById('apply-coupon').addEventListener('click', () => {
+    // El total con cupon lo dice el SERVIDOR, no esta pagina.
+    //
+    // Antes este boton escribia «Cupon listo para redimir» en verde para
+    // cualquier texto -- «PENDEJADA» incluido -- sin preguntarle a nadie. El
+    // comprador veia verde, metia la tarjeta y descubria al final que el cupon
+    // no existia, o pagaba el precio entero creyendo el descuento aplicado.
+    //
+    // Cotizar no reserva ni gasta cupo (payments: /v1/coupons/quote).
+    const aplicar = document.getElementById('apply-coupon');
+    const pintaCupon = (txt, color) => { couponStatus.textContent = txt; couponStatus.style.color = color; };
+    aplicar.addEventListener('click', async () => {
       const code = couponCode();
-      couponStatus.textContent = code ? P.cuponListo : P.cuponVacio;
-      couponStatus.style.color = code ? 'var(--ok)' : 'var(--or)';
+      if (!code) { pintaCupon(P.cuponVacio, 'var(--or)'); return; }
+      aplicar.disabled = true;
+      pintaCupon(P.cuponComprobando, 'var(--l2)');
+      try {
+        const r = await fetch('/api/payments/cupon/cotizar', { method: 'POST',
+          headers: { 'content-type': 'application/json' }, body: JSON.stringify({ couponCode: code }) });
+        if (r.status === 429) { pintaCupon(P.frenoB, 'var(--or)'); return; }
+        if (!r.ok) { pintaCupon(P.cuponInvalidoB, 'var(--rd)'); return; }
+        const d = await r.json();
+        const total = Number(d.totalMinor).toLocaleString(loc);
+        pintaCupon(`${P.descuento}: ${d.discountPercent}% · ${P.total}: ${total} ${moneda}`, 'var(--ok)');
+      } catch { pintaCupon(P.mpErrB, 'var(--rd)'); }
+      finally { aplicar.disabled = false; }
     });
     document.querySelectorAll('[data-m]').forEach((b) => b.addEventListener('click', () => {
       document.querySelectorAll('[data-m]').forEach((x) => x.removeAttribute('data-on'));
@@ -305,6 +326,45 @@ const mpKey = cobros.data?.publicKey ?? '';
       document.head.append(el);
     });
 
+    // El Brick vive en un iframe de Mercado Pago: nuestras variables CSS no
+    // entran ahi. La unica forma de que no parezca de otra web es pasarle los
+    // tokens a mano, y volver a pasarlos cuando el visitante cambia de tema.
+    //
+    // Los nombres de customVariables estan MEDIDOS: montado con estos valores
+    // y comprobado en captura que formBackgroundColor, inputBackgroundColor,
+    // textPrimaryColor y los borderRadius* aplican de verdad. `theme` va en
+    // customization.visual.STYLE, no en visual -- el SDK lee `t?.visual.style`.
+    //
+    // El radio 0 no es un capricho: en esta hoja solo .btn tiene esquinas
+    // redondeadas (6px). Todo lo demas es recto, y un formulario redondeado
+    // dentro de un recuadro recto se lee como incrustado de fuera.
+    const esPapel = () => {
+      const t = document.documentElement.getAttribute('data-theme');
+      if (t === 'paper') return true;
+      if (t === 'auto') return window.matchMedia('(prefers-color-scheme: light)').matches;
+      return false;   // 'dark' y cualquier valor raro: oscuro, que es la base
+    };
+
+    const paletaBrick = () => esPapel()
+      ? { theme: 'default', customVariables: {
+          baseColor: '#0A5AD6', baseColorFirstVariant: '#0A5AD6', baseColorSecondVariant: '#0A5AD6',
+          textPrimaryColor: '#000000', textSecondaryColor: 'rgba(0,0,0,.66)',
+          inputBackgroundColor: 'rgba(120,120,128,.20)', formBackgroundColor: '#ffffff',
+          errorColor: '#C21B12', successColor: '#0C6B3E',
+          borderRadiusSmall: '0px', borderRadiusMedium: '0px',
+          borderRadiusLarge: '0px', borderRadiusFullWidth: '0px',
+          formPadding: '0px', fontSizeMedium: '15px', inputVerticalPadding: '12px',
+        } }
+      : { theme: 'dark', customVariables: {
+          baseColor: '#0A84FF', baseColorFirstVariant: '#0A6CFF', baseColorSecondVariant: '#0A6CFF',
+          textPrimaryColor: '#ffffff', textSecondaryColor: 'rgba(235,235,245,.62)',
+          inputBackgroundColor: 'rgba(120,120,128,.22)', formBackgroundColor: '#0B0B0C',
+          errorColor: '#FF453A', successColor: '#30D158',
+          borderRadiusSmall: '0px', borderRadiusMedium: '0px',
+          borderRadiusLarge: '0px', borderRadiusFullWidth: '0px',
+          formPadding: '0px', fontSizeMedium: '15px', inputVerticalPadding: '12px',
+        } };
+
     const montarBrick = async () => {
       if (!mpKey || !logged || brickCargando || brickCtrl) return;
       if (metodoActual() !== 'card') return;
@@ -327,7 +387,7 @@ const mpKey = cobros.data?.publicKey ?? '';
           // navegador y se compra el curso por un peso.
           initialization: { amount: precioMenor },
           customization: {
-            visual: { hidePaymentButton: true },
+            visual: { hidePaymentButton: true, style: paletaBrick() },
             paymentMethods: { maxInstallments: 1 },
           },
           callbacks: {
@@ -387,9 +447,11 @@ const mpKey = cobros.data?.publicKey ?? '';
                 identification: fd.payer?.identification,
               } }) });
           if (r.status === 429) { toast('warn', P.frenoT, P.frenoB); return; }
-          // El servicio no cobra con cupon todavia: ese descuento solo lo sabe
-          // manejar la redireccion, asi que se cae a ella en vez de fallar.
-          if (r.status === 422) { toast('info', P.cuponRedir, P.cuponRedirB); }
+          // 422 = el cupon no vale (inexistente, agotado, caducado, ya usado por
+          // esta cuenta). Ya NO se cae a la redireccion: la ruta de tarjeta
+          // cobra con cupon, asi que un 422 aqui es un codigo malo y hay que
+          // decirlo, no mandar al comprador fuera de la pagina.
+          if (r.status === 422) { toast('bad', P.cuponInvalido, P.cuponInvalidoB); return; }
           else if (r.status === 501 || r.status === 503) { toast('warn', P.sinCred, P.sinCredB); return; }
           else if (!r.ok) { toast('bad', P.mpErr, P.mpErrB); return; }
           else {

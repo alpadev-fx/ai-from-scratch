@@ -416,7 +416,20 @@ const SUGERENCIAS = [C.sugFallo, C.sugSimple, C.sugPrueba];
 
       historial.push({ role: 'user', content: t });
       go.disabled = true; go.textContent = T.pensando;
-      const espera = turnoIA(`<p class="pr-p" style="color:var(--l3)">${T.pensando}</p>`);
+      // Mismo esqueleto que el panel lateral (AiPanel.astro:322). Aqui pesa mas:
+      // la pagina de chat da mas ancho, asi que la respuesta que llega ocupa mas
+      // lineas y el salto al sustituir una sola linea de texto es mayor. Tres
+      // barras reservan aproximadamente lo que va a venir.
+      //
+      // aria-busy lo anuncia una vez y .sk-voz lleva el texto para el lector de
+      // pantalla; las barras no se leen. go.textContent ya dice «Pensando…» en
+      // el boton, que es la otra mitad del estado.
+      const espera = turnoIA(`<span class="sk-stack" aria-busy="true" role="status">`
+        + `<span class="sk-voz">${esc(T.pensando)}</span>`
+        + `<span class="sk sk-line" style="--sk-w:96%"></span>`
+        + `<span class="sk sk-line" style="--sk-w:88%"></span>`
+        + `<span class="sk sk-line" style="--sk-w:61%"></span>`
+        + `</span>`);
       const turno = espera.parentElement!;
       try {
         const d = await preguntarIA(historial, cfg.lang, 'chat', leerPick());

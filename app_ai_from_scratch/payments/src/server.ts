@@ -591,6 +591,61 @@ app.get('/v1/admin/payments', async (request, reply) => {
     alerts: { deadEvents: queue.dead, stalePendingOver15m: queue.pendingOver15m, orphanedApproved: queue.orphanedApproved } };
 });
 
+/**
+ * Administracion de cupones desde /admin.
+ *
+ * ESTO NO SUSTITUYE A scripts/coupon.mjs, lo duplica en un sitio mas debil, y
+ * hay que saberlo: crear cupones por HTTP significa que la credencial pasa a
+ * ser una cookie de sesion de admin en vez del acceso al host. Un XSS en
+ * /admin es, a partir de aqui, una fabrica de cupones. El script sigue siendo
+ * el camino fuerte y no se borra.
+ *
+ * Por eso las guardas del script se copian TAL CUAL, no se relajan por ser una
+ * pantalla: sin tope no se crea, sin caducidad no se crea, y un 100 % con tope
+ * por encima de MAX_LIBRE se rechaza. La omision de un limite leida como
+ * «ilimitado» es exactamente el fallo que hizo nacer aquel script.
+ */
+const MAX_LIBRE = 100;
+
+app.get('/v1/admin/coupons', async (request, reply) => {
+  if (!authorized(request)) return reply.code(401).send({ error: 'unauthorized' });
+  return { coupons: await store.listCoupons(), priceMinor: PRICE_MINOR, currency: CURRENCY };
+});
+
+app.post<{ Body: { code?: unknown; percent?: unknown; max?: unknown; days?: unknown } }>(
+  '/v1/admin/coupons', async (request, reply) => {
+  if (!authorized(request)) return reply.code(401).send({ error: 'unauthorized' });
+  const code = String(request.body?.code ?? '').trim().toUpperCase().replace(/\s+/g, '');
+  const percent = Number(request.body?.percent);
+  const max = Number(request.body?.max);
+  const days = Number(request.body?.days);
+  if (!code || code.length > 64) return reply.code(400).send({ error: 'invalid_code' });
+  if (!Number.isInteger(percent) || percent < 1 || percent > 100) {
+    return reply.code(400).send({ error: 'invalid_percent' });
+  }
+  // Sin valor por defecto, a proposito: un tope omitido que se lea como
+  // «ilimitado» es el fallo original. Falta el dato -> no se crea.
+  if (!Number.isInteger(max) || max < 1) return reply.code(400).send({ error: 'max_required' });
+  if (!Number.isInteger(days) || days < 1) return reply.code(400).send({ error: 'days_required' });
+  if (percent === 100 && max > MAX_LIBRE) {
+    return reply.code(400).send({ error: 'free_coupon_cap', max: MAX_LIBRE });
+  }
+  const created = await store.createCoupon(code, percent, max, days);
+  if (!created) return reply.code(409).send({ error: 'coupon_exists' });
+  app.log.info({ code: created.code, percent, max, days }, 'coupon created from admin');
+  return created;
+});
+
+app.post<{ Params: { code: string }; Body: { active?: unknown } }>(
+  '/v1/admin/coupons/:code/state', async (request, reply) => {
+  if (!authorized(request)) return reply.code(401).send({ error: 'unauthorized' });
+  const active = request.body?.active === true;
+  const ok = await store.setCouponActive(String(request.params.code ?? ''), active);
+  if (!ok) return reply.code(404).send({ error: 'coupon_not_found' });
+  app.log.info({ code: request.params.code, active }, 'coupon state changed from admin');
+  return { ok: true, active };
+});
+
 app.post('/v1/admin/reconcile', async (request, reply) => {
   if (!authorized(request)) return reply.code(401).send({ error: 'unauthorized' });
   if (!config.mpAccessToken) return reply.code(501).send({ error: 'provider_not_configured' });

@@ -5,13 +5,73 @@ import { Store } from '../../src/db.ts';
 const dsn = process.env.PAYMENTS_TEST_DATABASE_URL;
 
 if (!dsn) {
-  console.error('payments/test/db/store.test.ts: SKIPPED (PAYMENTS_TEST_DATABASE_URL unset). Unproved: migrate() twice is a no-op; concurrent consumeOrder admits one winner; orphan approved payment lands dead with last_error starting orphan_payment:.');
+  console.error('payments/test/db/store.test.ts: SKIPPED (PAYMENTS_TEST_DATABASE_URL unset). Unproved: migrate() twice is a no-op; concurrent consumeOrder admits one winner; orphan approved payment lands dead with last_error starting orphan_payment:; one buyer retrying does not exhaust a capped coupon; quoteCoupon and reserveCoupon agree on the cap.');
 } else {
   const store = new Store(dsn);
 
   test('migrate() called twice is a no-op', async () => {
     await store.migrate();
     await store.migrate();
+  });
+
+  /**
+   * La regresion: un comprador que reintenta se agotaba su propio cupon.
+   *
+   * reserveCoupon insertaba una fila `reserved` por intento, todas del mismo
+   * usuario, y cada una gastaba un cupo. Con tope 3, al cuarto clic en
+   * «Pagar» su propio cupon respondia «no valido» -- y seguia asi 30 minutos,
+   * hasta que la barrida soltaba las reservas.
+   */
+  test('one buyer retrying does not exhaust a capped coupon', async () => {
+    await store.migrate();
+    const code = `RETRY${Date.now()}`;
+    const creado = await store.createCoupon(code, 50, 3, 7);
+    assert.ok(creado, 'the coupon must be created');
+    const userId = 900_000 + (Date.now() % 1000);
+
+    const uno = await store.reserveCoupon(code, userId);
+    assert.ok(uno, 'first reservation');
+    const dos = await store.reserveCoupon(code, userId);
+    assert.ok(dos, 'a retry by the same buyer must still reserve');
+    assert.equal(dos.id, uno.id, 'and it must REUSE the same reservation, not open a second');
+
+    // El cupo real: tres intentos del mismo comprador ocupan UNO, no tres.
+    const tres = await store.reserveCoupon(code, userId);
+    assert.ok(tres, 'a third retry still works');
+    assert.equal(tres.id, uno.id);
+
+    // Y quedan dos cupos para OTRAS personas.
+    const otro = await store.reserveCoupon(code, userId + 1);
+    assert.ok(otro, 'a different buyer still fits');
+    assert.notEqual(otro.id, uno.id);
+  });
+
+  /**
+   * Cotizar y reservar tienen que decir lo mismo. Si cotizar cuenta el cupo de
+   * otra forma, el boton «Aplicar» dice «cupon no valido» sobre un cupon que
+   * el cobro habria aceptado -- o al reves, promete un descuento que al pagar
+   * se cae.
+   */
+  test('quoteCoupon and reserveCoupon agree on the cap', async () => {
+    await store.migrate();
+    const code = `QUOTE${Date.now()}`;
+    assert.ok(await store.createCoupon(code, 95, 2, 7));
+    const userId = 910_000 + (Date.now() % 1000);
+
+    const antes = await store.quoteCoupon(code, userId);
+    assert.ok(antes, 'a fresh coupon quotes');
+    assert.equal(antes.percent, 95);
+
+    // La reserva PROPIA no puede hacer que el cupon se vea agotado para uno mismo.
+    assert.ok(await store.reserveCoupon(code, userId));
+    const despues = await store.quoteCoupon(code, userId);
+    assert.ok(despues, 'my own live reservation must not make the coupon look used up to me');
+    assert.equal(despues.totalMinor, antes.totalMinor);
+
+    // Un cupon revocado no se cotiza, igual que no se reserva.
+    await store.setCouponActive(code, false);
+    assert.equal(await store.quoteCoupon(code, userId), null);
+    assert.equal(await store.reserveCoupon(code, userId + 1), null);
   });
 
   test('two concurrent consumeOrder calls on the same order admit exactly one winner', async () => {

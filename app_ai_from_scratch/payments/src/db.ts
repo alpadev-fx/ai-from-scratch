@@ -32,8 +32,10 @@ export interface CouponRow {
   percent: number;
   maxRedemptions: number | null;
   active: boolean;
-  /** reserved + redeemed: el mismo conteo que decide si queda cupo. */
+  /** El mismo conteo que decide si queda cupo: redimidos + reservas vivas. */
   used: number;
+  /** Cuantos de esos `used` son reservas vivas, no compras. Se pueden soltar. */
+  holding: number;
   startsAt: string | null;
   endsAt: string | null;
   discountMinor: number;
@@ -443,9 +445,23 @@ export class Store {
       `SELECT 1 FROM coupon_redemptions WHERE coupon_id=$1 AND user_id=$2 AND state='redeemed' LIMIT 1`,
       [row.id, userId]);
     if (prior.rowCount) return null;
+    // El cupo se cuenta COMO LO CUENTA reserveCoupon, no parecido.
+    //
+    // reserveCoupon suelta las reservas de mas de 30 minutos antes de contar;
+    // cotizar no puede hacer ese UPDATE (es de solo lectura a proposito), asi
+    // que excluye las mismas filas con el mismo predicado. Sin esto, cotizar
+    // decia «cupon no valido» sobre un cupon que reservar habria aceptado.
+    //
+    // Y la reserva VIVA de quien pregunta no cuenta contra el: es la suya, y
+    // reserveCoupon se la va a reutilizar. Antes su propio intento anterior le
+    // hacia ver el cupon como agotado.
     const used = await this.pool.query(
-      `SELECT COUNT(*)::int AS count FROM coupon_redemptions WHERE coupon_id=$1 AND state IN ('reserved','redeemed')`,
-      [row.id]);
+      `SELECT COUNT(*)::int AS count FROM coupon_redemptions
+        WHERE coupon_id=$1
+          AND (state='redeemed'
+               OR (state='reserved' AND reserved_at >= now() - interval '30 minutes'
+                   AND user_id <> $2))`,
+      [row.id, userId]);
     if (row.max_redemptions !== null && Number(used.rows[0]?.count ?? 0) >= Number(row.max_redemptions)) return null;
     const discountMinor = Math.floor(PRICE_MINOR * Number(row.percent) / 100);
     return { id: Number(row.id), code: String(row.code), percent: Number(row.percent),
@@ -479,7 +495,23 @@ export class Store {
       if (row.max_redemptions !== null && Number(used.rows[0]?.count ?? 0) >= Number(row.max_redemptions)) {
         await client.query('ROLLBACK'); return null;
       }
-      const inserted = await client.query(
+      // REUTILIZAR la reserva viva de este mismo usuario, no insertar otra.
+      //
+      // Antes esto insertaba siempre. Un comprador que reintenta -- red mala,
+      // tarjeta rechazada, o un checkout roto como el de hoy -- se quedaba con
+      // una fila `reserved` por intento, todas suyas, y cada una gastaba un
+      // cupo de las 3 del cupon. Al cuarto clic su propio cupon le decia
+      // «Revisa el codigo o intenta de nuevo», y seguia diciendoselo 30
+      // minutos, que es lo que tarda la barrida de arriba en soltarlas.
+      // Medido: cupon de tope 3, tres clics en «Pagar», el cuarto 422.
+      //
+      // El indice unico coupon_user_redeemed solo cubre `redeemed`, asi que no
+      // frenaba esto. Una persona tiene como mucho UNA reserva viva por cupon.
+      const mia = await client.query(
+        `SELECT id FROM coupon_redemptions
+          WHERE coupon_id=$1 AND user_id=$2 AND state='reserved'
+          ORDER BY reserved_at DESC LIMIT 1`, [row.id, userId]);
+      const inserted = mia.rowCount ? mia : await client.query(
         `INSERT INTO coupon_redemptions (coupon_id,user_id) VALUES ($1,$2) RETURNING id`, [row.id, userId]);
       await client.query('COMMIT');
       // El `/ 100` de aqui es el PORCENTAJE del cupon, no la moneda: un 30%
@@ -501,13 +533,23 @@ export class Store {
   async listCoupons(): Promise<CouponRow[]> {
     const result = await this.pool.query(`
       SELECT c.id, c.code, c.percent, c.max_redemptions, c.active, c.starts_at, c.ends_at,
+             -- El MISMO conteo que reserveCoupon: las reservas de mas de 30
+             -- minutos ya no ocupan cupo (la barrida de reserveCoupon las
+             -- suelta), asi que contarlas aqui pintaba «3 de 3» sobre un
+             -- cupon que el cobro habria aceptado.
              (SELECT COUNT(*)::int FROM coupon_redemptions r
-                WHERE r.coupon_id = c.id AND r.state IN ('reserved','redeemed')) AS used
+                WHERE r.coupon_id = c.id
+                  AND (r.state='redeemed'
+                       OR (r.state='reserved'
+                           AND r.reserved_at >= now() - interval '30 minutes'))) AS used,
+             (SELECT COUNT(*)::int FROM coupon_redemptions r
+                WHERE r.coupon_id = c.id AND r.state='reserved'
+                  AND r.reserved_at >= now() - interval '30 minutes') AS holding
         FROM coupons c ORDER BY c.created_at DESC, c.code`);
     return result.rows.map((r) => ({
       id: Number(r.id), code: String(r.code), percent: Number(r.percent),
       maxRedemptions: r.max_redemptions === null ? null : Number(r.max_redemptions),
-      active: Boolean(r.active), used: Number(r.used),
+      active: Boolean(r.active), used: Number(r.used), holding: Number(r.holding),
       startsAt: r.starts_at ? new Date(r.starts_at).toISOString() : null,
       endsAt: r.ends_at ? new Date(r.ends_at).toISOString() : null,
       discountMinor: Math.floor(PRICE_MINOR * Number(r.percent) / 100),
@@ -543,6 +585,26 @@ export class Store {
    * conserva el curso, y eso es correcto -- pago (o se le regalo) y ya esta.
    * El codigo simplemente deja de abrir mas.
    */
+  /**
+   * Suelta las reservas VIVAS de un cupon. No toca las redimidas.
+   *
+   * Existe porque una reserva dura 30 minutos y durante ese rato ocupa cupo.
+   * Con un cupon de tope 3 y un checkout que falla, el propio comprador podia
+   * dejar el cupon inservible hasta la siguiente barrida -- y no habia forma
+   * de desatascarlo salvo esperar o entrar a Postgres a mano.
+   *
+   * Es seguro: una reserva no es una compra. Si alguien estaba a mitad de
+   * pagar, su `reserveCoupon` vuelve a tomar cupo en el siguiente intento; y
+   * si ya pago, la fila esta en `redeemed` y esto no la mira.
+   */
+  async releaseCouponHolds(code: string): Promise<number> {
+    const result = await this.pool.query(
+      `UPDATE coupon_redemptions SET state='released'
+         WHERE state='reserved'
+           AND coupon_id = (SELECT id FROM coupons WHERE code=$1)`, [normalizeCode(code)]);
+    return result.rowCount ?? 0;
+  }
+
   async setCouponActive(code: string, active: boolean): Promise<boolean> {
     const result = await this.pool.query(
       `UPDATE coupons SET active=$2 WHERE code=$1`, [normalizeCode(code), active]);

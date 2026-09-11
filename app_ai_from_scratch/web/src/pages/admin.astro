@@ -18,7 +18,7 @@ const payRes = await apiTry<{ payments: P[] }>('/api/admin/payments', Astro.requ
 const pays = payRes.data?.payments ?? [];
 const paysOk = payRes.status === 200;
 type C = { id: number; code: string; percent: number; maxRedemptions: number | null;
-  active: boolean; used: number; startsAt: string | null; endsAt: string | null;
+  active: boolean; used: number; holding: number; startsAt: string | null; endsAt: string | null;
   discountMinor: number; totalMinor: number };
 // apiTry y no apiFetch, por lo mismo que los cobros: los cupones son UNA caja
 // de /admin y el servicio de pagos caido no puede apagar la administracion.
@@ -142,18 +142,24 @@ const cobrado = [...porMoneda.entries()]
       )}
       {cuponesOk && cupones.length > 0 && (
       <div class="tblwrap"><div style="display:flex;flex-direction:column;gap:14px">
-        <div class="tbl-admin" style="grid-template-columns:minmax(0,1.2fr) 110px 120px 120px 120px 130px;padding-bottom:10px;border-bottom:1px solid var(--hair)">
+        <div class="tbl-admin" style="grid-template-columns:minmax(0,1.2fr) 100px 120px 165px 110px 185px;padding-bottom:10px;border-bottom:1px solid var(--hair)">
           <div class="tblhead">Código</div><div class="tblhead">Descuento</div><div class="tblhead">Queda en</div><div class="tblhead">Usos</div><div class="tblhead">Estado</div><div class="tblhead">Acción</div>
         </div>
         {cupones.map((c) => (
-          <div class="tbl-admin" style="grid-template-columns:minmax(0,1.2fr) 110px 120px 120px 120px 130px;align-items:center;height:56px;border-bottom:1px solid var(--hair2)">
+          <div class="tbl-admin" style="grid-template-columns:minmax(0,1.2fr) 100px 120px 165px 110px 185px;align-items:center;height:56px;border-bottom:1px solid var(--hair2)">
             <span class="num" style="font:600 14px/1.2 var(--m)">{c.code}</span>
             <span class="s">{c.percent}%</span>
             <span class="num s">{c.totalMinor.toLocaleString('es-CO')} {MONEDA}</span>
-            <span class="s" style="color:var(--l2)">{c.used} de {c.maxRedemptions ?? '∞'}</span>
+            <span class="s" style="color:var(--l2)">{c.used} de {c.maxRedemptions ?? '∞'}{c.holding > 0 && <span style="color:var(--or)"> · {c.holding} sin pagar</span>}</span>
             <span class="s" style={`color:${COLC[estadoCupon(c)]}`}>{estadoCupon(c)}</span>
-            <button class="btn ghost" type="button" data-cup={c.code} data-activar={c.active ? '0' : '1'}
-              style="height:32px;padding:0 12px">{c.active ? 'Revocar' : 'Activar'}</button>
+            <div style="display:flex;gap:6px">
+              <button class="btn ghost" type="button" data-cup={c.code} data-activar={c.active ? '0' : '1'}
+                style="height:32px;padding:0 10px">{c.active ? 'Revocar' : 'Activar'}</button>
+              {c.holding > 0 && (
+                <button class="btn ghost" type="button" data-liberar={c.code}
+                  style="height:32px;padding:0 10px;color:var(--or)">Soltar</button>
+              )}
+            </div>
           </div>
         ))}
       </div></div>
@@ -163,7 +169,7 @@ const cobrado = [...porMoneda.entries()]
       )}
       <div class="card" style="border-color:var(--hair);border-left:2px solid var(--or);display:flex;gap:12px;align-items:flex-start">
         <Fragment set:html={icon('alert', 18, 'var(--or)')} />
-        <div><div class="h3">Revocar no quita el acceso</div><p class="s" style="color:var(--l2);margin-top:4px">Quien ya redimió el cupón conserva el curso: pagó o se le regaló, y eso no se deshace desde aquí. Revocar solo impide que el código abra más cuentas. Un cupón del 100 % no pasa por Mercado Pago: concede el curso directamente.</p></div>
+        <div><div class="h3">Revocar no quita el acceso · «sin pagar» son reservas</div><p class="s" style="color:var(--l2);margin-top:4px">Un cupón se reserva al pulsar «Pagar» y la reserva ocupa un uso durante 30 minutos aunque el pago nunca termine. «Soltar» las libera al instante: no es una compra, así que no se pierde nada. Quien ya redimió el cupón conserva el curso: pagó o se le regaló, y eso no se deshace desde aquí. Revocar solo impide que el código abra más cuentas. Un cupón del 100 % no pasa por Mercado Pago: concede el curso directamente.</p></div>
       </div>
     </div>
   </div>
@@ -242,6 +248,22 @@ const cobrado = [...porMoneda.entries()]
         } finally { cBtn.disabled = false; }
       });
     }
+
+    // Soltar las reservas vivas. No es una compra: solo devuelve el cupo que
+    // ocupa un checkout que nunca termino.
+    document.querySelectorAll<HTMLButtonElement>('[data-liberar]').forEach((b) => {
+      b.addEventListener('click', async () => {
+        b.disabled = true;
+        try {
+          const res = await fetch(`/api/admin/cupones/${encodeURIComponent(b.dataset.liberar!)}/liberar`,
+            { method: 'POST' });
+          const d = await res.json().catch(() => ({}));
+          if (!res.ok) { window.toast('bad', 'No se pudo soltar', 'El servidor lo rechazó.'); return; }
+          window.toast('ok', 'Reservas liberadas', `${d.released} uso(s) vuelven a estar disponibles.`);
+          location.reload();
+        } finally { b.disabled = false; }
+      });
+    });
 
     document.querySelectorAll<HTMLButtonElement>('[data-cup]').forEach((b) => {
       b.addEventListener('click', async () => {

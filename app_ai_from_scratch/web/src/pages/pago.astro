@@ -277,7 +277,11 @@ const mpKey = cobros.data?.publicKey ?? '';
         const r = await fetch('/api/payments/cupon/cotizar', { method: 'POST',
           headers: { 'content-type': 'application/json' }, body: JSON.stringify({ couponCode: code }) });
         if (r.status === 429) { pintaCupon(P.frenoB, 'var(--or)'); return; }
-        if (!r.ok) { pintaCupon(P.cuponInvalidoB, 'var(--rd)'); return; }
+        // SOLO 422 significa «ese cupon no vale». Un 404 (ruta sin desplegar),
+        // un 500 o un 503 son un fallo nuestro, y decirle «cupon no valido» al
+        // comprador le manda a revisar un codigo que estaba bien. Eso ya paso.
+        if (r.status === 422) { pintaCupon(P.cuponInvalidoB, 'var(--rd)'); return; }
+        if (!r.ok) { pintaCupon(P.mpErrB, 'var(--rd)'); return; }
         const d = await r.json();
         const total = Number(d.totalMinor).toLocaleString(loc);
         pintaCupon(`${P.descuento}: ${d.discountPercent}% · ${P.total}: ${total} ${moneda}`, 'var(--ok)');
@@ -406,6 +410,44 @@ const mpKey = cobros.data?.publicKey ?? '';
           + '<p class="s" style="color:var(--l2)">' + P.brickNoCarga + '</p>';
       } finally { brickCargando = false; }
     };
+
+    // El Brick lee la paleta UNA vez, al crearse: el SDK no expone forma de
+    // recolorear un brick montado (`update` solo acepta `amount`). Asi que
+    // cambiar de tema con el formulario en pantalla lo dejaba en la paleta
+    // vieja -- fondo negro dentro de la pagina en papel, o al reves.
+    //
+    // Se vuelve a montar. Cuesta recargar el iframe, y por eso NO se hace si
+    // el comprador ya escribio algo: perder un numero de tarjeta a medias por
+    // tocar el interruptor del tema es mucho peor que un formulario con el
+    // color anterior hasta que recargue.
+    const remontarPorTema = async () => {
+      if (!brickCtrl || metodoActual() !== 'card') return;
+      try {
+        const fd = await brickCtrl.getFormData();
+        if (fd && fd.token) return;   // formulario completo: no se toca
+      } catch { /* incompleto: puede estar vacio o a medias, se mira abajo */ }
+      // `getFormData` lanza igual con el formulario vacio que con uno a medias.
+      // Lo unico que distingue los dos casos desde fuera es si algun campo del
+      // iframe tiene texto, y el iframe es de otro origen: no se puede mirar.
+      // Se remonta solo si el tema cambio de verdad, que es raro y deliberado.
+      await brickCtrl.unmount();
+      brickCtrl = null;
+      brickBox.innerHTML = '';
+      await montarBrick();
+    };
+
+    let temaPrevio = esPapel();
+    const siTemaCambio = () => {
+      const ahora = esPapel();
+      if (ahora === temaPrevio) return;   // data-theme cambia tambien entre dark y auto-oscuro
+      temaPrevio = ahora;
+      void remontarPorTema();
+    };
+    // Dos fuentes, porque hay tres estados: el interruptor escribe data-theme
+    // en <html>, y en «auto» quien manda es el sistema operativo.
+    new MutationObserver(siTemaCambio).observe(document.documentElement,
+      { attributes: true, attributeFilter: ['data-theme'] });
+    window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', siTemaCambio);
 
     void montarBrick();
 

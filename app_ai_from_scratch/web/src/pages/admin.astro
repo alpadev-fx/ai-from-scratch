@@ -17,6 +17,19 @@ const users = (await apiFetch<{ users: U[] }>('/api/admin/users', Astro.request)
 const payRes = await apiTry<{ payments: P[] }>('/api/admin/payments', Astro.request);
 const pays = payRes.data?.payments ?? [];
 const paysOk = payRes.status === 200;
+type C = { id: number; code: string; percent: number; maxRedemptions: number | null;
+  active: boolean; used: number; startsAt: string | null; endsAt: string | null;
+  discountMinor: number; totalMinor: number };
+// apiTry y no apiFetch, por lo mismo que los cobros: los cupones son UNA caja
+// de /admin y el servicio de pagos caido no puede apagar la administracion.
+const cupRes = await apiTry<{ coupons: C[]; priceMinor: number }>('/api/admin/cupones', Astro.request);
+const cupones = cupRes.data?.coupons ?? [];
+const cuponesOk = cupRes.status === 200;
+const estadoCupon = (c: C) => !c.active ? 'revocado'
+  : c.endsAt && new Date(c.endsAt) <= new Date() ? 'caducado'
+  : c.maxRedemptions !== null && c.used >= c.maxRedemptions ? 'agotado' : 'activo';
+const COLC: Record<string, string> = { activo: 'var(--ok)', revocado: 'var(--l3)',
+  caducado: 'var(--l3)', agotado: 'var(--or)' };
 const L = t(resolveLang(user!.lang, Astro.request));
 const rootLabsLabel = resolveLang(user!.lang, Astro.request) === 'en' ? 'Solved labs' : 'Labs resueltos';
 const ROLEC: Record<string, string> = { student: 'var(--l2)', tutor: 'var(--ac)', admin: 'var(--or)', root: 'var(--rd)' };
@@ -92,9 +105,65 @@ const cobrado = [...porMoneda.entries()]
         </div>
       ))}
       </div></div><!-- /.tblwrap: el aviso de abajo NO debe scrollear -->
+
       <div class="card" style="border-color:var(--hair);border-left:2px solid var(--or);display:flex;gap:12px;align-items:flex-start;margin-top:6px">
         <Fragment set:html={icon('alert', 18, 'var(--or)')} />
         <div><div class="h3">Cambiar un rol se registra</div><p class="s" style="color:var(--l2);margin-top:4px">Queda en el historial con quién lo hizo y cuándo. La plataforma no se puede quedar sin admins: el servidor rechaza ese cambio.</p></div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <p class="lbl">Cupones</p>
+      {!cuponesOk && (
+        <div class="card" style="border-left:2px solid var(--or)">
+          <div class="h3">Los cobros no responden</div>
+          <p class="s" style="color:var(--l2);margin-top:4px">Sin ese servicio no se pueden ni ver ni crear cupones. El resto de la administración sigue funcionando.</p>
+        </div>
+      )}
+      {cuponesOk && (
+      <div class="card" style="display:flex;flex-direction:column;gap:14px">
+        <div>
+          <div class="h3">Crear un cupón</div>
+          <p class="s" style="color:var(--l2);margin-top:4px">El tope y los días son obligatorios: un cupón sin límite es una barra libre, y así fue como se regaló el curso una vez. El descuento es un porcentaje sobre el precio; abajo se ve cuánto queda a pagar.</p>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
+          <label style="display:flex;flex-direction:column;gap:5px"><span class="lbl">Código</span>
+            <input id="cup-code" class="input" placeholder="PRUEBA2000" maxlength="64" style="text-transform:uppercase;width:190px"></label>
+          <label style="display:flex;flex-direction:column;gap:5px"><span class="lbl">Descuento %</span>
+            <input id="cup-pct" class="input" type="number" min="1" max="100" value="95" style="width:110px"></label>
+          <label style="display:flex;flex-direction:column;gap:5px"><span class="lbl">Usos máximos</span>
+            <input id="cup-max" class="input" type="number" min="1" value="3" style="width:120px"></label>
+          <label style="display:flex;flex-direction:column;gap:5px"><span class="lbl">Días</span>
+            <input id="cup-dias" class="input" type="number" min="1" value="7" style="width:100px"></label>
+          <button id="cup-crear" class="btn" type="button">Crear</button>
+        </div>
+        <p id="cup-total" class="s" style="color:var(--l2)" data-precio={String(cupRes.data?.priceMinor ?? 0)} data-moneda={MONEDA}></p>
+      </div>
+      )}
+      {cuponesOk && cupones.length > 0 && (
+      <div class="tblwrap"><div style="display:flex;flex-direction:column;gap:14px">
+        <div class="tbl-admin" style="grid-template-columns:minmax(0,1.2fr) 110px 120px 120px 120px 130px;padding-bottom:10px;border-bottom:1px solid var(--hair)">
+          <div class="tblhead">Código</div><div class="tblhead">Descuento</div><div class="tblhead">Queda en</div><div class="tblhead">Usos</div><div class="tblhead">Estado</div><div class="tblhead">Acción</div>
+        </div>
+        {cupones.map((c) => (
+          <div class="tbl-admin" style="grid-template-columns:minmax(0,1.2fr) 110px 120px 120px 120px 130px;align-items:center;height:56px;border-bottom:1px solid var(--hair2)">
+            <span class="num" style="font:600 14px/1.2 var(--m)">{c.code}</span>
+            <span class="s">{c.percent}%</span>
+            <span class="num s">{c.totalMinor.toLocaleString('es-CO')} {MONEDA}</span>
+            <span class="s" style="color:var(--l2)">{c.used} de {c.maxRedemptions ?? '∞'}</span>
+            <span class="s" style={`color:${COLC[estadoCupon(c)]}`}>{estadoCupon(c)}</span>
+            <button class="btn ghost" type="button" data-cup={c.code} data-activar={c.active ? '0' : '1'}
+              style="height:32px;padding:0 12px">{c.active ? 'Revocar' : 'Activar'}</button>
+          </div>
+        ))}
+      </div></div>
+      )}
+      {cuponesOk && cupones.length === 0 && (
+        <p class="s" style="color:var(--l3)">Todavía no hay cupones.</p>
+      )}
+      <div class="card" style="border-color:var(--hair);border-left:2px solid var(--or);display:flex;gap:12px;align-items:flex-start">
+        <Fragment set:html={icon('alert', 18, 'var(--or)')} />
+        <div><div class="h3">Revocar no quita el acceso</div><p class="s" style="color:var(--l2);margin-top:4px">Quien ya redimió el cupón conserva el curso: pagó o se le regaló, y eso no se deshace desde aquí. Revocar solo impide que el código abra más cuentas. Un cupón del 100 % no pasa por Mercado Pago: concede el curso directamente.</p></div>
       </div>
     </div>
   </div>
@@ -111,6 +180,82 @@ const cobrado = [...porMoneda.entries()]
         if (res.ok) { window.toast('info', 'Rol actualizado', `${d.user.name} ahora es ${d.user.role}. Queda en el historial.`); return; }
         sel.value = before;
         window.toast('bad', 'No se cambió el rol', d.msg ?? 'El servidor lo rechazó.');
+      });
+    });
+
+    // ── Cupones ────────────────────────────────────────────────────────────
+    //
+    // El precio vive en price.ts y esta pantalla NO lo reimprime: se lee del
+    // total que ya calculo el servidor para el primer cupon de la tabla, o del
+    // atributo que deja el frontmatter. Un 39.990 escrito aqui a mano seria la
+    // cuarta copia del precio y la que se queda vieja.
+    const cCode = document.getElementById('cup-code') as HTMLInputElement | null;
+    if (cCode) {
+      const cPct = document.getElementById('cup-pct') as HTMLInputElement;
+      const cMax = document.getElementById('cup-max') as HTMLInputElement;
+      const cDias = document.getElementById('cup-dias') as HTMLInputElement;
+      const cBtn = document.getElementById('cup-crear') as HTMLButtonElement;
+      const cTotal = document.getElementById('cup-total')!;
+      const precio = Number(cTotal.dataset.precio ?? '0');
+      const moneda = cTotal.dataset.moneda ?? '';
+
+      // Lo que va a pagar el comprador, con la MISMA cuenta que hace el
+      // servidor (floor del porcentaje sobre el precio). Si aqui saliera otro
+      // numero, el admin estaria creando un cupon a ciegas.
+      const pintaTotal = () => {
+        const pct = Number(cPct.value);
+        if (!Number.isInteger(pct) || pct < 1 || pct > 100 || !precio) { cTotal.textContent = ''; return; }
+        const desc = Math.floor(precio * pct / 100);
+        cTotal.textContent = pct === 100
+          ? 'Al 100 % el cupón no pasa por Mercado Pago: concede el curso directamente.'
+          : `Con ${pct}% el comprador pagaría ${(precio - desc).toLocaleString('es-CO')} ${moneda}.`;
+      };
+      cPct.addEventListener('input', pintaTotal);
+      pintaTotal();
+
+      // Cada codigo de error del servicio tiene su frase. Un «no se pudo»
+      // generico deja al admin adivinando cual de las cuatro guardas salto.
+      const MOTIVO: Record<string, string> = {
+        invalid_code: 'El código está vacío o pasa de 64 caracteres.',
+        invalid_percent: 'El descuento tiene que ser un entero entre 1 y 100.',
+        max_required: 'Falta el tope de usos. No hay valor por defecto a propósito.',
+        days_required: 'Faltan los días de validez.',
+        free_coupon_cap: 'Un cupón del 100 % no admite un tope tan alto: sería acceso gratis sin control.',
+        coupon_exists: 'Ese código ya existe. Revócalo o usa otro.',
+      };
+
+      cBtn.addEventListener('click', async () => {
+        cBtn.disabled = true;
+        try {
+          const res = await fetch('/api/admin/cupones', { method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ code: cCode.value, percent: Number(cPct.value),
+              max: Number(cMax.value), days: Number(cDias.value) }) });
+          const d = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            window.toast('bad', 'No se creó el cupón', MOTIVO[d.error] ?? 'El servidor lo rechazó.');
+            return;
+          }
+          window.toast('ok', `Cupón ${d.code} creado`,
+            `${d.percent}% · quedan ${Number(d.totalMinor).toLocaleString('es-CO')} ${moneda} · hasta ${d.maxRedemptions} usos.`);
+          location.reload();
+        } finally { cBtn.disabled = false; }
+      });
+    }
+
+    document.querySelectorAll<HTMLButtonElement>('[data-cup]').forEach((b) => {
+      b.addEventListener('click', async () => {
+        const activar = b.dataset.activar === '1';
+        b.disabled = true;
+        try {
+          const res = await fetch(`/api/admin/cupones/${encodeURIComponent(b.dataset.cup!)}/estado`, {
+            method: 'POST', headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ active: activar }) });
+          if (!res.ok) { window.toast('bad', 'No se pudo cambiar', 'El servidor lo rechazó.'); return; }
+          window.toast('info', activar ? 'Cupón activado' : 'Cupón revocado',
+            activar ? 'Vuelve a abrir cuentas.' : 'Deja de abrir cuentas. Quien ya lo redimió conserva el curso.');
+          location.reload();
+        } finally { b.disabled = false; }
       });
     });
   </script>

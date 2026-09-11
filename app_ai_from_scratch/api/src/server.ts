@@ -1041,6 +1041,38 @@ app.get('/api/admin/payments', async (req, reply) => {
   return relay(reply, await callPayments('/v1/admin/payments'));
 });
 
+/**
+ * Cupones desde /admin. Solo rol admin, y el servicio de cobros vuelve a
+ * comprobar cada guarda: esta capa no valida nada por su cuenta a proposito,
+ * porque dos copias de las reglas de un cupon se separan en cuanto una cambie.
+ */
+app.get('/api/admin/cupones', async (req, reply) => {
+  const user = await requireRole(req, reply, ['admin']); if (!user) return;
+  return relay(reply, await callPayments('/v1/admin/coupons'));
+});
+
+app.post<{ Body: { code?: unknown; percent?: unknown; max?: unknown; days?: unknown } }>(
+  '/api/admin/cupones', async (req, reply) => {
+  const user = await requireRole(req, reply, ['admin']); if (!user) return;
+  const response = await callPayments('/v1/admin/coupons', { method: 'POST', body: JSON.stringify({
+    code: req.body?.code, percent: req.body?.percent, max: req.body?.max, days: req.body?.days,
+  }) });
+  // Un cupon es un objeto con forma de dinero: quien lo creo queda en el log
+  // del api, no solo en el del servicio de cobros.
+  req.log.info({ adminId: user.id, code: req.body?.code, status: response.status }, 'admin coupon create');
+  return relay(reply, response);
+});
+
+app.post<{ Params: { code: string }; Body: { active?: unknown } }>(
+  '/api/admin/cupones/:code/estado', async (req, reply) => {
+  const user = await requireRole(req, reply, ['admin']); if (!user) return;
+  const response = await callPayments(`/v1/admin/coupons/${encodeURIComponent(req.params.code)}/state`,
+    { method: 'POST', body: JSON.stringify({ active: req.body?.active === true }) });
+  req.log.info({ adminId: user.id, code: req.params.code, active: req.body?.active === true,
+    status: response.status }, 'admin coupon state');
+  return relay(reply, response);
+});
+
 // Compatibility gateway while Mercado Pago is reconfigured to call the payments
 // service directly. Signature verification still happens only in /payments.
 app.post<{ Body: unknown; Querystring: Record<string, string> }>(

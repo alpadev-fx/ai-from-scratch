@@ -26,6 +26,20 @@ export interface CouponOffer {
   totalMinor: number;
 }
 
+export interface CouponRow {
+  id: number;
+  code: string;
+  percent: number;
+  maxRedemptions: number | null;
+  active: boolean;
+  /** reserved + redeemed: el mismo conteo que decide si queda cupo. */
+  used: number;
+  startsAt: string | null;
+  endsAt: string | null;
+  discountMinor: number;
+  totalMinor: number;
+}
+
 export interface CouponReservation {
   id: number;
   offer: CouponOffer;
@@ -477,6 +491,62 @@ export class Store {
       } };
     } catch (error) { await client.query('ROLLBACK'); throw error; }
     finally { client.release(); }
+  }
+
+  /**
+   * Los cupones que existen, con lo gastado de cada uno. `used` cuenta
+   * reserved+redeemed: el mismo criterio que usa reserveCoupon para decidir si
+   * queda cupo, porque una tabla que cuente distinto que la puerta miente.
+   */
+  async listCoupons(): Promise<CouponRow[]> {
+    const result = await this.pool.query(`
+      SELECT c.id, c.code, c.percent, c.max_redemptions, c.active, c.starts_at, c.ends_at,
+             (SELECT COUNT(*)::int FROM coupon_redemptions r
+                WHERE r.coupon_id = c.id AND r.state IN ('reserved','redeemed')) AS used
+        FROM coupons c ORDER BY c.created_at DESC, c.code`);
+    return result.rows.map((r) => ({
+      id: Number(r.id), code: String(r.code), percent: Number(r.percent),
+      maxRedemptions: r.max_redemptions === null ? null : Number(r.max_redemptions),
+      active: Boolean(r.active), used: Number(r.used),
+      startsAt: r.starts_at ? new Date(r.starts_at).toISOString() : null,
+      endsAt: r.ends_at ? new Date(r.ends_at).toISOString() : null,
+      discountMinor: Math.floor(PRICE_MINOR * Number(r.percent) / 100),
+      totalMinor: PRICE_MINOR - Math.floor(PRICE_MINOR * Number(r.percent) / 100),
+    }));
+  }
+
+  /**
+   * Crea un cupon. Devuelve null si el codigo YA existe -- no lo pisa.
+   *
+   * `ON CONFLICT DO NOTHING` y no DO UPDATE a proposito: sobrescribir en
+   * silencio un cupon vivo cambiaria el precio de un codigo que ya circula, y
+   * las redenciones hechas seguirian colgando de la misma fila. Quien quiera
+   * cambiarlo, que lo revoque y cree otro.
+   *
+   * Las validaciones NO viven aqui: viven en la ruta, junto al mensaje que ve
+   * quien lo crea. Aqui solo queda la CHECK de la tabla, que es la ultima red.
+   */
+  async createCoupon(code: string, percent: number, maxRedemptions: number,
+    days: number): Promise<CouponRow | null> {
+    const normalized = normalizeCode(code);
+    const result = await this.pool.query(
+      `INSERT INTO coupons (code, percent, max_redemptions, active, starts_at, ends_at)
+         VALUES ($1,$2,$3,true, now(), now() + ($4 || ' days')::interval)
+       ON CONFLICT (code) DO NOTHING RETURNING id`, [normalized, percent, maxRedemptions, String(days)]);
+    if (!result.rowCount) return null;
+    const all = await this.listCoupons();
+    return all.find((c) => c.code === normalized) ?? null;
+  }
+
+  /**
+   * Revoca o reactiva. Revocar NO borra ni retira accesos: quien ya redimio
+   * conserva el curso, y eso es correcto -- pago (o se le regalo) y ya esta.
+   * El codigo simplemente deja de abrir mas.
+   */
+  async setCouponActive(code: string, active: boolean): Promise<boolean> {
+    const result = await this.pool.query(
+      `UPDATE coupons SET active=$2 WHERE code=$1`, [normalizeCode(code), active]);
+    return (result.rowCount ?? 0) > 0;
   }
 
   async attachCoupon(id: number, providerId: string): Promise<void> {

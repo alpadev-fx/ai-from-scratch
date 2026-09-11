@@ -26,6 +26,20 @@ export interface CouponOffer {
   totalMinor: number;
 }
 
+/**
+ * Por que NO vale un cupon, o la oferta si vale.
+ *
+ * Un `null` para los cinco casos convertia cada «no me sirve el cupon» en una
+ * investigacion: el log decia 422 y nada mas. Ahora el motivo viaja al log y a
+ * la pantalla, que es donde hace falta.
+ */
+export type CouponQuoteReason = 'no_existe' | 'revocado' | 'aun_no_empieza'
+  | 'caducado' | 'ya_usado' | 'agotado';
+
+export type CouponQuote =
+  | { ok: true; offer: CouponOffer }
+  | { ok: false; reason: CouponQuoteReason; used?: number; max?: number };
+
 export interface CouponRow {
   id: number;
   code: string;
@@ -431,20 +445,25 @@ export class Store {
    * que se cobra; la carrera entre cotizar y reservar la cierra reserveCoupon,
    * que es quien manda.
    */
-  async quoteCoupon(code: string, userId: number): Promise<CouponOffer | null> {
+  async quoteCoupon(code: string, userId: number): Promise<CouponQuote> {
     const normalized = normalizeCode(code);
-    if (!normalized || normalized.length > 64) return null;
+    if (!normalized || normalized.length > 64) return { ok: false, reason: 'no_existe' };
     const result = await this.pool.query(
       `SELECT id, code, percent, max_redemptions, active, starts_at, ends_at
          FROM coupons WHERE code=$1`, [normalized]);
     const row = result.rows[0];
     const now = Date.now();
-    if (!row || !row.active || (row.starts_at && new Date(row.starts_at).getTime() > now) ||
-        (row.ends_at && new Date(row.ends_at).getTime() <= now)) return null;
+    // Un motivo por puerta, y no un `null` para las cinco. Sin esto, un 422 en
+    // el log no distingue «ese codigo no existe» de «te lo agotaste tu mismo»,
+    // y averiguar cual era costaba una ronda entera con el dueño mirando.
+    if (!row) return { ok: false, reason: 'no_existe' };
+    if (!row.active) return { ok: false, reason: 'revocado' };
+    if (row.starts_at && new Date(row.starts_at).getTime() > now) return { ok: false, reason: 'aun_no_empieza' };
+    if (row.ends_at && new Date(row.ends_at).getTime() <= now) return { ok: false, reason: 'caducado' };
     const prior = await this.pool.query(
       `SELECT 1 FROM coupon_redemptions WHERE coupon_id=$1 AND user_id=$2 AND state='redeemed' LIMIT 1`,
       [row.id, userId]);
-    if (prior.rowCount) return null;
+    if (prior.rowCount) return { ok: false, reason: 'ya_usado' };
     // El cupo se cuenta COMO LO CUENTA reserveCoupon, no parecido.
     //
     // reserveCoupon suelta las reservas de mas de 30 minutos antes de contar;
@@ -462,10 +481,13 @@ export class Store {
                OR (state='reserved' AND reserved_at >= now() - interval '30 minutes'
                    AND user_id <> $2))`,
       [row.id, userId]);
-    if (row.max_redemptions !== null && Number(used.rows[0]?.count ?? 0) >= Number(row.max_redemptions)) return null;
+    if (row.max_redemptions !== null && Number(used.rows[0]?.count ?? 0) >= Number(row.max_redemptions)) {
+      return { ok: false, reason: 'agotado', used: Number(used.rows[0]?.count ?? 0),
+        max: Number(row.max_redemptions) };
+    }
     const discountMinor = Math.floor(PRICE_MINOR * Number(row.percent) / 100);
-    return { id: Number(row.id), code: String(row.code), percent: Number(row.percent),
-      discountMinor, totalMinor: PRICE_MINOR - discountMinor };
+    return { ok: true, offer: { id: Number(row.id), code: String(row.code),
+      percent: Number(row.percent), discountMinor, totalMinor: PRICE_MINOR - discountMinor } };
   }
 
   async reserveCoupon(code: string, userId: number): Promise<CouponReservation | null> {

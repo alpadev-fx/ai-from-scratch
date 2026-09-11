@@ -324,8 +324,17 @@ app.post<{ Body: { userId?: unknown; couponCode?: unknown } }>('/v1/coupons/quot
   if (!Number.isSafeInteger(userId) || userId < 1) return reply.code(400).send({ error: 'invalid_actor' });
   const code = typeof request.body?.couponCode === 'string' ? request.body.couponCode : '';
   if (code.trim() === '') return reply.code(400).send({ error: 'missing_coupon' });
-  const offer = await store.quoteCoupon(code, userId);
-  if (!offer) return reply.code(422).send({ error: 'invalid_coupon' });
+  const quote = await store.quoteCoupon(code, userId);
+  if (!quote.ok) {
+    // El motivo AL LOG. Un 422 a secas no distingue «ese codigo no existe» de
+    // «te lo agotaste tu mismo», y eso convirtio cada aviso en una ronda de
+    // preguntas con el dueño delante de la pantalla.
+    app.log.info({ code: code.trim().toUpperCase(), userId, reason: quote.reason,
+      used: quote.used, max: quote.max }, 'coupon quote refused');
+    return reply.code(422).send({ error: 'invalid_coupon', reason: quote.reason,
+      ...(quote.used !== undefined ? { used: quote.used, max: quote.max } : {}) });
+  }
+  const offer = quote.offer;
   return { code: offer.code, discountPercent: offer.percent,
     discountMinor: offer.discountMinor, totalMinor: offer.totalMinor, currency: CURRENCY };
 });

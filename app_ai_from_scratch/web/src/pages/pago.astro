@@ -280,7 +280,15 @@ const mpKey = cobros.data?.publicKey ?? '';
         // SOLO 422 significa «ese cupon no vale». Un 404 (ruta sin desplegar),
         // un 500 o un 503 son un fallo nuestro, y decirle «cupon no valido» al
         // comprador le manda a revisar un codigo que estaba bien. Eso ya paso.
-        if (r.status === 422) { pintaCupon(P.cuponInvalidoB, 'var(--rd)'); return; }
+        //
+        // Y el 422 dice CUAL de las cinco puertas salto. «Revisa el codigo» a
+        // secas manda a revisar el codigo incluso cuando el codigo es correcto
+        // y lo que pasa es que ya lo usaste, o que caduco ayer.
+        if (r.status === 422) {
+          const d = await r.json().catch(() => ({}));
+          pintaCupon(P.cuponMotivo?.[d.reason] ?? P.cuponInvalidoB, 'var(--rd)');
+          return;
+        }
         if (!r.ok) { pintaCupon(P.mpErrB, 'var(--rd)'); return; }
         const d = await r.json();
         const total = Number(d.totalMinor).toLocaleString(loc);

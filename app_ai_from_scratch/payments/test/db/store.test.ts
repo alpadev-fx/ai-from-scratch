@@ -5,7 +5,7 @@ import { Store } from '../../src/db.ts';
 const dsn = process.env.PAYMENTS_TEST_DATABASE_URL;
 
 if (!dsn) {
-  console.error('payments/test/db/store.test.ts: SKIPPED (PAYMENTS_TEST_DATABASE_URL unset). Unproved: migrate() twice is a no-op; concurrent consumeOrder admits one winner; orphan approved payment lands dead with last_error starting orphan_payment:; one buyer retrying does not exhaust a capped coupon; quoteCoupon and reserveCoupon agree on the cap.');
+  console.error('payments/test/db/store.test.ts: SKIPPED (PAYMENTS_TEST_DATABASE_URL unset). Unproved: migrate() twice is a no-op; concurrent consumeOrder admits one winner; orphan approved payment lands dead with last_error starting orphan_payment:; one buyer retrying does not exhaust a capped coupon; quoteCoupon and reserveCoupon agree on the cap, and a refusal names which gate it was.');
 } else {
   const store = new Store(dsn);
 
@@ -52,26 +52,34 @@ if (!dsn) {
    * el cobro habria aceptado -- o al reves, promete un descuento que al pagar
    * se cae.
    */
-  test('quoteCoupon and reserveCoupon agree on the cap', async () => {
+  test('quoteCoupon and reserveCoupon agree on the cap, and a refusal names the gate', async () => {
     await store.migrate();
     const code = `QUOTE${Date.now()}`;
     assert.ok(await store.createCoupon(code, 95, 2, 7));
     const userId = 910_000 + (Date.now() % 1000);
 
     const antes = await store.quoteCoupon(code, userId);
-    assert.ok(antes, 'a fresh coupon quotes');
-    assert.equal(antes.percent, 95);
+    assert.ok(antes.ok, 'a fresh coupon quotes');
+    assert.equal(antes.offer.percent, 95);
 
     // La reserva PROPIA no puede hacer que el cupon se vea agotado para uno mismo.
     assert.ok(await store.reserveCoupon(code, userId));
     const despues = await store.quoteCoupon(code, userId);
-    assert.ok(despues, 'my own live reservation must not make the coupon look used up to me');
-    assert.equal(despues.totalMinor, antes.totalMinor);
+    assert.ok(despues.ok, 'my own live reservation must not make the coupon look used up to me');
+    assert.equal(despues.offer.totalMinor, antes.offer.totalMinor);
 
-    // Un cupon revocado no se cotiza, igual que no se reserva.
+    // Un cupon revocado no se cotiza, igual que no se reserva, Y DICE POR QUE.
     await store.setCouponActive(code, false);
-    assert.equal(await store.quoteCoupon(code, userId), null);
+    const revocado = await store.quoteCoupon(code, userId);
+    assert.equal(revocado.ok, false);
+    assert.equal(revocado.ok === false && revocado.reason, 'revocado');
     assert.equal(await store.reserveCoupon(code, userId + 1), null);
+
+    // Un codigo que no existe no se confunde con uno revocado: es la
+    // distincion que costo tres rondas de «no me sirve el cupon».
+    const fantasma = await store.quoteCoupon('NOEXISTE' + Date.now(), userId);
+    assert.equal(fantasma.ok, false);
+    assert.equal(fantasma.ok === false && fantasma.reason, 'no_existe');
   });
 
   test('two concurrent consumeOrder calls on the same order admit exactly one winner', async () => {

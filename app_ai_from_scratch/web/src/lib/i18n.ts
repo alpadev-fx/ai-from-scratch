@@ -40,6 +40,12 @@ export const STR = {
       eliminar: 'Eliminar la cuenta', eliminarBtn: 'Eliminar', detectado: 'Detectado ahora' },
     guardar: 'Guardar cambios', descartar: 'Descartar',
     ui: {
+      // Aviso de acceso para quien entra sin haberlo comprado. El texto no
+      // nombra el precio a proposito: el precio vive en lib/price.ts y toda
+      // copia que lo repita se vuelve mentira el dia que cambie.
+      upT: 'Tu acceso no está activo',
+      upB: 'El acceso completo abre las 12 lecciones, el tutor de IA, los labs y todo lo que se publique mientras esté activo.',
+      upCta: 'Ver el acceso', upNo: 'Ahora no', upCerrar: 'Cerrar el aviso',
       leccionCol: 'Lección', hechosCol: 'Hechos', estadoCol: 'Estado',
       sigueAqui: 'SIGUE AQUÍ', borradorTag: 'BORRADOR', labsTag: 'LABS',
       rolStudent: 'Estudiante', rolTutor: 'Tutor', rolAdmin: 'Admin',
@@ -626,6 +632,7 @@ export const STR = {
         cuentaPrimero: 'Primero crea tu cuenta',
         cuentaPrimeroB: 'El acceso se abre sobre una cuenta. Registrarte toma 20 segundos y no pide tarjeta.',
         registrarme: 'Registrarte', sinCuenta: 'Necesitas una cuenta', sinCuentaB: 'Regístrate primero: el acceso se abre sobre tu cuenta.',
+        entrar: 'Ya tengo cuenta', seguirViendo: 'Seguir viendo',
         sinCred: 'Checkout sin configurar', sinCredB: 'El cobro no está conectado en el servidor. Nadie puede pagar todavía.',
         sinCheckout: 'Los pagos no están abiertos todavía', sinCheckoutB: 'El cobro todavía no está conectado. Crea tu cuenta y entra a la lección 01 mientras tanto: te avisamos en cuanto se abra.',
         crearCuenta: 'Crear una cuenta',
@@ -668,6 +675,9 @@ export const STR = {
       eliminar: 'Delete the account', eliminarBtn: 'Delete', detectado: 'Detected now' },
     guardar: 'Save changes', descartar: 'Discard',
     ui: {
+      upT: 'Your access is not active',
+      upB: 'Full access opens the 12 lessons, the AI tutor, the labs and everything published while it stays active.',
+      upCta: 'See access', upNo: 'Not now', upCerrar: 'Dismiss this notice',
       leccionCol: 'Lesson', hechosCol: 'Done', estadoCol: 'Status',
       sigueAqui: 'RESUME HERE', borradorTag: 'DRAFT', labsTag: 'LABS',
       rolStudent: 'Student', rolTutor: 'Tutor', rolAdmin: 'Admin',
@@ -1244,6 +1254,7 @@ export const STR = {
         cuentaPrimero: 'Create your account first',
         cuentaPrimeroB: 'Access is granted on an account. Signing up takes 20 seconds and asks for no card.',
         registrarme: 'Sign up', sinCuenta: 'You need an account', sinCuentaB: 'Sign up first: access is granted on your account.',
+        entrar: 'I already have an account', seguirViendo: 'Keep browsing',
         sinCred: 'Checkout not configured', sinCredB: 'Billing is not connected on the server. Nobody can pay yet.',
         sinCheckout: 'Payments are not open yet', sinCheckoutB: 'Billing is not connected yet. Create your account and start lesson 01 in the meantime — we will tell you the moment it opens.',
         crearCuenta: 'Create an account',

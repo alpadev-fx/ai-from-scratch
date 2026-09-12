@@ -39,6 +39,13 @@ const NAV = [
 
 const ROL: Record<string, string> = { student: L.ui.rolStudent, tutor: L.ui.rolTutor, admin: L.ui.rolAdmin };
 
+// Aviso de acceso: solo para el estudiante que todavia no ha comprado.
+// `satisface` no sirve aqui: root satisface ['student'] (ver CONTIENE en
+// lib/session.ts) y acabaria viendo una venta dirigida a otra persona. La
+// comparacion tiene que ser exacta.
+const UNA_VEZ_POR_SESION = false;
+const avisoAcceso = user.role === 'student' && user.paid !== true;
+
 // AI mode replaces the «Chat» nav entry. A nav entry NAVIGATES: it took the
 // student off the lesson they were reading to go and ask about it. The toggle
 // switches on a layer that follows them instead, so the same question can be
@@ -399,6 +406,19 @@ const actionHtml = hasAction ? await Astro.slots.render('action') : '';
     @media (prefers-reduced-motion: no-preference){
       .sidebar{transition:width .16s ease-out,transform .16s ease-out}
     }
+
+    /* Aviso de acceso. Nace oculto: si el JS no corre, nadie queda con un
+       modal encima de la pagina y sin forma de cerrarlo. */
+    .up-back{position:fixed;inset:0;z-index:60;display:none;align-items:center;justify-content:center;
+      padding:20px;background:rgba(0,0,0,.62)}
+    .up-back[data-on]{display:flex}
+    .up-card{background:var(--bg);border:1px solid var(--hair);max-width:460px;width:100%;
+      padding:24px;display:flex;flex-direction:column;gap:12px}
+    .up-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:6px}
+    .up-cta{background:var(--fg);color:var(--bg);padding:11px 18px;text-decoration:none;
+      font-size:13px;letter-spacing:.04em;text-transform:uppercase}
+    .up-no{background:none;border:1px solid var(--hair);color:var(--l2);padding:11px 16px;
+      font-size:13px;cursor:pointer}
   </style>
 </head>
 <body>
@@ -506,6 +526,27 @@ const actionHtml = hasAction ? await Astro.slots.render('action') : '';
 
   <div id="toasts"></div>
   <AiPanel lang={lang} flags={ia} nombre={user.name.split(' ')[0] ?? ''} />
+
+  <!-- Aviso de acceso. Se renderiza en el servidor y SOLO para role 'student'
+       sin compra: un admin, un tutor o root no tienen por que ver una venta.
+       No aparece en /pago porque esa pagina no usa este layout — si algun dia
+       lo usara, este modal taparia el checkout y costaria la venta.
+       UNA_VEZ_POR_SESION cambia la cadencia sin tocar la logica: en false sale
+       en cada visita (lo pedido), en true sale una vez por pestania.
+       El comentario va FUERA de {expr && (...)}: dentro son dos nodos y el
+       compilador falla con "Unexpected token". -->
+  {avisoAcceso && (
+  <div id="up-modal" class="up-back" data-once={UNA_VEZ_POR_SESION ? "1" : "0"} role="dialog" aria-modal="true" aria-labelledby="up-t">
+    <div class="up-card">
+      <h2 id="up-t" class="h3">{L.ui.upT}</h2>
+      <p class="s" style="color:var(--l2)">{L.ui.upB}</p>
+      <div class="up-row">
+        <a class="up-cta" href="/pago">{L.ui.upCta}</a>
+        <button type="button" id="up-no" class="up-no" aria-label={L.ui.upCerrar}>{L.ui.upNo}</button>
+      </div>
+    </div>
+  </div>
+  )}
 
   <script type="application/json" id="txt" is:inline set:html={jsonSafe({ ...L.avisos, auto: L.automatico, dark: L.oscuro, paper: L.papel })}></script>
 
@@ -626,6 +667,26 @@ const actionHtml = hasAction ? await Astro.slots.render('action') : '';
     });
     phone.addEventListener('change', sync);
     sync();
+
+    // Aviso de acceso. El servidor ya decidio SI existe; aqui solo se decide
+    // CUANDO se muestra. data-once=1 lo limita a una vez por pestania
+    // (sessionStorage, que muere al cerrarla); data-once=0 lo muestra en cada
+    // visita. sessionStorage lanza en modo privado, de ahi el try.
+    const up = document.getElementById('up-modal');
+    if (up) {
+      const once = up.dataset.once === '1';
+      let visto = false;
+      if (once) { try { visto = sessionStorage.getItem('up-visto') === '1'; } catch { visto = false; } }
+      if (!visto) {
+        up.setAttribute('data-on', '');
+        if (once) { try { sessionStorage.setItem('up-visto', '1'); } catch {} }
+      }
+      const cerrar = () => up.removeAttribute('data-on');
+      document.getElementById('up-no')?.addEventListener('click', cerrar);
+      // Clic en el fondo, no dentro de la tarjeta.
+      up.addEventListener('click', (e) => { if (e.target === up) cerrar(); });
+      document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && up.hasAttribute('data-on')) cerrar(); });
+    }
   </script>
 </body>
 </html>

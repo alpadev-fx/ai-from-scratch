@@ -60,6 +60,19 @@ const mpKey = cobros.data?.publicKey ?? '';
   <script type="application/ld+json" is:inline set:html={jsonld}></script>
   <style is:global set:html={TOKENS + PUBLIC_BASE}></style>
   <style is:global>
+    /* Aviso de cuenta. Vive aqui y no en un layout porque /pago no usa
+       layouts/App.astro: duplicar estas seis reglas cuesta menos que arrastrar
+       una hoja entera de estilos de la app dentro de una pagina publica. */
+    .up-back{position:fixed;inset:0;z-index:60;display:none;align-items:center;justify-content:center;
+      padding:20px;background:rgba(0,0,0,.62)}
+    .up-back[data-on]{display:flex}
+    .up-card{background:var(--bg);border:1px solid var(--hair);max-width:460px;width:100%;
+      padding:24px;display:flex;flex-direction:column;gap:12px}
+    .up-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:6px}
+    .up-cta{background:var(--fg);color:var(--bg);padding:11px 18px;text-decoration:none;
+      font-size:13px;letter-spacing:.04em;text-transform:uppercase}
+    .up-no{background:none;border:1px solid var(--hair);color:var(--l2);padding:11px 16px;
+      font-size:13px;cursor:pointer;text-decoration:none;display:inline-block}
     .h1{font-size:38px}
     .btn.pay{height:52px;width:100%}
     .row{display:flex;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--hair2)}
@@ -214,6 +227,29 @@ const mpKey = cobros.data?.publicKey ?? '';
     </section>
   </div>
   <div id="toasts"></div>
+
+  <!-- Sin sesion no hay nada que cobrar: el Brick no monta (ver el guard de
+       montarBrick) y el boton de pagar solo puede sacar un toast. Decirlo de
+       entrada evita que alguien rellene el formulario y descubra al final que
+       le faltaba una cuenta. Se cierra: no es una carcel, la pagina se puede
+       leer completa antes de decidir.
+       Nace sin data-on y lo abre el JS a proposito: si el script no corre, el
+       fallo es "no sale el aviso", no "sale un aviso que nadie puede cerrar".
+       El comentario va FUERA de {expr && (...)}: dentro, el compilador ve dos
+       nodos donde la expresion solo admite uno y falla con "Unexpected token". -->
+  {!user && (
+  <div id="reg-modal" class="up-back" role="dialog" aria-modal="true" aria-labelledby="reg-t">
+    <div class="up-card">
+      <h2 id="reg-t" class="h3">{P.cuentaPrimero}</h2>
+      <p class="s" style="color:var(--l2)">{P.cuentaPrimeroB}</p>
+      <div class="up-row">
+        <a class="up-cta" href="/registro">{P.registrarme}</a>
+        <a class="up-no" href="/login">{P.entrar}</a>
+        <button type="button" id="reg-no" class="up-no">{P.seguirViendo}</button>
+      </div>
+    </div>
+  </div>
+  )}
 
   <script define:vars={{ P, logged: !!user, moneda: MONEDA, precioMenor: PRECIO_MENOR, mpKey, loc: lang === 'en' ? 'en-US' : 'es-CO' }}>
     const COLOR = { ok: 'var(--ok)', bad: 'var(--rd)', warn: 'var(--or)', info: 'var(--ac)' };
@@ -571,6 +607,17 @@ const mpKey = cobros.data?.publicKey ?? '';
     window.abrirTutorial = () => abrirTutorial('pago', pasosDe('pago', TT), TT);
     const force = new URLSearchParams(location.search).get('tutorial') === '1';
     if (force || !tutorialHecho('pago')) window.abrirTutorial();
+  </script>
+  <script is:inline>
+    (() => {
+      const m = document.getElementById('reg-modal');
+      if (!m) return;
+      m.setAttribute('data-on', '');
+      const cerrar = () => m.removeAttribute('data-on');
+      document.getElementById('reg-no')?.addEventListener('click', cerrar);
+      m.addEventListener('click', (e) => { if (e.target === m) cerrar(); });
+      document.addEventListener('keydown', (e) => { if (e.key === 'Escape') cerrar(); });
+    })();
   </script>
 </body>
 </html>

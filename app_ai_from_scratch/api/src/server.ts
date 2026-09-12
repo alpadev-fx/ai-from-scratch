@@ -521,6 +521,17 @@ const CHAT_PER_MINUTE = Math.max(1, Number(process.env.CHAT_POR_MINUTO ?? 6));
 const CHAT_DAY_CAP = Math.max(1, Number(process.env.CHAT_TOPE_DIA ?? 120));
 const CHAT_GLOBAL_DAY_CAP = Math.max(1, Number(process.env.CHAT_TOPE_DIA_GLOBAL ?? 4000));
 const CHAT_DAY_CAP_FREE = Math.max(1, Number(process.env.CHAT_TOPE_DIA_GRATIS ?? 20));
+// Quien no ha pagado entra primero por el proveedor barato. Antes iba con
+// `undefined`, que es «usa el orden por defecto» — y ese orden empieza por
+// Anthropic, asi que una cuenta gratis gastaba presupuesto de pago: 20 mensajes
+// por persona y dia, hasta CHAT_TOPE_DIA_GLOBAL_GRATIS en total.
+//
+// Fijar un nombre aqui es seguro aunque ese proveedor no tenga clave:
+// pick_chain (ai/src/course_ai/agent/providers.py:182) ignora los nombres que
+// no estan activos y deja la cadena completa. Sin clave se comporta como hoy;
+// con clave, el barato va primero y el resto queda de respaldo. Nunca deja al
+// alumno sin chat, que es lo que importa.
+const CHAT_FREE_PROVIDER = (process.env.CHAT_PROVEEDOR_GRATIS ?? 'openrouter').trim() || undefined;
 const CHAT_GLOBAL_DAY_CAP_FREE = Math.max(1, Number(process.env.CHAT_TOPE_DIA_GLOBAL_GRATIS ?? 800));
 const CHAT_TOKENS_DAY = Math.max(1, Number(process.env.CHAT_TOPE_TOKENS_DIA ?? 200_000));
 const CHAT_TOKENS_DAY_GLOBAL = Math.max(1, Number(process.env.CHAT_TOPE_TOKENS_DIA_GLOBAL ?? 5_000_000));
@@ -746,7 +757,7 @@ app.post<{ Body: ChatBody }>('/api/chat', { schema: SCHEMA_CHAT }, async (req, r
   const session = req.cookies?.[COOKIE] ?? '';
   if (!session) return reply.code(401).send({ error: 'sin_sesion' });
   const source: ChatSource = req.body?.fuente === 'panel' ? 'panel' : 'chat';
-  const pick = unpaid ? undefined : (typeof req.body?.proveedor === 'string' ? req.body.proveedor : undefined);
+  const pick = unpaid ? CHAT_FREE_PROVIDER : (typeof req.body?.proveedor === 'string' ? req.body.proveedor : undefined);
   const effort = unpaid ? 'bajo' : (typeof req.body?.esfuerzo === 'string' ? req.body.esfuerzo : undefined);
   const r = await talkToAi({ sesion: session, mensajes: messages, lang,
     proveedor: pick, esfuerzo: effort });

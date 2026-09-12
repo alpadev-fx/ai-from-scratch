@@ -382,7 +382,10 @@ const SUGERENCIAS = [C.sugFallo, C.sugSimple, C.sugPrueba];
       const filas = traza.map((t) => {
         // Every field below is model output (tool names it emitted, provider and
         // model ids it echoed back), so it goes through esc() like t.error does.
-        if (t.paso === 'modelo') return `<div style="display:flex;gap:9px"><span class="lbl" style="width:78px;flex:none">${T.trazaModelo}</span><span class="ch-lab-s">${esc(String(t.proveedor ?? ''))} · ${esc(String(t.modelo ?? ''))} · ${esc(String(t.ms ?? ''))}ms${t.herramientas?.length ? ` → ${esc(t.herramientas.join(', '))}` : ''}</span></div>`;
+        // Mismo criterio que en AiPanel: fuera el proveedor, el modelo y los ms.
+        if (t.paso === 'modelo') return t.herramientas?.length
+          ? `<div style="display:flex;gap:9px"><span class="lbl" style="width:78px;flex:none">${T.trazaTool}</span><span class="ch-lab-s">${esc(t.herramientas.join(', '))}</span></div>`
+          : '';
         if (t.paso === 'herramienta') return `<div style="display:flex;gap:9px"><span class="lbl" style="width:78px;flex:none;color:${t.ok ? 'var(--ok)' : 'var(--rd)'}">${T.trazaTool}</span><span class="ch-lab-s">${esc(String(t.nombre ?? ''))} · ${esc(String(t.ms ?? ''))}ms${t.memo ? ` · ${T.trazaMemo}` : ''}</span></div>`;
         if (t.paso === 'fallo') return `<div style="display:flex;gap:9px"><span class="lbl" style="width:78px;flex:none;color:var(--rd)">${T.trazaFallo}</span><span class="ch-lab-s">${esc(String(t.error ?? ''))}</span></div>`;
         return '';
@@ -426,10 +429,30 @@ const SUGERENCIAS = [C.sugFallo, C.sugSimple, C.sugPrueba];
       // el boton, que es la otra mitad del estado.
       const espera = turnoIA(`<span class="sk-stack" aria-busy="true" role="status">`
         + `<span class="sk-voz">${esc(T.pensando)}</span>`
+        + `<span class="voz-ciclo voz-in" aria-hidden="true">${esc(T.pensando)}</span>`
         + `<span class="sk sk-line" style="--sk-w:96%"></span>`
         + `<span class="sk sk-line" style="--sk-w:88%"></span>`
         + `<span class="sk sk-line" style="--sk-w:61%"></span>`
         + `</span>`);
+
+      // Rota la palabra de espera. Mismo motivo que en AiPanel: una palabra fija
+      // durante una respuesta larga se lee como «se colgo». El intervalo muere
+      // cuando el nodo sale del documento, no queda un timer por pregunta.
+      (() => {
+        const voz = espera.querySelector('.voz-ciclo');
+        if (!(voz instanceof HTMLElement)) return;
+        const ciclo = Array.isArray(T.pensandoCiclo) && T.pensandoCiclo.length
+          ? T.pensandoCiclo : [String(T.pensando)];
+        let i = 0;
+        const id = window.setInterval(() => {
+          if (!voz.isConnected) { window.clearInterval(id); return; }
+          i = (i + 1) % ciclo.length;
+          voz.textContent = ciclo[i] + '…';
+          voz.classList.remove('voz-in');
+          void voz.offsetWidth;
+          voz.classList.add('voz-in');
+        }, 1600);
+      })();
       const turno = espera.parentElement!;
       try {
         const d = await preguntarIA(historial, cfg.lang, 'chat', leerPick());

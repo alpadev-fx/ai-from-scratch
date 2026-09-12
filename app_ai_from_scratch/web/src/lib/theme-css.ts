@@ -90,6 +90,10 @@ export const SKELETON = `
    pantalla necesita la frase que sustituye, y esta es la unica forma de darsela
    sin pintarla. clip-path y no display:none -- lo segundo tambien lo esconde
    del lector, que es justo lo contrario de lo que hace falta. */
+.voz-ciclo{display:block;font-size:13px;letter-spacing:.04em;color:var(--l2);margin-bottom:2px}
+.voz-ciclo.voz-in{animation:vozIn .34s cubic-bezier(.22,1,.36,1) both}
+@keyframes vozIn{from{opacity:0;transform:translateY(6px);filter:blur(2px)}to{opacity:1;transform:none;filter:none}}
+@media (prefers-reduced-motion: reduce){.voz-ciclo.voz-in{animation:none}}
 .sk-voz{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;
   clip-path:inset(50%);white-space:nowrap;border:0}
 /* La región que está cargando. aria-busy lo anuncia UNA vez; las barras se

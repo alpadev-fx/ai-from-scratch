@@ -319,12 +319,41 @@ const open = flags.mode && flags.open;
   //
   // El texto sigue estando para el lector de pantalla (.sk-voz) y el contenedor
   // lleva aria-busy, asi que se anuncia una vez y las barras no se leen.
-  const pensandoBurbuja = (): HTMLElement =>
-    burbuja('bot', `<span class="sk-stack" aria-busy="true" role="status">`
+  // La palabra de espera rota mientras se aguarda. Rota .voz-ciclo, que es
+  // visible y aria-hidden; .sk-voz NO se toca: esta oculta a la vista (ver
+  // .sk-voz en lib/theme-css.ts) y vive dentro de un role="status", asi que
+  // cambiarla no se veria y ademas le dictaria doce palabras seguidas a un
+  // lector de pantalla en lugar de una.
+  // La palabra de espera rota mientras se aguarda. Una sola palabra fija durante
+  // diez segundos parece que se colgo; una que cambia dice que sigue trabajando.
+  // El intervalo se apaga solo cuando el nodo sale del documento: sin esa
+  // comprobacion queda un timer vivo por cada pregunta de la sesion.
+  const girarVoz = (raiz: HTMLElement): void => {
+    const voz = raiz.querySelector('.voz-ciclo');
+    if (!(voz instanceof HTMLElement)) return;
+    const ciclo: string[] = Array.isArray(T.pensandoCiclo) && T.pensandoCiclo.length
+      ? T.pensandoCiclo : [String(T.pensando)];
+    let i = 0;
+    const id = window.setInterval(() => {
+      if (!voz.isConnected) { window.clearInterval(id); return; }
+      i = (i + 1) % ciclo.length;
+      voz.textContent = ciclo[i] + '…';
+      voz.classList.remove('voz-in');
+      void voz.offsetWidth;
+      voz.classList.add('voz-in');
+    }, 1600);
+  };
+
+  const pensandoBurbuja = (): HTMLElement => {
+    const el = burbuja('bot', `<span class="sk-stack" aria-busy="true" role="status">`
       + `<span class="sk-voz">${esc(T.pensando)}</span>`
+      + `<span class="voz-ciclo voz-in" aria-hidden="true">${esc(T.pensando)}</span>`
       + `<span class="sk sk-line" style="--sk-w:94%"></span>`
       + `<span class="sk sk-line" style="--sk-w:68%"></span>`
       + `</span>`);
+    girarVoz(el);
+    return el;
+  };
 
   const conAccion = (texto: string, accion: { txt: string; href: string } | null): HTMLElement =>
     burbuja('bot', `<span>${esc(texto)}</span>${accion
@@ -336,7 +365,14 @@ const open = flags.mode && flags.open;
   const pintaTraza = (traza: Traza[]): string => {
     const filas = traza.map((t) => {
       if (t.paso === 'modelo') {
-        return `<div style="display:flex;gap:8px"><span class="lbl">${T.trazaModelo}</span><span class="s">${esc(String(t.proveedor ?? ''))} · ${esc(String(t.modelo ?? ''))} · ${esc(String(t.ms ?? ''))}ms${t.herramientas?.length ? ` → ${esc(t.herramientas.join(', '))}` : ''}</span></div>`;
+        // El proveedor, el nombre del modelo y la latencia NO se enseñan: le
+        // decian al alumno que detras hay un modelo concreto de un tercero, un
+        // dato que no le sirve para nada y que ata el producto a un proveedor
+        // en la cabeza de quien lo lee. Las herramientas si quedan: eso explica
+        // de donde salio la respuesta, que es lo que la traza promete.
+        return t.herramientas?.length
+          ? `<div style="display:flex;gap:8px"><span class="lbl">${T.trazaTool}</span><span class="s">${esc(t.herramientas.join(', '))}</span></div>`
+          : '';
       }
       if (t.paso === 'herramienta') {
         return `<div style="display:flex;gap:8px"><span class="lbl" style="color:${t.ok ? 'var(--ok)' : 'var(--rd)'}">${T.trazaTool}</span><span class="s">${esc(String(t.nombre ?? ''))} · ${esc(String(t.ms ?? ''))}ms${t.memo ? ` · ${T.trazaMemo}` : ''}</span></div>`;

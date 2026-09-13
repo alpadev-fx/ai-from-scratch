@@ -73,6 +73,34 @@ var catalog = []Operation{
 			"only a boolean. The solution is never put in a response, and this operation is the " +
 			"reason the agent-facing lab operations can omit the column entirely",
 	},
+	{
+		// EL SOLUCIONARIO. La operacion mas peligrosa de este catalogo, y por eso
+		// se declara mas alto que ninguna otra.
+		//
+		// `labs.solution` es la columna que la ontologia describe como «LA MAS
+		// IMPORTANTE: si el agente puede leerla, "dime la respuesta del 5.2"
+		// destruye el curso». Aqui sale entera, para las 36. Lo que hace que eso
+		// sea defendible y no un agujero:
+		//
+		//   · Internal, asi que P1 sigue siendo estructural: si alguien cablea
+		//     esta operacion a una herramienta del agente, la prueba de
+		//     aislamiento cae en el arranque y no en produccion.
+		//   · muro de_pago declarado, porque prompt, payload y explanation lo
+		//     son. Declararla gratis habria sido la forma silenciosa de sacar el
+		//     corpus de pago por una puerta con nombre de administracion.
+		//   · la unica ruta que la llama exige rol admin. Un tutor no pasa.
+		//
+		// No lleva `attempts` ni ninguna columna de una persona: esto es el
+		// contenido del curso, no lo que alguien respondio.
+		Name: "lab.solutions_all", Table: "labs", Scope: Public, Audience: Internal, Muro: DePago,
+		Returns: []string{"id", "lesson_n", "idx", "level", "kind", "prompt", "payload", "solution", "explanation", "draft"},
+		From:    "labs", Order: "lesson_n, idx", Limit: 500,
+		Why: "the admin-only answer key for the 36 labs",
+		Justify: "an administrator supporting a student, or reviewing what was written, cannot do it " +
+			"without the answer beside the statement. labs.solution is the column this catalogue " +
+			"exists to keep away from the agent, so it travels Internal and behind an admin-only " +
+			"route, and never through a tool",
+	},
 
 	// --------------------------------------------------------------- attempts
 	// `attempts.id` and `attempts.user_id` are both jamas, so an agent-facing
@@ -403,6 +431,18 @@ var catalog = []Operation{
 		Justify: "grade() compares the submitted option id against questions.solution inside api and returns " +
 			"only a boolean. The solution is never put in a response, and this operation is the " +
 			"reason the agent-facing question operations can omit the column entirely",
+	},
+	{
+		// El mismo solucionario para los 15 packs de quiz y examen. Mismas tres
+		// guardas que lab.solutions_all: Internal, de_pago declarado, y una sola
+		// ruta que exige admin.
+		Name: "question.solutions_all", Table: "questions", Scope: Public, Audience: Internal, Muro: DePago,
+		Returns: []string{"id", "kind", "pack", "idx", "lesson_n", "prompt_es", "prompt_en", "payload",
+			"solution", "explanation_es", "explanation_en"},
+		From: "questions", Order: "pack, idx", Limit: 1000,
+		Why: "the admin-only answer key for every quiz and exam question",
+		Justify: "the same need as lab.solutions_all over the quiz and exam corpus: questions.solution " +
+			"read beside its statement, by an administrator, never by a tool",
 	},
 	{
 		Name: "question.packs", Table: "questions", Scope: Public, Audience: Agent, Muro: Gratis,

@@ -53,10 +53,19 @@ const detalleSus = (su: Suscripcion): string =>
 // cobros viejos son USD y los nuevos COP, asi que aquel numero sumaba 9.99
 // dolares con 35.000 pesos y presentaba el resultado como dolares. Un total que
 // mezcla monedas no es un total.
+// Number(p.amount), aunque el servicio ya lo mande numerico desde el arreglo de
+// payments/src/db.ts. `P.amount: number` es una promesa sobre JSON que cruza un
+// fetch, y TypeScript no puede comprobarla: cuando `amount` llegaba como string
+// -- NUMERIC en Postgres sale como string por `pg` -- este `+` concatenaba y la
+// tarjeta decia `02000.00 COP`, con el cero del acumulador pegado delante. Dos
+// cobros habrian dado `02000.003000.00`. Un total falso es peor que ninguno, y
+// esta pantalla no puede fiarse del tipo que le declara otro servicio.
 const porMoneda = new Map<string, number>();
 for (const p of pays) {
   if (p.status !== 'approved') continue;
-  porMoneda.set(p.currency, (porMoneda.get(p.currency) ?? 0) + p.amount);
+  const monto = Number(p.amount);
+  if (!Number.isFinite(monto)) continue;
+  porMoneda.set(p.currency, (porMoneda.get(p.currency) ?? 0) + monto);
 }
 // COP no tiene decimales y USD si, asi que el formato lo decide la moneda de la
 // fila y no un `toFixed(2)` global.

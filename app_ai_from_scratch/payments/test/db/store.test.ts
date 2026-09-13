@@ -125,5 +125,41 @@ if (!dsn) {
     assert.equal(Number(still.rows[0].n), 1);
   });
 
+  /**
+   * La regresion que se veia en /admin: «Cobrado: 02000.00 COP».
+   *
+   * `amount` es NUMERIC(12,2) y `pg` devuelve NUMERIC como STRING. listPayments
+   * devolvia la fila cruda, asi que la pantalla sumaba con `+` sobre un string:
+   * `0 + "2000.00" === "02000.00"`, con el cero del acumulador pegado delante, y
+   * con dos cobros habria dado `02000.003000.00`. El total facturado del panel
+   * no era feo, era falso.
+   *
+   * La segunda mitad es la que importa mas: dos cobros tienen que SUMAR. Un test
+   * que solo mirase `typeof` pasaria con una sola fila y dejaria pasar la
+   * concatenacion, que es exactamente como se colo la primera vez.
+   */
+  test('listPayments returns amount as a number, so two payments add up instead of concatenating', async () => {
+    await store.migrate();
+    const marca = `sum-${Date.now()}`;
+    for (const [sufijo, monto] of [['a', 2000], ['b', 3000]] as const) {
+      await store.upsertPayment({
+        providerId: `${marca}-${sufijo}`, userId: 900_001, status: 'approved', amount: monto,
+        currency: 'COP', raw: { id: `${marca}-${sufijo}`, status: 'approved' }, liveMode: true,
+      });
+    }
+    const filas = (await store.listPayments(500) as { provider_id: string; amount: unknown }[])
+      .filter((f) => String(f.provider_id).startsWith(marca));
+    assert.equal(filas.length, 2, 'los dos cobros de prueba tienen que volver');
+    for (const f of filas) {
+      assert.equal(typeof f.amount, 'number', `amount volvio como ${typeof f.amount}: ${String(f.amount)}`);
+    }
+    const total = filas.reduce((acc, f) => acc + (f.amount as number), 0);
+    assert.strictEqual(total, 5000, `dos cobros dieron ${JSON.stringify(total)} en vez de 5000`);
+    // Se limpia lo que se inserto. Son cobros `approved`, y la tarjeta «Cobrado»
+    // de /admin suma justo eso: sin este borrado, cada `pnpm verify` le anadiria
+    // 5.000 COP inventados al total que ve el admin en local.
+    await store.pool.query(`DELETE FROM payments WHERE provider_id LIKE $1`, [`${marca}-%`]);
+  });
+
   test.after(async () => { await store.close(); });
 }

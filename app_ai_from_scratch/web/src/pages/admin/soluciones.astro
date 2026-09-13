@@ -15,10 +15,11 @@ const { user, redirect } = await gate(Astro.request, ['admin']);
 if (redirect) return Astro.redirect(redirect);
 
 type Lab = { id: string; lesson_n: number; idx: number; level: string; kind: string;
-  prompt: string; payload: string; solution: string; explanation: string; draft: number };
+  prompt: string; payload: string; solution: string; explanation: string; draft: number;
+  respuesta: unknown; hecho: boolean };
 type Question = { id: string; kind: string; pack: string; idx: number; lesson_n: number;
   prompt_es: string; prompt_en: string; payload: string; solution: string;
-  explanation_es: string; explanation_en: string };
+  explanation_es: string; explanation_en: string; respuesta: unknown; hecho: boolean };
 
 const data = await apiFetch<{ labs: Lab[]; questions: Question[] }>('/api/admin/soluciones', Astro.request);
 const labs = data?.labs ?? [];
@@ -112,6 +113,7 @@ const borradores = labs.filter((l) => l.draft).length;
       <div><div class="h3">Esta pantalla es el curso entero resuelto</div><p class="s" style="color:var(--l2);margin-top:4px">
         {labs.length} labs y {questions.length} preguntas con su respuesta. Solo rol admin: un tutor no entra, y el asistente de IA no puede leer estas columnas por diseño.
         No la proyectes en una pantalla compartida ni la dejes abierta. Cada vez que se abre queda en el registro del servidor con tu id.
+        El botón «Resolver» manda la respuesta al mismo endpoint de intento que usa un estudiante, así que el acierto queda en <b>tu</b> progreso, no en el de nadie más.
       </p></div>
     </div>
 
@@ -129,7 +131,7 @@ const borradores = labs.filter((l) => l.draft).length;
             const sol = leerLab(l);
             return (
               <div data-fila data-buscar={`${l.id} ${l.prompt} ${sol.texto}`.toLowerCase()}
-                style="display:grid;grid-template-columns:92px minmax(0,1fr) minmax(0,1fr);gap:16px;padding:14px 18px;border-bottom:1px solid var(--hair2);align-items:start">
+                style="display:grid;grid-template-columns:92px minmax(0,1fr) minmax(0,1fr) 132px;gap:16px;padding:14px 18px;border-bottom:1px solid var(--hair2);align-items:start">
                 <div style="display:flex;flex-direction:column;gap:4px">
                   <span class="num" style="font:700 14px/1 var(--m)">{l.id}</span>
                   <span class="s" style={`color:${NIVEL[l.level] ?? 'var(--l3)'}`}>{l.level}</span>
@@ -144,6 +146,14 @@ const borradores = labs.filter((l) => l.draft).length;
                   <p class="lbl" style="margin-bottom:4px">Respuesta</p>
                   <pre style={`margin:0;white-space:pre-wrap;word-break:break-word;font:600 13px/1.5 var(--m);color:${sol.crudo ? 'var(--or)' : 'var(--ok)'}`}>{sol.texto}</pre>
                   {sol.crudo && <span class="s" style="color:var(--or)">sin lectura para este tipo: se muestra el dato tal cual</span>}
+                </div>
+                <div style="display:flex;flex-direction:column;gap:4px;align-items:stretch">
+                  <button class="btn ghost" style="height:32px;font-size:10px" data-resolver
+                    data-url={`/api/labs/${l.id}/attempt`} data-respuesta={JSON.stringify(l.respuesta)}
+                    disabled={l.respuesta === null || l.draft > 0}>{l.hecho ? 'Resolver otra vez' : 'Resolver'}</button>
+                  <span class="s" data-estado style={`color:${l.hecho ? 'var(--ok)' : 'var(--l3)'}`}>
+                    {l.respuesta === null ? 'sin respuesta derivable' : l.draft > 0 ? 'borrador: no admite intentos' : l.hecho ? 'ya resuelto por ti' : 'lo resuelve a tu nombre'}
+                  </span>
                 </div>
               </div>
             );
@@ -161,7 +171,7 @@ const borradores = labs.filter((l) => l.draft).length;
             const sol = leerPregunta(q, 'es');
             return (
               <div data-fila data-buscar={`${q.id} ${q.prompt_es} ${q.prompt_en} ${sol.texto}`.toLowerCase()}
-                style="display:grid;grid-template-columns:92px minmax(0,1fr) minmax(0,1fr);gap:16px;padding:14px 18px;border-bottom:1px solid var(--hair2);align-items:start">
+                style="display:grid;grid-template-columns:92px minmax(0,1fr) minmax(0,1fr) 132px;gap:16px;padding:14px 18px;border-bottom:1px solid var(--hair2);align-items:start">
                 <div style="display:flex;flex-direction:column;gap:4px">
                   <span class="num" style="font:700 14px/1 var(--m)">{q.id}</span>
                   <span class="s" style="color:var(--l3)">lección {q.lesson_n}</span>
@@ -174,6 +184,14 @@ const borradores = labs.filter((l) => l.draft).length;
                   <p class="lbl" style="margin-bottom:4px">Respuesta</p>
                   <pre style={`margin:0;white-space:pre-wrap;word-break:break-word;font:600 13px/1.5 var(--m);color:${sol.crudo ? 'var(--or)' : 'var(--ok)'}`}>{sol.texto}</pre>
                   {sol.crudo && <span class="s" style="color:var(--or)">no se pudo resolver a texto: se muestra el id</span>}
+                </div>
+                <div style="display:flex;flex-direction:column;gap:4px;align-items:stretch">
+                  <button class="btn ghost" style="height:32px;font-size:10px" data-resolver
+                    data-url={`/api/questions/${q.id}/attempt`} data-respuesta={JSON.stringify(q.respuesta)}
+                    disabled={q.respuesta === null}>{q.hecho ? 'Resolver otra vez' : 'Resolver'}</button>
+                  <span class="s" data-estado style={`color:${q.hecho ? 'var(--ok)' : 'var(--l3)'}`}>
+                    {q.respuesta === null ? 'sin respuesta derivable' : q.hecho ? 'ya resuelto por ti' : 'lo resuelve a tu nombre'}
+                  </span>
                 </div>
               </div>
             );
@@ -222,5 +240,54 @@ const borradores = labs.filter((l) => l.draft).length;
     };
     q?.addEventListener('input', pintar);
     pintar();
+
+    // «Resolver»: manda la respuesta al endpoint de intento REAL, el mismo que
+    // usa un estudiante. No hay atajo de admin que marque resuelto por detras --
+    // si lo hubiera, el solucionario podria escribir progreso sin pasar por el
+    // corrector, y entonces un boton verde ya no probaria que la respuesta es
+    // correcta. El intento queda a nombre de quien pulsa: la sesion es la suya.
+    //
+    // `respuesta` viene del SERVIDOR (answerFor), no se deriva aqui: la forma de
+    // `solution` no es la de `answer`, y una derivacion equivocada escribiria un
+    // intento FALLIDO en el progreso del admin.
+    for (const btn of document.querySelectorAll<HTMLButtonElement>('[data-resolver]')) {
+      btn.addEventListener('click', async () => {
+        const url = btn.dataset.url!;
+        const estado = btn.parentElement?.querySelector<HTMLElement>('[data-estado]');
+        const decir = (txt: string, color: string) => {
+          if (!estado) return;
+          estado.textContent = txt;
+          estado.style.color = color;
+        };
+        btn.disabled = true;
+        decir('enviando…', 'var(--l3)');
+        try {
+          const res = await fetch(url, {
+            method: 'POST', headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ answer: JSON.parse(btn.dataset.respuesta ?? 'null'), lang: 'es' }),
+          });
+          const d = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            decir(d.error ? `no se pudo: ${d.error}` : `no se pudo (${res.status})`, 'var(--rd)');
+            btn.disabled = false;
+            return;
+          }
+          // `correct: false` no es un fallo de red: es el solucionario diciendo
+          // que su propia respuesta no pasa el corrector. Se dice tal cual y en
+          // rojo, porque es un dato del curso que hay que arreglar.
+          if (d.correct) {
+            decir('resuelto', 'var(--ok)');
+            btn.textContent = 'Resolver otra vez';
+            btn.disabled = false;
+          } else {
+            decir('el corrector la dio por incorrecta', 'var(--rd)');
+            btn.disabled = false;
+          }
+        } catch {
+          decir('sin red', 'var(--rd)');
+          btn.disabled = false;
+        }
+      });
+    }
   </script>
 </App>

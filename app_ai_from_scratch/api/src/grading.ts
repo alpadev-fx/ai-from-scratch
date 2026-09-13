@@ -13,6 +13,8 @@ export interface Solution {
   cuts?: unknown[];
   order?: unknown[];
   slots?: unknown[];
+  /** build: por indice de hueco, los textos que el autor dio por validos. */
+  accept?: Record<string, unknown>;
   min?: number;
   max?: number;
 }
@@ -22,6 +24,61 @@ export type Answer = unknown;
 
 /** The narrow row the grader is allowed to receive from data. */
 export interface GradableLab { kind: string; solution: string }
+
+/**
+ * La respuesta que hay que ENVIAR para acertar este ejercicio, derivada de su
+ * solucion. `null` cuando no se puede derivar sin inventar contenido.
+ *
+ * POR QUE VIVE AQUI Y NO EN LA PANTALLA. La forma de `solution` y la de `answer`
+ * NO son la misma, y esa diferencia es justo donde se cuela el fallo: un `choice`
+ * se corrige con `String(answer) === String(sol.value)`, asi que hay que mandar
+ * el texto pelado y no `{value: ...}`. Medido: mandar el objeto devuelve
+ * correct:false. Si esta derivacion viviera en el Astro, nada podria probarla, y
+ * un boton que manda la forma equivocada no es un boton que no funciona -- es un
+ * INTENTO FALLIDO escrito en attempts, con el progreso del admin ensuciado y sin
+ * forma de distinguirlo de un fallo de verdad.
+ *
+ * Aqui, en cambio, `grade()` esta al lado y api/test/resolver.mts pasa las 36 y
+ * las 54 por las dos funciones: lo que esta derivacion produce tiene que ser lo
+ * que aquel grader acepta, para cada mecanica y para cada fila que haya en la
+ * base, no para las que alguien recuerde al escribir el test.
+ *
+ * `null` para un `build` sin `accept`: ese grader da por bueno cualquier texto no
+ * vacio, asi que rellenarlo seria trivial -- y seria inventar. Lo que quedaria en
+ * attempts.answer es una respuesta que ningun autor escribio. Vale mas un boton
+ * apagado que diga por que.
+ */
+export function answerFor(kind: string, solutionJson: string): unknown | null {
+  let sol: Solution;
+  try { sol = JSON.parse(solutionJson) as Solution; } catch { return null; }
+  switch (kind) {
+    case 'choice':
+      return typeof sol.value === 'string' || typeof sol.value === 'number' ? sol.value : null;
+    case 'hotcold':
+      return typeof sol.value === 'number' ? sol.value : null;
+    // Cualquier punto del rango vale; `min` es el unico que siempre existe si el
+    // rango existe, y esta dentro por definicion.
+    case 'knob':
+      return typeof sol.min === 'number' && typeof sol.max === 'number' && sol.min <= sol.max ? sol.min : null;
+    case 'cut':
+      return Array.isArray(sol.cuts) ? sol.cuts : null;
+    case 'order':
+      return Array.isArray(sol.order) ? sol.order : null;
+    case 'build': {
+      if (!Array.isArray(sol.slots) || !sol.accept || typeof sol.accept !== 'object') return null;
+      const out: Record<number, string> = {};
+      for (let i = 0; i < sol.slots.length; i++) {
+        const acepta = (sol.accept as Record<string, unknown>)[String(i)];
+        const primera = Array.isArray(acepta) ? acepta[0] : acepta;
+        if (typeof primera !== 'string' || primera.trim() === '') return null;
+        out[i] = primera;
+      }
+      return out;
+    }
+    default:
+      return null;
+  }
+}
 
 export function grade(lab: GradableLab, answer: Answer): boolean {
   const sol = JSON.parse(lab.solution) as Solution;

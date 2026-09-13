@@ -21,6 +21,7 @@ import { createAuth } from '../../auth/src/index.ts';
 import { COOKIE, sign } from '../../auth/src/core.ts';
 import { get, run, pool } from '../src/db.ts';
 import { many, one, write, writeAuthorized } from '../src/data.ts';
+import { answerFor } from '../src/grading.ts';
 
 const log = { info: () => {}, warn: () => {}, error: () => {} };
 const auth = createAuth({ one, many, write, writeAuthorized,
@@ -35,10 +36,19 @@ async function soluciones(req: any, reply: any) {
   const admin = await auth.requireRole(req, reply, ['admin']); if (!admin) return;
   reply.header('cache-control', 'no-store');
   const [labs, questions] = await Promise.all([
-    many<{ id: string; solution: string }>('lab.solutions_all'),
+    many<{ id: string; kind: string; solution: string }>('lab.solutions_all'),
     many<{ id: string; solution: string }>('question.solutions_all'),
   ]);
-  return { labs, questions };
+  const [labsHechos, preguntasHechas] = await Promise.all([
+    many<{ lab_id: string; solved: number | null }>('attempt.best_by_lab', {}, admin.id),
+    many<{ question_id: string; solved: number | null }>('qattempt.best_by_question', {}, admin.id),
+  ]);
+  const resueltos = new Set(labsHechos.filter((r) => r.solved === 1).map((r) => r.lab_id));
+  const resueltasQ = new Set(preguntasHechas.filter((r) => r.solved === 1).map((r) => r.question_id));
+  return {
+    labs: labs.map((l) => ({ ...l, respuesta: answerFor(l.kind, l.solution), hecho: resueltos.has(l.id) })),
+    questions: questions.map((q) => ({ ...q, respuesta: answerFor('choice', q.solution), hecho: resueltasQ.has(q.id) })),
+  };
 }
 
 function reply() {
@@ -105,8 +115,27 @@ try {
   assert.equal(r.status, 401, 'una peticion sin sesion leyo el solucionario');
   assert.equal(nadaAnon, undefined);
 
-  console.log('soluciones: 5 casos verdes');
+  // 6. la marca de «ya resuelto» es la del ADMIN QUE PREGUNTA, y es real.
+  //    Ambas lecturas son Scope: Own, asi que no pueden traer el progreso de
+  //    otro; lo que se prueba aqui es que tampoco mienten sobre el propio.
+  //    Sin ningun intento, ninguna casilla puede venir marcada.
+  const antes = await soluciones(como(admin, 'admin'), reply()) as { labs: any[]; questions: any[] };
+  assert.ok(!antes.labs.some((l) => l.hecho), 'un admin recien creado ya tenia labs marcados');
+  assert.ok(!antes.questions.some((q) => q.hecho), 'un admin recien creado ya tenia preguntas marcadas');
+
+  const diana = antes.labs.find((l) => l.respuesta !== null);
+  assert.ok(diana, 'ningun lab traia respuesta derivable');
+  await write('attempt.record',
+    { lab_id: diana.id, answer: JSON.stringify(diana.respuesta), correct: 1 }, admin.id);
+  const despues = await soluciones(como(admin, 'admin'), reply()) as { labs: any[] };
+  assert.ok(despues.labs.find((l) => l.id === diana.id)?.hecho, `el lab ${diana.id} no quedo marcado`);
+  assert.equal(despues.labs.filter((l) => l.hecho).length, 1, 'se marco mas de un lab con un solo intento');
+
+  console.log('soluciones: 6 casos verdes');
 } finally {
-  for (const u of [admin, tutor, alumno]) await run('DELETE FROM users WHERE id = ?', [u.id]);
+  for (const u of [admin, tutor, alumno]) {
+    await run('DELETE FROM attempts WHERE user_id = ?', [u.id]);
+    await run('DELETE FROM users WHERE id = ?', [u.id]);
+  }
   await pool.end();
 }

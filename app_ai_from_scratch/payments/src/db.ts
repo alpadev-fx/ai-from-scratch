@@ -710,10 +710,29 @@ export class Store {
     return result.rowCount === 1;
   }
 
+  /**
+   * `amount` SALE COMO NUMERO, y esa conversion no es cosmetica.
+   *
+   * La columna es NUMERIC(12,2) y `pg` devuelve NUMERIC como STRING para no
+   * perder precision. Esta funcion devolvia la fila cruda, asi que el JSON decia
+   * "2000.00" donde /admin declara `amount: number` -- un tipo que TypeScript no
+   * puede comprobar porque cruza un fetch. La tarjeta «Cobrado» suma con `+`:
+   *
+   *     (porMoneda.get(cur) ?? 0) + p.amount   //  0 + "2000.00" === "02000.00"
+   *
+   * y en pantalla salia `02000.00 COP`. Con dos cobros aprobados habria salido
+   * `02000.003000.00`: el total facturado del panel no era feo, era falso.
+   *
+   * Se arregla aqui y no solo en la pantalla porque `entitlementSources` ya hacia
+   * `Number(row.amount ?? 0)` unas lineas mas arriba -- el mismo campo tenia dos
+   * contratos distintos dentro del mismo servicio, y el siguiente que lo leyera
+   * heredaba el que estuviera mal.
+   */
   async listPayments(limit = 100): Promise<unknown[]> {
-    return (await this.pool.query(
+    const rows = (await this.pool.query(
       `SELECT provider,provider_id,user_id,status,amount,currency,updated_at
          FROM payments ORDER BY updated_at DESC LIMIT $1`, [Math.min(500, Math.max(1, limit))])).rows;
+    return rows.map((row) => ({ ...row, amount: Number(row.amount ?? 0) }));
   }
 
   /**

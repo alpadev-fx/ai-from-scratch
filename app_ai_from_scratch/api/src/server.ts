@@ -8,7 +8,7 @@ import { COOKIE, mandaPlataforma } from '../../auth/src/core.ts';
 import { localizeLesson } from './lesson-meta.ts';
 import { createAuth } from '../../auth/src/index.ts';
 import type { AuthUser } from '../../auth/src/index.ts';
-import { grade, hint, publicLab } from './grading.ts';
+import { grade, hint, publicLab, answerFor} from './grading.ts';
 import type { BestAttempt, PublicLabSource } from './grading.ts';
 import { examGate, ofPack, packScore, publicQuestion } from './assess.ts';
 import type { QuestionBest, QuestionRow } from './assess.ts';
@@ -910,9 +910,31 @@ app.get('/api/admin/soluciones', async (req, reply) => {
       prompt_es: string; prompt_en: string; payload: string; solution: string;
       explanation_es: string; explanation_en: string }>('question.solutions_all'),
   ]);
+  // Lo que este admin ya tiene resuelto, para que la pantalla apague el boton en
+  // vez de invitarle a repetir 90 veces. Las dos operaciones son Scope: Own y
+  // van con SU actor: lee su propio progreso, no el de nadie mas, y por eso esto
+  // no necesita ninguna operacion nueva ni toca P3.
+  const [labsHechos, preguntasHechas] = await Promise.all([
+    many<BestAttempt>('attempt.best_by_lab', {}, admin.id),
+    many<QuestionBest>('qattempt.best_by_question', {}, admin.id),
+  ]);
+  const resueltos = new Set(labsHechos.filter((r) => r.solved === 1).map((r) => r.lab_id));
+  const resueltasQ = new Set(preguntasHechas.filter((r) => r.solved === 1).map((r) => r.question_id));
   req.log.info({ adminId: admin.id, labs: labs.length, questions: questions.length },
     'admin read the answer key');
-  return { labs, questions };
+  // `respuesta` es lo que hay que ENVIAR a POST /api/labs/:id/attempt para
+  // acertar, y se deriva aqui y no en la pantalla a proposito: la forma de
+  // `solution` no es la de `answer`, y una derivacion equivocada no seria un
+  // boton roto sino un intento FALLIDO escrito en el progreso de quien lo pulse.
+  // Aqui `grade()` esta al lado y api/test/resolver.mts pasa las 36 y las 54 por
+  // las dos funciones. `null` = no derivable sin inventar; el boton se apaga.
+  //
+  // Una pregunta de quiz se corrige como un `choice`, igual que en su propia ruta
+  // de intento unas lineas mas arriba: el mismo grader, el mismo tipo.
+  return {
+    labs: labs.map((l) => ({ ...l, respuesta: answerFor(l.kind, l.solution), hecho: resueltos.has(l.id) })),
+    questions: questions.map((q) => ({ ...q, respuesta: answerFor('choice', q.solution), hecho: resueltasQ.has(q.id) })),
+  };
 });
 
 app.get('/api/root/solved-labs', async (req, reply) => {

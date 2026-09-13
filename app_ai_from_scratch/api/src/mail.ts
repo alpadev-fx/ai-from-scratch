@@ -12,19 +12,19 @@ const env = (k: string): string | null => { const v = process.env[k]; return v &
 const EMAIL_RE = /^[^@\s]+@[^@\s.]+\.[^@\s]{2,}$/;
 
 export interface Mailer {
-  send(input: { to: string; subject: string; text: string }): Promise<void>;
+  send(input: { to: string; subject: string; text: string; html?: string }): Promise<void>;
 }
 
 function resendMailer(apiKey: string, from: string): Mailer {
   return {
-    async send({ to, subject, text }) {
+    async send({ to, subject, text, html }) {
       const ctl = new AbortController();
       const timer = setTimeout(() => ctl.abort(), 10000);
       try {
         const res = await fetch('https://api.resend.com/emails', {
           method: 'POST', signal: ctl.signal,
           headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
-          body: JSON.stringify({ from, to, subject, text }),
+          body: JSON.stringify(html ? { from, to, subject, text, html } : { from, to, subject, text }),
         });
         if (!res.ok) {
           const body = await res.text().catch(() => '');

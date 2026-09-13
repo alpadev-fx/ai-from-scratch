@@ -34,6 +34,8 @@ import {
 import { clientIp } from './brake.ts';
 import { authThrottle } from './auth-throttle.ts';
 import { mailer } from './mail.ts';
+import { PRICE } from './product.ts';
+import { renderEmailHtml } from '../../design/saas-emails/templates.ts';
 import { coachState } from './coach.ts';
 import { publish as publishEvent } from './bus.ts';
 
@@ -1191,7 +1193,26 @@ app.post<{ Body: { eventKey?: unknown; userId?: unknown; active?: unknown; sourc
   if (event.periodEnd && !Number.isFinite(Date.parse(event.periodEnd))) {
     return reply.code(400).send({ error: 'invalid_entitlement_event' });
   }
-  return auth.applyEntitlement(event);
+  const result = await auth.applyEntitlement(event);
+  // Purchase receipt, sent once per real payment that actually granted access.
+  // `accepted` is false for a retry of the same eventKey, so Mercado Pago's own
+  // redeliveries cannot mail the buyer twice; the source guard keeps subscription
+  // and coupon grants out, since those carry their own message.
+  // Deliberately not awaited: a Resend outage must not fail this response, or
+  // Mercado Pago retries a payment whose entitlement already applied.
+  if (result.accepted && result.active && event.source === 'mercadopago.payment' && mailer) {
+    one<AuthUser>('auth.user', {}, event.userId)
+      .then((buyer) => {
+        if (!buyer?.email) return;
+        const rendered = renderEmailHtml({ kind: 'purchase_receipt', name: buyer.name || buyer.email,
+          actionUrl: 'https://aifromscratch.shop/panel',
+          fields: [{ label: 'Producto', value: 'Fundamentos Vol. 1' },
+            { label: 'Total', value: `${PRICE.monto.toLocaleString('es-CO')} ${PRICE.moneda}` }] });
+        return mailer!.send({ to: buyer.email, subject: rendered.subject, text: rendered.text, html: rendered.html });
+      })
+      .catch((err) => app.log.error({ err, userId: event.userId }, 'purchase receipt email failed'));
+  }
+  return result;
 });
 
 app.get('/api/version', async () => ({

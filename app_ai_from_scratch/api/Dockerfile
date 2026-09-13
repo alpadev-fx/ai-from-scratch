@@ -33,6 +33,12 @@ COPY api/init ./init
 # nothing and the weekly league close never runs.
 COPY api/scripts ./scripts
 COPY auth /app/auth
+# The purchase-receipt email renderer lives in design/ (shared presentation
+# contract, not api-owned code) but api/src/server.ts imports it directly —
+# same cross-directory shape as auth/ above, same fix. Needs its own allowlist
+# entry in the root .dockerignore too (that file denies-all by default); the
+# Dockerfile COPY alone is not enough, same two-layer requirement auth/ has.
+COPY design /app/design
 RUN pnpm build
 # league-demo.mjs creates seven accounts with a hardcoded password. It is
 # typechecked by `pnpm build` on purpose but must not exist in a deployed image:

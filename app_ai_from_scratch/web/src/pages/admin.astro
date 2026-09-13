@@ -7,7 +7,9 @@ import { icon } from '../lib/icons';
 import { MONEDA } from '../lib/price';
 const { user, redirect } = await gate(Astro.request, ['admin']);
 if (redirect) return Astro.redirect(redirect);
-type U = { id: number; email: string; name: string; role: string; paid: number; cohort: string | null; created_at: string };
+type Suscripcion = { estado: 'activa' | 'no_activa' | 'cancelada'; hasta: string | null; aMano: boolean };
+type U = { id: number; email: string; name: string; role: string; paid: number; cohort: string | null;
+  created_at: string; suscripcion: Suscripcion };
 type P = { id: number; status: string; amount: number; currency: string; at: string; ext_id: string };
 const users = (await apiFetch<{ users: U[] }>('/api/admin/users', Astro.request))?.users ?? [];
 // apiFetch lanza con cualquier codigo que no sea 2xx, asi que el `?? []` que
@@ -34,6 +36,18 @@ const L = t(resolveLang(user!.lang, Astro.request));
 const rootLabsLabel = resolveLang(user!.lang, Astro.request) === 'en' ? 'Solved labs' : 'Labs resueltos';
 const ROLEC: Record<string, string> = { student: 'var(--l2)', tutor: 'var(--ac)', admin: 'var(--or)', root: 'var(--rd)' };
 const ROLE_ES: Record<string, string> = { student: 'Estudiante', tutor: 'Tutor', admin: 'Admin', root: 'Root' };
+// La suscripcion sustituye a la columna «Compra». Compra era el `paid` crudo, un
+// si/no, y con el si/no no se distingue «nunca pago» de «se le corto a mano»:
+// un admin que cortaba una cuenta veia exactamente lo mismo que antes de
+// cortarla. Los tres estados son los que el servidor acepta, no una lista aparte.
+const SUSC_ES: Record<string, string> = { activa: 'Activa', no_activa: 'No activa', cancelada: 'Cancelado' };
+const SUSCC: Record<string, string> = { activa: 'var(--ok)', no_activa: 'var(--l3)', cancelada: 'var(--rd)' };
+const DIAS_POR_DEFECTO = 30;
+const detalleSus = (su: Suscripcion): string =>
+  su.estado === 'cancelada' ? 'Acceso cortado a mano. Gana sobre cualquier cobro vivo.'
+  : su.estado === 'no_activa' ? 'Sin acceso de pago. Solo la leccion 1.'
+  : su.aMano && su.hasta ? `Activada a mano hasta el ${su.hasta.slice(0, 10)}.`
+  : 'Acceso por cobro confirmado, no a mano.';
 // Cobrado, AGRUPADO POR MONEDA. Antes esto era un `reduce` sobre `p.amount` con
 // «USD» escrito encima, y la tabla de cobros guarda la moneda por fila: los
 // cobros viejos son USD y los nuevos COP, asi que aquel numero sumaba 9.99
@@ -72,18 +86,31 @@ const cobrado = [...porMoneda.entries()]
 
     <div style="display:flex;flex-direction:column;gap:14px">
       <p class="lbl">Usuarios y roles</p>
-      <!-- .tblwrap: nombre, correo, rol, alta y compra no caben en 362 px y
+      <!-- .tblwrap: nombre, correo, rol, alta y suscripcion no caben en 362 px y
            apilarlos vuelve la tabla ilegible. Scroll horizontal DENTRO de su
            contenedor, que es el trato correcto para una tabla densa, y asi el
-           body nunca desborda. -->
+           body nunca desborda.
+
+           NOMBRE Y CORREO VAN EN UNA SOLA LINEA, con puntos suspensivos y el
+           valor entero en `title`. La columna de suscripcion ocupa 240 px donde
+           «Compra» ocupaba 90, asi que a 1180 px el correo bajo de ~379 px a
+           ~294 px y uno largo pasaba a DOS lineas dentro de una fila de 56 px de
+           alto fijo: se salia por debajo y se solapaba con el <select> de rol.
+           Medido: 2 de 39 filas.
+
+           Se arregla aqui y no subiendo los minimos del grid. `.tblwrap` esta
+           excluido de `min-width:0` en App.astro:392 a proposito, asi que un
+           minimo mayor que el contenedor no lo hace scrollear: lo hace CRECER, y
+           entonces desborda el body entero (medido: scrollWidth 1280 -> 1476).
+           Esa regla la comparten tutor.astro y root/labs-resueltos.astro. -->
       <div class="tblwrap"><div style="display:flex;flex-direction:column;gap:14px">
-        <div class="tbl-admin" style="grid-template-columns:minmax(0,1.2fr) minmax(0,1.6fr) 150px 110px 90px 110px;padding-bottom:10px;border-bottom:1px solid var(--hair)">
-          <div class="tblhead">Nombre</div><div class="tblhead">Correo</div><div class="tblhead">Rol</div><div class="tblhead">Alta</div><div class="tblhead">Compra</div><div class="tblhead">Historia</div>
+        <div class="tbl-admin" style="grid-template-columns:minmax(0,1.2fr) minmax(0,1.6fr) 150px 110px 240px 110px;padding-bottom:10px;border-bottom:1px solid var(--hair)">
+          <div class="tblhead">Nombre</div><div class="tblhead">Correo</div><div class="tblhead">Rol</div><div class="tblhead">Alta</div><div class="tblhead">Suscripción</div><div class="tblhead">Historia</div>
       </div>
       {users.map((u) => (
-          <div class="tbl-admin" style="grid-template-columns:minmax(0,1.2fr) minmax(0,1.6fr) 150px 110px 90px 110px;align-items:center;height:56px;border-bottom:1px solid var(--hair2)">
-          <span style="font:600 14px/1.2 var(--f)">{u.name}</span>
-          <span class="s" style="color:var(--l2)">{u.email}</span>
+          <div class="tbl-admin" style="grid-template-columns:minmax(0,1.2fr) minmax(0,1.6fr) 150px 110px 240px 110px;align-items:center;height:56px;border-bottom:1px solid var(--hair2)">
+          <span title={u.name} style="font:600 14px/1.2 var(--f);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{u.name}</span>
+          <span class="s" title={u.email} style="color:var(--l2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{u.email}</span>
           <!-- 16px y 44 de alto: el estilo en linea le ganaba a .input{font-size:16px}
                del bloque movil, y por debajo de 16 iOS Safari hace zoom al enfocar.
                34px tambien incumplia el suelo tactil de 44. -->
@@ -100,7 +127,20 @@ const cobrado = [...porMoneda.entries()]
               .map((r) => <option value={r} selected={u.role === r} style={`color:${ROLEC[r]}`}>{ROLE_ES[r]}</option>)}
           </select>
           <span class="num s">{u.created_at.slice(0, 10)}</span>
-          <span class="s" style={`color:${u.paid ? 'var(--ok)' : 'var(--l3)'}`}>{u.paid ? 'Sí' : 'No'}</span>
+          {/* El <select> es el estado y el numero son los dias que dura ACTIVAR.
+              16px y 44 de alto por lo mismo que el select de rol: por debajo de
+              16 iOS Safari hace zoom al enfocar, y 44 es el suelo tactil. */}
+          <div style="display:flex;gap:6px;align-items:center">
+            <select data-sus={u.id} class="input" title={detalleSus(u.suscripcion)}
+              style={`font:500 16px/1 var(--m);letter-spacing:.06em;padding:0 8px;width:148px;color:${SUSCC[u.suscripcion.estado]}`}>
+              {Object.keys(SUSC_ES).map((e) => (
+                <option value={e} selected={u.suscripcion.estado === e} style={`color:${SUSCC[e]}`}>{SUSC_ES[e]}</option>
+              ))}
+            </select>
+            <input data-dias={u.id} class="input" type="number" min="1" max="3650" value={DIAS_POR_DEFECTO}
+              title="Días que dura la activación manual" aria-label="Días de activación"
+              style="width:74px;font:500 16px/1 var(--m);padding:0 8px">
+          </div>
           {u.role === 'student' ? <a class="s" href={`/admin/progreso?student=${u.id}`}>Ver progreso</a> : <span class="s" style="color:var(--l3)">-</span>}
         </div>
       ))}
@@ -109,6 +149,16 @@ const cobrado = [...porMoneda.entries()]
       <div class="card" style="border-color:var(--hair);border-left:2px solid var(--or);display:flex;gap:12px;align-items:flex-start;margin-top:6px">
         <Fragment set:html={icon('alert', 18, 'var(--or)')} />
         <div><div class="h3">Cambiar un rol se registra</div><p class="s" style="color:var(--l2);margin-top:4px">Queda en el historial con quién lo hizo y cuándo. La plataforma no se puede quedar sin admins: el servidor rechaza ese cambio.</p></div>
+      </div>
+
+      <div class="card" style="border-color:var(--hair);border-left:2px solid var(--ac);display:flex;gap:12px;align-items:flex-start">
+        <Fragment set:html={icon('alert', 18, 'var(--ac)')} />
+        <div><div class="h3">Qué hace cada estado de suscripción</div><p class="s" style="color:var(--l2);margin-top:4px">
+          <b>Activa</b> abre el curso completo los días que digas al lado, sin cupón y sin pasar por Mercado Pago; al cumplirse el plazo se cierra solo.
+          <b>No activa</b> retira esa concesión: si además tiene un cobro vivo, ese cobro sigue mandando y la cuenta vuelve a verse activa.
+          <b>Cancelado</b> corta el acceso y gana sobre cualquier cobro vivo, hasta que lo vuelvas a poner en otro estado.
+          Cada cambio queda en el registro de accesos con tu id de admin dentro.
+        </p></div>
       </div>
     </div>
 
@@ -186,6 +236,60 @@ const cobrado = [...porMoneda.entries()]
         if (res.ok) { window.toast('info', 'Rol actualizado', `${d.user.name} ahora es ${d.user.role}. Queda en el historial.`); return; }
         sel.value = before;
         window.toast('bad', 'No se cambió el rol', d.msg ?? 'El servidor lo rechazó.');
+      });
+    });
+
+    // ── Suscripción a mano ─────────────────────────────────────────────────
+    //
+    // El <select> vuelve a su valor anterior si el servidor rechaza el cambio.
+    // Sin eso la pantalla se queda diciendo «Activa» sobre una cuenta que el
+    // servidor dejo como estaba, que es la peor mentira posible en un panel de
+    // administracion: la que el admin cree.
+    const SUS_TXT: Record<string, string> = { activa: 'Activa', no_activa: 'No activa', cancelada: 'Cancelado' };
+    const SUS_COL: Record<string, string> = { activa: 'var(--ok)', no_activa: 'var(--l3)', cancelada: 'var(--rd)' };
+    const SUS_MOTIVO: Record<string, string> = {
+      estado_invalido: 'Ese estado no existe. Son activa, no activa o cancelado.',
+      dias_invalidos: 'Los días tienen que ser un entero entre 1 y 3650.',
+      no_existe: 'Esa cuenta ya no está.',
+      solo_admin: 'Hace falta rol admin.',
+    };
+    document.querySelectorAll<HTMLSelectElement>('[data-sus]').forEach((sel) => {
+      let antes = sel.value;
+      sel.addEventListener('change', async () => {
+        const id = sel.dataset.sus!;
+        const dias = document.querySelector<HTMLInputElement>(`[data-dias="${id}"]`);
+        sel.disabled = true;
+        try {
+          const res = await fetch(`/api/admin/users/${id}/suscripcion`, {
+            method: 'PATCH', headers: { 'content-type': 'application/json' },
+            // `dias` solo viaja al activar. El servidor ya los ignora en los
+            // otros dos estados, pero mandar un numero que no participa en la
+            // accion es como se acaba validando por costumbre.
+            body: JSON.stringify(sel.value === 'activa'
+              ? { estado: sel.value, dias: Number(dias?.value ?? 30) }
+              : { estado: sel.value }),
+          });
+          const d = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            sel.value = antes;
+            window.toast('bad', 'No se cambió la suscripción', d.msg ?? SUS_MOTIVO[d.error] ?? 'El servidor lo rechazó.');
+            return;
+          }
+          // El estado que se pinta es el que devolvió el servidor, no el que se
+          // eligió: poner «No activa» sobre alguien con un cobro vivo lo deja
+          // activo, y la pantalla tiene que decir eso y no lo que se pulsó.
+          const su = d.suscripcion ?? {};
+          const estado = String(su.estado ?? sel.value);
+          sel.value = estado;
+          antes = estado;
+          sel.style.color = SUS_COL[estado] ?? 'var(--l3)';
+          const detalle = estado === 'cancelada' ? 'Acceso cortado a mano. Gana sobre cualquier cobro vivo.'
+            : estado === 'no_activa' ? 'Sin acceso de pago. Solo la lección 1.'
+            : su.aMano && su.hasta ? `Activada a mano hasta el ${String(su.hasta).slice(0, 10)}.`
+            : 'Acceso por cobro confirmado, no a mano.';
+          sel.title = detalle;
+          window.toast(estado === 'cancelada' ? 'bad' : 'ok', `${d.user?.name ?? 'La cuenta'}: ${SUS_TXT[estado]}`, detalle);
+        } finally { sel.disabled = false; }
       });
     });
 

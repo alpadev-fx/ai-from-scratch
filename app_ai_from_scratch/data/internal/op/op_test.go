@@ -205,6 +205,7 @@ func TestNoAgentOperationCanReachAJamasColumn(t *testing.T) {
 // should never be possible to add one without a reviewer seeing it.
 func TestTheExemptionListDoesNotGrowQuietly(t *testing.T) {
 	want := []string{
+		"auth.admin_entitlements -> entitlement_events.active,id,occurred_at,period_end,source,user_id",
 		"auth.admin_users -> users.email,id",
 		"auth.password_reset -> users.deleted_at,email,failed,id,locked_until,pass_hash,token_version",
 		"auth.recovery_by_email -> users.id",

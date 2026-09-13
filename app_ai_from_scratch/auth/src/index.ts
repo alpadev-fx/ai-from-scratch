@@ -1,6 +1,9 @@
-import { createHash } from 'node:crypto';
-import { COOKIE, POLICY_VERSION, ROLES, TOKEN_MINUTES, cookieOpts, hashPassword, hashToken, mandaPlataforma,
-  newToken, satisface, sign, spendKdf, verify, verifyPassword } from './core.ts';
+import { createHash, randomUUID } from 'node:crypto';
+import { COOKIE, DIAS_CONCESION_POR_DEFECTO, ESTADOS_SUSCRIPCION, EXTERNO_BLOQUEO, EXTERNO_CONCESION,
+  FUENTE_BLOQUEO, FUENTE_CONCESION, MAX_DIAS_CONCESION, POLICY_VERSION, ROLES, TOKEN_MINUTES, cookieOpts,
+  hashPassword, hashToken, mandaPlataforma, newToken, satisface, sign, spendKdf, suscripcionDe,
+  ultimasManuales, verify, verifyPassword } from './core.ts';
+import type { FilaManual } from './core.ts';
 
 export * from './core.ts';
 
@@ -300,9 +303,18 @@ export function createAuth(deps: AuthDependencies) {
 
     // Roles are authorization state, so their mutation belongs here too. Course
     // administration may consume the result but does not implement RBAC.
+    // La lista lleva el estado de suscripción de cada cuenta, no solo `paid`.
+    // `paid` es un sí/no y la pantalla tiene que distinguir «no ha pagado nunca»
+    // de «se le cortó a mano»: sin esa diferencia, un admin que corta una cuenta
+    // ve exactamente lo mismo que antes de cortarla y no sabe si la acción entró.
     app.get('/api/admin/users', async (request: RequestLike, reply: ReplyLike) => {
       const actor = await requireRole(request, reply, ['admin']); if (!actor) return;
-      return { users: await deps.many('auth.admin_users') };
+      const [users, manuales] = await Promise.all([
+        deps.many<{ id: number; paid: number }>('auth.admin_users'),
+        deps.many<FilaManual>('auth.admin_entitlements'),
+      ]);
+      const ultimas = ultimasManuales(manuales);
+      return { users: users.map((u) => ({ ...u, suscripcion: suscripcionDe(u.paid, ultimas, u.id) })) };
     });
 
     app.patch('/api/admin/users/:id/role', async (request: RequestLike & { params?: { id?: unknown } }, reply: ReplyLike) => {
@@ -355,6 +367,89 @@ export function createAuth(deps: AuthDependencies) {
       await emit('auth.role_changed', { subject: String(target.id), target: String(target.id),
         actor: String(actor.id), from: target.role, to: role });
       return { user: shapeUser(fresh!) };
+    });
+
+    // ACTIVAR O CORTAR EL ACCESO A MANO, sin cupón y sin pasar por Mercado Pago.
+    //
+    // Escribe eventos en la MISMA tabla que un webhook firmado, a propósito. La
+    // alternativa obvia -- una columna `suscripcion` en `users` que el admin
+    // ponga -- se descartó porque `auth.entitlement_sweep` recalcula users.paid
+    // desde entitlement_events cada hora: la concesión a mano habría durado
+    // hasta el siguiente barrido y el acceso se habría cerrado solo, sin rastro.
+    //
+    // Son dos filas por acción, una por fuente, porque el estado es una pareja
+    // (concede / corta) y no un valor: escribir solo una dejaría la otra como
+    // estaba, así que pasar de «cancelada» a «activa» habría dejado el corte
+    // puesto y la concesión no habría hecho nada visible.
+    app.patch('/api/admin/users/:id/suscripcion',
+      async (request: RequestLike & { params?: { id?: unknown } }, reply: ReplyLike) => {
+      const actor = await requireRole(request, reply, ['admin']); if (!actor) return;
+      const targetId = Number(request.params?.id);
+      const target = Number.isSafeInteger(targetId) && targetId > 0
+        ? await deps.one<AuthUser>('auth.user', {}, targetId) : null;
+      if (!target) return reply.code(404).send({ error: 'no_existe' });
+
+      const estado = request.body?.estado;
+      if (typeof estado !== 'string' || !(ESTADOS_SUSCRIPCION as readonly string[]).includes(estado)) {
+        return reply.code(400).send({ error: 'estado_invalido',
+          msg: `El estado tiene que ser uno de: ${ESTADOS_SUSCRIPCION.join(', ')}.` });
+      }
+      const concede = estado === 'activa';
+      // LOS DÍAS SE VALIDAN SOLO AL ACTIVAR, y esa asimetría es deliberada.
+      //
+      // Al activar hay que ser estricto: aceptar un 0 y descartarlo luego sería
+      // la clase de silencio que hace que el admin crea que concedió un mes.
+      //
+      // Al cortar NO hay nada que creer, y validarlos igual costaba un corte.
+      // Medido en /admin: la caja de días se queda con el valor de la acción
+      // anterior, así que poner «No activa» con un 0 dentro devolvía 400
+      // dias_invalidos y el acceso seguía abierto mientras la pantalla decía que
+      // el cambio se había rechazado por los días -- un campo que para ese
+      // estado no significa nada. Un corte de acceso no puede depender de una
+      // caja que no participa en él.
+      const crudos = request.body?.dias;
+      const dias = crudos === undefined || crudos === null || crudos === ''
+        ? DIAS_CONCESION_POR_DEFECTO : Number(crudos);
+      if (concede && (!Number.isInteger(dias) || dias < 1 || dias > MAX_DIAS_CONCESION)) {
+        return reply.code(400).send({ error: 'dias_invalidos',
+          msg: `Los días tienen que ser un entero entre 1 y ${MAX_DIAS_CONCESION}.` });
+      }
+
+      const bloquea = estado === 'cancelada';
+      const ahora = new Date();
+      const hasta = concede ? new Date(ahora.getTime() + dias * 86_400_000).toISOString() : null;
+      // El event_key es único por acción y no idempotente a propósito: un
+      // webhook se reintenta y tiene que colapsar, un clic de un admin es una
+      // decisión nueva cada vez. Lleva dentro quién la tomó, que es el único
+      // registro de autoría que queda de esta acción.
+      const clave = (fuente: string) =>
+        `${fuente}:por:${actor.id}:sobre:${target.id}:${ahora.toISOString()}:${randomUUID()}`;
+
+      await deps.write('auth.entitlement_record', {
+        event: clave(FUENTE_CONCESION), active: concede, source: FUENTE_CONCESION,
+        external: EXTERNO_CONCESION, occurred: ahora.toISOString(), period: hasta ?? '',
+      }, target.id);
+      await deps.write('auth.entitlement_record', {
+        event: clave(FUENTE_BLOQUEO), active: bloquea, source: FUENTE_BLOQUEO,
+        external: EXTERNO_BLOQUEO, occurred: ahora.toISOString(), period: '',
+      }, target.id);
+      const latest = await deps.one<{ paid: number }>('auth.entitlement_apply', {}, target.id);
+
+      // El estado que se devuelve sale de la MISMA función que lo pinta en la
+      // lista, alimentada con las dos filas que se acaban de escribir. Deducirlo
+      // aquí a mano sería una segunda copia de la regla.
+      const suscripcion = suscripcionDe(Boolean(latest?.paid), new Map<string, FilaManual>([
+        [`${target.id}:${FUENTE_CONCESION}`,
+          { user_id: target.id, source: FUENTE_CONCESION, active: concede, period_end: hasta }],
+        [`${target.id}:${FUENTE_BLOQUEO}`,
+          { user_id: target.id, source: FUENTE_BLOQUEO, active: bloquea, period_end: null }],
+      ]), target.id);
+
+      deps.log.info({ adminId: actor.id, userId: target.id, estado, dias: concede ? dias : null,
+        paid: suscripcion.estado === 'activa' }, 'admin subscription change');
+      await emit('subscription.admin_set', { subject: String(target.id), target: String(target.id),
+        actor: String(actor.id), estado, hasta });
+      return { user: { id: target.id, name: target.name, email: target.email }, suscripcion };
     });
   }
 

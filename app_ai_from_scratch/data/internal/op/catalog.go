@@ -912,12 +912,49 @@ var catalog = []Operation{
 		Why: "idempotently record one signed payments entitlement event for the target actor",
 	},
 	{
+		// DOS FUENTES, Y UNA MANDA SOBRE LA OTRA.
+		//
+		// `source = 'admin'` es la concesion a mano desde /admin: un mes de
+		// acceso sin cupon y sin pasar por Mercado Pago. Entra por la misma
+		// puerta que un webhook firmado a proposito -- si viviera en una columna
+		// aparte de `users`, el barrido de caducidad de abajo la borraria en la
+		// siguiente hora, porque ese barrido recalcula users.paid SOLO desde esta
+		// tabla. Un segundo origen de la verdad para el acceso es exactamente el
+		// fallo que este catalogo existe para no tener.
+		//
+		// `source = 'admin_block'` es el corte a mano, y es la unica fuente que
+		// NO se suma con un OR: la derivacion normal concede si CUALQUIER fuente
+		// concede, asi que sin esta resta un admin no podia cerrarle el acceso a
+		// alguien con una suscripcion viva en Mercado Pago -- la fila del pago
+		// seguia concediendo y el corte no se notaba. Por eso el bloqueo se
+		// excluye del EXISTS que concede (si no, contaria como concesion) y se
+		// comprueba aparte como NOT EXISTS.
 		Name: "auth.entitlement_apply", Table: "users", Scope: Own, Audience: Agent, Muro: Gratis, Write: true,
-		Raw: "UPDATE users SET paid = CASE WHEN EXISTS (SELECT 1 FROM (SELECT DISTINCT ON (source, external_id) active, period_end " +
+		Raw: "UPDATE users SET paid = CASE WHEN EXISTS (SELECT 1 FROM (SELECT DISTINCT ON (source, external_id) active, period_end, source " +
 			"FROM entitlement_events WHERE user_id = $1 ORDER BY source, external_id, occurred_at DESC, id DESC) current_entitlements " +
+			"WHERE active = true AND (period_end IS NULL OR period_end > now()) AND source <> 'admin_block') " +
+			"AND NOT EXISTS (SELECT 1 FROM (SELECT DISTINCT ON (external_id) active, period_end " +
+			"FROM entitlement_events WHERE user_id = $1 AND source = 'admin_block' ORDER BY external_id, occurred_at DESC, id DESC) manual_blocks " +
 			"WHERE active = true AND (period_end IS NULL OR period_end > now())) THEN 1 ELSE 0 END WHERE id = $1 RETURNING paid",
 		Returns: []string{"paid"}, Params: []Param{{Name: "actor", Kind: Actor}},
 		Why: "derive current paid access from the target actor's latest unexpired signed entitlement states",
+	},
+	{
+		// Lo que /admin pinta en la columna «Suscripción». Son filas `jamas` de
+		// una tabla que el agente no ve nunca, y esta operacion tampoco se las
+		// acerca: Internal, y la consume la pantalla de administracion.
+		//
+		// Devuelve las filas crudas de las DOS fuentes a mano y deja que auth
+		// elija la ultima por (user_id, source). Se podria resolver con un
+		// DISTINCT ON aqui, pero entonces la regla de «cual gana» viviria en dos
+		// sitios -- este SQL y la derivacion de arriba -- y dos copias de una
+		// regla se separan en cuanto una cambie.
+		Name: "auth.admin_entitlements", Table: "entitlement_events", Scope: Public, Audience: Internal, Muro: Gratis,
+		Returns: []string{"id", "user_id", "source", "active", "period_end", "occurred_at"},
+		From:    "entitlement_events", Where: "source IN ('admin','admin_block')",
+		Order: "occurred_at DESC, id DESC", Limit: 20000,
+		Why:     "the manual subscription state /admin shows and edits per account",
+		Justify: "the admin subscription column has to say whose access was granted or cut by hand, until when, and which of the two rows is the newest. user_id and period_end are the answer, id and occurred_at are the tie-break, and none of it enters the agent tool surface",
 	},
 	{
 		// EL BARRIDO DE CADUCIDAD.
@@ -948,12 +985,23 @@ var catalog = []Operation{
 		// Sin esa condicion NOT EXISTS es verdadero para «ningun evento», y el
 		// primer barrido tras el despliegue cerraba a todos esos compradores.
 		Name: "auth.entitlement_sweep", Table: "users", Scope: Public, Audience: Agent, Muro: Gratis, Write: true,
-		Raw: "UPDATE users SET paid = 0 WHERE paid = 1 " +
-			"AND EXISTS (SELECT 1 FROM entitlement_events WHERE user_id = users.id) " +
+		//
+		// Y cierra tambien por BLOQUEO a mano, no solo por caducidad. Un admin
+		// que corta a alguien con una suscripcion viva en Mercado Pago depende
+		// de que `auth.entitlement_apply` haya corrido; si esa llamada fallo, sin
+		// esta rama el corte no se aplicaba nunca, porque la fila del pago sigue
+		// concediendo y la condicion de caducidad no se cumple. El barrido sigue
+		// sin conceder nada: las dos ramas ponen paid = 0.
+		Raw: "UPDATE users SET paid = 0 WHERE paid = 1 AND (" +
+			"EXISTS (SELECT 1 FROM (SELECT DISTINCT ON (external_id) active, period_end " +
+			"FROM entitlement_events WHERE user_id = users.id AND source = 'admin_block' " +
+			"ORDER BY external_id, occurred_at DESC, id DESC) b " +
+			"WHERE b.active = true AND (b.period_end IS NULL OR b.period_end > now())) " +
+			"OR (EXISTS (SELECT 1 FROM entitlement_events WHERE user_id = users.id) " +
 			"AND NOT EXISTS (" +
-			"SELECT 1 FROM (SELECT DISTINCT ON (source, external_id) active, period_end " +
+			"SELECT 1 FROM (SELECT DISTINCT ON (source, external_id) active, period_end, source " +
 			"FROM entitlement_events WHERE user_id = users.id ORDER BY source, external_id, occurred_at DESC, id DESC) e " +
-			"WHERE e.active = true AND (e.period_end IS NULL OR e.period_end > now()))",
+			"WHERE e.active = true AND (e.period_end IS NULL OR e.period_end > now()) AND e.source <> 'admin_block')))",
 		// Sin RETURNING. Solo hace falta CUANTAS filas se cerraron, y eso ya lo
 		// da el conteo de la escritura; devolver users.id seria sacar una
 		// columna `jamas` de la tabla para no usarla.

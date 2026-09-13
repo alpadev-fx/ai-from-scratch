@@ -153,7 +153,14 @@ const token = new URL(Astro.request.url).searchParams.get('t') ?? '';
           body: JSON.stringify({ email }),
         });
         const d = await res.json().catch(() => ({}));
-        if (!res.ok) { toast('bad', P.eCorreo, d.msg ?? P.eCorreoB); return; }
+        // Only a 400 means the address itself is malformed. A 503 (no mail
+        // provider) or a 500 is the server's fault, and saying "correo inválido"
+        // sends the user off to fix something that was already correct.
+        if (!res.ok) {
+          const malEscrito = res.status === 400;
+          toast('bad', malEscrito ? P.eCorreo : P.tRed, d.msg ?? (malEscrito ? P.eCorreoB : P.tRedB));
+          return;
+        }
         ver('vEnviado');
         toast('ok', P.tEnviado, P.tEnviadoB);
         // Sin proveedor de correo el servidor devuelve el enlace fuera de producción.
@@ -200,6 +207,7 @@ const token = new URL(Astro.request.url).searchParams.get('t') ?? '';
           setTimeout(() => location.assign('/panel'), 600);
           return;
         }
+        if (res.status >= 500) { toast('bad', P.tRed, P.tRedB); return; }
         const titulo = res.status === 409 ? P.tUsado : res.status === 410 ? P.tVencido : P.tInvalido;
         toast('warn', titulo, P.tPideOtro);
         ver('fPedir');

@@ -150,7 +150,7 @@ const borradores = labs.filter((l) => l.draft).length;
                 <div style="display:flex;flex-direction:column;gap:4px;align-items:stretch">
                   <button class="btn ghost" style="height:32px;font-size:10px" data-resolver
                     data-url={`/api/labs/${l.id}/attempt`} data-respuesta={JSON.stringify(l.respuesta)}
-                    disabled={l.respuesta === null || l.draft > 0}>{l.hecho ? 'Resolver otra vez' : 'Resolver'}</button>
+                    disabled={l.respuesta === null || l.draft > 0}>{l.hecho && l.respuesta !== null ? 'Resolver otra vez' : 'Resolver'}</button>
                   <span class="s" data-estado style={`color:${l.hecho ? 'var(--ok)' : 'var(--l3)'}`}>
                     {l.respuesta === null ? 'sin respuesta derivable' : l.draft > 0 ? 'borrador: no admite intentos' : l.hecho ? 'ya resuelto por ti' : 'lo resuelve a tu nombre'}
                   </span>
@@ -188,7 +188,7 @@ const borradores = labs.filter((l) => l.draft).length;
                 <div style="display:flex;flex-direction:column;gap:4px;align-items:stretch">
                   <button class="btn ghost" style="height:32px;font-size:10px" data-resolver
                     data-url={`/api/questions/${q.id}/attempt`} data-respuesta={JSON.stringify(q.respuesta)}
-                    disabled={q.respuesta === null}>{q.hecho ? 'Resolver otra vez' : 'Resolver'}</button>
+                    disabled={q.respuesta === null}>{q.hecho && q.respuesta !== null ? 'Resolver otra vez' : 'Resolver'}</button>
                   <span class="s" data-estado style={`color:${q.hecho ? 'var(--ok)' : 'var(--l3)'}`}>
                     {q.respuesta === null ? 'sin respuesta derivable' : q.hecho ? 'ya resuelto por ti' : 'lo resuelve a tu nombre'}
                   </span>

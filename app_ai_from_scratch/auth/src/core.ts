@@ -290,3 +290,92 @@ export const cookieOpts: CookieOpts = {
 export const newToken = (): string => randomBytes(32).toString('base64url');
 export const hashToken = (t: unknown): string => createHash('sha256').update(String(t)).digest('hex');
 export const TOKEN_MINUTES = 30;
+
+// ─── Suscripción: los tres estados que /admin muestra y edita ───────────────
+//
+// El acceso de pago no vive en una columna que un admin escriba. Vive en
+// `entitlement_events`, y `users.paid` es una CACHÉ derivada de esa tabla que el
+// barrido horario recalcula. Por eso una concesión a mano se escribe como un
+// evento más (source 'admin') y un corte a mano como otro (source 'admin_block'):
+// si fueran una columna aparte, el barrido las borraría dentro de la hora
+// siguiente y nadie sabría por qué se cerró la cuenta.
+//
+// Y por eso son DOS fuentes y no una con tres valores. La derivación normal
+// concede si cualquier fuente concede, así que «no conceder» no es expresable
+// quitando una fila: mientras exista un pago vivo en Mercado Pago, esa fila
+// sigue concediendo. El corte tiene que ser una resta, y una resta necesita su
+// propia fuente.
+export const ESTADOS_SUSCRIPCION = ['activa', 'no_activa', 'cancelada'] as const;
+export type EstadoSuscripcion = (typeof ESTADOS_SUSCRIPCION)[number];
+
+/** La fuente que concede a mano, y la que corta. Son claves de datos, no texto. */
+export const FUENTE_CONCESION = 'admin';
+export const FUENTE_BLOQUEO = 'admin_block';
+/** `external_id` dentro de cada fuente. Uno fijo por fuente: cada acción sustituye a la anterior. */
+export const EXTERNO_CONCESION = 'concesion';
+export const EXTERNO_BLOQUEO = 'corte';
+
+/** Una fila de entitlement_events de las dos fuentes manuales. */
+export interface FilaManual {
+  user_id: number;
+  source: string;
+  active: boolean | number;
+  period_end: string | null;
+}
+
+const viva = (fila: FilaManual, ahora: number): boolean =>
+  Boolean(fila.active) && (!fila.period_end || Date.parse(fila.period_end) > ahora);
+
+/**
+ * La última fila por (user_id, source). `filas` tiene que llegar ordenada de más
+ * nueva a más vieja — es lo que hace `auth.admin_entitlements` con
+ * `ORDER BY occurred_at DESC, id DESC` — así que la primera que se ve gana y las
+ * demás de esa misma pareja se descartan.
+ */
+export function ultimasManuales(filas: readonly FilaManual[]): Map<string, FilaManual> {
+  const out = new Map<string, FilaManual>();
+  for (const fila of filas) {
+    const clave = `${fila.user_id}:${fila.source}`;
+    if (!out.has(clave)) out.set(clave, fila);
+  }
+  return out;
+}
+
+export interface Suscripcion {
+  estado: EstadoSuscripcion;
+  /** Hasta cuándo vale la concesión a mano, ISO. `null` si el acceso no viene de una. */
+  hasta: string | null;
+  /** El acceso de ahora mismo lo puso un admin, no un cobro. */
+  aMano: boolean;
+}
+
+/**
+ * El estado que se pinta para UNA cuenta.
+ *
+ * `paid` es la caché ya derivada por el servicio de datos, así que esta función
+ * no vuelve a decidir si hay acceso: solo distingue POR QUÉ. El corte se mira
+ * primero porque gana sobre cualquier cobro vivo — es justo el caso que no se
+ * podía expresar antes de que existiera la fuente de bloqueo.
+ */
+export function suscripcionDe(
+  paid: boolean | number,
+  ultimas: Map<string, FilaManual>,
+  userId: number,
+  ahora: number = Date.now(),
+): Suscripcion {
+  const bloqueo = ultimas.get(`${userId}:${FUENTE_BLOQUEO}`);
+  if (bloqueo && viva(bloqueo, ahora)) return { estado: 'cancelada', hasta: null, aMano: false };
+  const concesion = ultimas.get(`${userId}:${FUENTE_CONCESION}`);
+  const concesionViva = Boolean(concesion && viva(concesion, ahora));
+  if (!paid) return { estado: 'no_activa', hasta: null, aMano: false };
+  return {
+    estado: 'activa',
+    hasta: concesionViva ? (concesion!.period_end ?? null) : null,
+    aMano: concesionViva,
+  };
+}
+
+/** Un mes es lo que se regala por defecto, y hay tope: una concesión sin límite
+ *  es acceso gratis permanente escrito a mano, que es justo lo que el muro evita. */
+export const DIAS_CONCESION_POR_DEFECTO = 30;
+export const MAX_DIAS_CONCESION = 3650;

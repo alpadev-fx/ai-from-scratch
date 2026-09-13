@@ -328,6 +328,7 @@ func probeArgs(ctx context.Context, dsn string) (map[string]probe, error) {
 		"auth.reset_lookup":              {args: map[string]any{"token": "smoke-token-never-used"}},
 		"auth.admin_count":               {args: map[string]any{}},
 		"auth.admin_users":               {args: map[string]any{}},
+		"auth.admin_entitlements":        {args: map[string]any{}},
 		"user.me":                        {args: map[string]any{}, actor: actor},
 		"user.credentials_by_email":      {args: map[string]any{"login": email}},
 	}, nil

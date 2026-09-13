@@ -281,6 +281,22 @@ var catalog = []Operation{
 		Params: []Param{{Name: "actor", Kind: Actor}},
 		Why:    "the acting person's earned codes, used to insert only missing achievements",
 	},
+	// TWO OPERATIONS, because there are two shapes and `achievements.lesson_n`
+	// is nullable.
+	//
+	// There was one, taking lesson_n as an Int. A rank ("all three labs of the
+	// lesson, twelve times") belongs to no single lesson, so api sent
+	// lesson_n: null -- and bind() refuses a null for an Int, correctly: an Int
+	// that also accepts null is a validator with a hole in it. The 400 came back
+	// out of POST /api/labs/:id/attempt, so closing ANY lesson answered the
+	// browser with an error and no rank was ever written. Nothing caught it
+	// because no suite had ever solved three labs of one lesson, and `data smoke`
+	// probes reads only.
+	//
+	// The fix is not a nullable Int. It is saying out loud that a rank insert is
+	// a different statement: three columns, no lesson, `kind` a literal rather
+	// than a parameter, so this operation can only ever write the row it is named
+	// after.
 	{
 		Name: "achievement.record", Table: "achievements", Scope: Own, Audience: Agent, Muro: Gratis, Write: true,
 		Raw: "INSERT INTO achievements (user_id, code, kind, lesson_n) VALUES ($1,$2,$3,$4) " +
@@ -291,7 +307,17 @@ var catalog = []Operation{
 			{Name: "kind", Kind: Text, Max: 40},
 			{Name: "lesson_n", Kind: Int, Max: 99},
 		},
-		Why: "persist one achievement calculated for the acting person",
+		Why: "persist one per-lesson achievement calculated for the acting person",
+	},
+	{
+		Name: "achievement.record_rank", Table: "achievements", Scope: Own, Audience: Agent, Muro: Gratis, Write: true,
+		Raw: "INSERT INTO achievements (user_id, code, kind, lesson_n) VALUES ($1,$2,'rango',NULL) " +
+			"ON CONFLICT (user_id, code) DO NOTHING",
+		Params: []Param{
+			{Name: "actor", Kind: Actor},
+			{Name: "code", Kind: Text, Max: 80},
+		},
+		Why: "persist one global rank for the acting person; a rank belongs to no lesson, so lesson_n is NULL",
 	},
 	{
 		Name: "ranking.table", Table: "ranking_optin", Scope: Public, Audience: Agent, Muro: Gratis,

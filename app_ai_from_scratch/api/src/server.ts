@@ -247,7 +247,13 @@ async function syncAchievements(userId: number) {
   const has = new Set((await many<{ code: string }>('achievement.codes', {}, userId)).map((r) => r.code));
   const nuevos = should.filter((l) => !has.has(l.code));
   for (const l of nuevos) {
-    await write('achievement.record', { code: l.code, kind: l.kind, lesson_n: l.lesson_n }, userId);
+    // A rank belongs to no lesson. It used to go through the same operation with
+    // lesson_n: null, and the data service refuses a null for a declared Int —
+    // so closing any lesson threw here, the browser got a 400 on the very
+    // attempt that finished it, and no rank was ever written. The two shapes are
+    // now two operations; see achievement.record_rank in data's catalogue.
+    if (l.lesson_n === null) await write('achievement.record_rank', { code: l.code }, userId);
+    else await write('achievement.record', { code: l.code, kind: l.kind, lesson_n: l.lesson_n }, userId);
   }
   return { nuevos, todos: should, perLesson };
 }

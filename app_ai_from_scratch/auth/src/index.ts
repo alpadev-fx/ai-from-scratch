@@ -233,10 +233,19 @@ export function createAuth(deps: AuthDependencies) {
       await deps.write('auth.reset_create', { token: hashToken(token), minutes: TOKEN_MINUTES }, user.id);
       const link = `${deps.origin}/recuperar?t=${token}`;
       if (deps.mailer) {
-        await deps.mailer.send({
-          to: mail, subject: 'Recuperar acceso',
-          text: `Abre este enlace para cambiar la clave: ${link}`,
-        });
+        // A send failure must not escape. This route answers identically whether
+        // or not the account exists (that is the whole point of `answer`), and an
+        // uncaught throw turns it into an enumeration oracle: a registered address
+        // 500s while an unknown one 200s, so anyone can harvest the user list by
+        // walking a wordlist. Loud in the log, uniform to the caller.
+        try {
+          await deps.mailer.send({
+            to: mail, subject: 'Recuperar acceso',
+            text: `Abre este enlace para cambiar la clave: ${link}`,
+          });
+        } catch (err) {
+          deps.log.error({ err, userId: user.id }, 'recover: mail send failed');
+        }
       } else {
         deps.log.info({ link }, 'recover: link generated (no mail provider configured)');
       }

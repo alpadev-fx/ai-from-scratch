@@ -882,6 +882,39 @@ app.get<{ Params: { id: string } }>('/api/admin/students/:id/timeline', async (r
 // The catalog operation deliberately exposes only a successful lab id, its
 // position, the completion time and the student's display identity -- never an
 // answer, prompt, explanation or solution.
+// EL SOLUCIONARIO, solo para admin.
+//
+// Es la ruta que devuelve labs.solution y questions.solution -- las dos columnas
+// que la ontologia clasifica `jamas` y que todo lo demas en este repositorio se
+// esfuerza en no dejar salir. Tres cosas la sostienen, y ninguna es opcional:
+//
+//   1. requireRole(['admin']). Un tutor NO pasa: acompanar a un estudiante no
+//      exige el solucionario entero, y cuanta menos gente lo lea, mejor.
+//   2. Las operaciones del catalogo son Internal, asi que si alguien las cablea
+//      a una herramienta del agente la prueba de aislamiento cae al arrancar.
+//      La guarda no depende de que nadie se acuerde de esta ruta.
+//   3. `cache-control: no-store`. Delante hay Cloudflare, y una respuesta con el
+//      curso entero resuelto que se quede en un cache compartido es el curso
+//      regalado. La cookie ya evita el cacheo en la practica; esto lo dice.
+//
+// No devuelve nada de ninguna persona: es contenido del curso, no respuestas
+// enviadas. Para lo segundo estan /api/admin/students/:id/timeline y
+// /api/root/solved-labs, que a proposito NO traen soluciones.
+app.get('/api/admin/soluciones', async (req, reply) => {
+  const admin = await requireRole(req, reply, ['admin']); if (!admin) return;
+  reply.header('cache-control', 'no-store');
+  const [labs, questions] = await Promise.all([
+    many<{ id: string; lesson_n: number; idx: number; level: string; kind: string;
+      prompt: string; payload: string; solution: string; explanation: string; draft: number }>('lab.solutions_all'),
+    many<{ id: string; kind: string; pack: string; idx: number; lesson_n: number;
+      prompt_es: string; prompt_en: string; payload: string; solution: string;
+      explanation_es: string; explanation_en: string }>('question.solutions_all'),
+  ]);
+  req.log.info({ adminId: admin.id, labs: labs.length, questions: questions.length },
+    'admin read the answer key');
+  return { labs, questions };
+});
+
 app.get('/api/root/solved-labs', async (req, reply) => {
   const root = await requireRole(req, reply, ['root']); if (!root) return;
   const labs = await many<{

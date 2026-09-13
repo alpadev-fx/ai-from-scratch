@@ -221,8 +221,10 @@ func TestTheExemptionListDoesNotGrowQuietly(t *testing.T) {
 		"job.state_counts -> jobs.estado",
 		"job.take -> jobs.clave,datos,id,intentos,tipo",
 		"lab.solution_for_grading -> labs.solution",
+		"lab.solutions_all -> labs.solution",
 		"league.flow -> ranking_optin.user_id",
 		"question.solution_for_grading -> questions.solution",
+		"question.solutions_all -> questions.solution",
 		"root.solved_labs -> attempts.id",
 		"tutor.students_all -> users.email,id",
 		"tutor.students_cohort -> users.email,id",
@@ -354,11 +356,13 @@ func TestTheSetOfPaidOperationsDoesNotGrowQuietly(t *testing.T) {
 		"lab.get":                {"payload", "prompt"},
 		"lab.prompts":            {"prompt"},
 		"lab.explanation":        {"explanation"},
+		"lab.solutions_all":      {"explanation", "payload", "prompt"},
 		"lesson_text.get":        {"analogy", "examples", "technical"},
 		"lesson_text.by_lang":    {"analogy", "technical"},
 		"progress.failed_labs":   {"prompt"},
 		"question.explanation":   {"explanation_en", "explanation_es"},
 		"question.list_for_pack": {"payload", "prompt_en", "prompt_es"},
+		"question.solutions_all": {"explanation_en", "explanation_es", "payload", "prompt_en", "prompt_es"},
 	}
 	got := map[string][]string{}
 	for _, o := range Catalog() {

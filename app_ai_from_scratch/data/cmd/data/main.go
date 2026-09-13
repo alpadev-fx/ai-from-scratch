@@ -329,6 +329,8 @@ func probeArgs(ctx context.Context, dsn string) (map[string]probe, error) {
 		"auth.admin_count":               {args: map[string]any{}},
 		"auth.admin_users":               {args: map[string]any{}},
 		"auth.admin_entitlements":        {args: map[string]any{}},
+		"lab.solutions_all":              {args: map[string]any{}},
+		"question.solutions_all":         {args: map[string]any{}},
 		"user.me":                        {args: map[string]any{}, actor: actor},
 		"user.credentials_by_email":      {args: map[string]any{"login": email}},
 	}, nil

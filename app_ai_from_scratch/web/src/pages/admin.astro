@@ -80,6 +80,7 @@ const cobrado = [...porMoneda.entries()]
 <App user={user!} title="Admin" crumb="ADMIN / PLATAFORMA" active="Admin">
   <span slot="topbar" class="lbl" style="color:var(--or)">MODO ADMIN</span>
   {user!.role === 'root' && <a slot="topbar" class="btn ghost" style="text-decoration:none" href="/root/labs-resueltos">{rootLabsLabel}</a>}
+  <a slot="topbar" class="btn ghost" style="text-decoration:none" href="/admin/soluciones">Soluciones</a>
   <div style="padding:30px 28px 48px;display:flex;flex-direction:column;gap:26px;max-width:1180px">
     <div style="display:flex;flex-direction:column;gap:12px">
       <p class="eb">Panel · Admin</p>

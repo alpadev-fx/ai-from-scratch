@@ -17,4 +17,4 @@ export const PUBLICAS = ['/', '/login', '/registro', '/pago', '/terminos', '/pri
 
 /** Rutas que no deben indexarse nunca (privadas o de un solo uso). */
 export const PRIVADAS = ['/panel', '/curso', '/leccion', '/perfil', '/ajustes', '/logros', '/ranking',
-  '/tutor', '/admin', '/recuperar', '/pago/gracias', '/pago/error', '/api'];
+  '/tutoriales', '/tutor', '/admin', '/recuperar', '/pago/gracias', '/pago/error', '/api'];

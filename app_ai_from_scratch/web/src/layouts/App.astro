@@ -29,6 +29,10 @@ const NAV = [
   { href: '/logros',    ic: 'chart',  key: 'logros',  label: L.nav.logros,  roles: ['student', 'tutor', 'admin'] },
   { href: '/ranking',   ic: 'chart',  key: 'ranking', label: L.nav.ranking, roles: ['student', 'tutor', 'admin'] },
   { href: '/ligas',     ic: 'chart',  key: 'ligas',   label: L.nav.ligas,   roles: ['student', 'tutor', 'admin'] },
+  // Los tutoriales son contenido de pago, pero el enlace lo ven todos: quien no
+  // ha pagado entra a la vitrina, que es donde se vende. Esconder el enlace
+  // esconderia el producto a quien puede comprarlo.
+  { href: '/tutoriales', ic: 'play',  key: 'tutoriales', label: L.nav.tutoriales, roles: ['student', 'tutor', 'admin'] },
   { href: '/tutor',     ic: 'users',  key: 'cohorte', label: L.nav.cohorte, roles: ['tutor', 'admin'] },
   { href: '/admin',     ic: 'shield', key: 'admin',   label: L.nav.admin,   roles: ['admin'] },
   // El solucionario es el curso entero resuelto, asi que entra en la barra con

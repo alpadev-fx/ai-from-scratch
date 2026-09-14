@@ -9,10 +9,17 @@
 export const prerender = false;
 import App from '../../layouts/App.astro';
 import { gate, apiFetch } from '../../lib/session';
+import { t, resolveLang } from '../../lib/i18n';
 import { icon } from '../../lib/icons';
 
 const { user, redirect } = await gate(Astro.request, ['admin']);
 if (redirect) return Astro.redirect(redirect);
+
+// La barra marca la entrada activa comparando con su propia etiqueta, asi que
+// el literal 'Admin' dejaba esta pagina sin marcar en cuanto la cuenta estaba
+// en ingles ('Answer key' !== 'Admin'). Se pasa la misma cadena que pinta la
+// barra, no una copia.
+const L = t(resolveLang(user!.lang, Astro.request));
 
 type Lab = { id: string; lesson_n: number; idx: number; level: string; kind: string;
   prompt: string; payload: string; solution: string; explanation: string; draft: number;
@@ -98,7 +105,7 @@ const porPack = new Map<string, Question[]>();
 for (const q of questions) porPack.set(q.pack, [...(porPack.get(q.pack) ?? []), q]);
 const borradores = labs.filter((l) => l.draft).length;
 ---
-<App user={user!} title="Soluciones" crumb="ADMIN / SOLUCIONES" active="Admin">
+<App user={user!} title="Soluciones" crumb="ADMIN / SOLUCIONES" active={L.nav.soluciones}>
   <span slot="topbar" class="lbl" style="color:var(--rd)">SOLUCIONARIO</span>
   <a slot="topbar" class="btn ghost" style="height:36px;font-size:10px;text-decoration:none" href="/admin">Volver a admin</a>
 

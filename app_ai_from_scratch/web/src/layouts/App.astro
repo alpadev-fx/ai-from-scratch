@@ -31,6 +31,10 @@ const NAV = [
   { href: '/ligas',     ic: 'chart',  key: 'ligas',   label: L.nav.ligas,   roles: ['student', 'tutor', 'admin'] },
   { href: '/tutor',     ic: 'users',  key: 'cohorte', label: L.nav.cohorte, roles: ['tutor', 'admin'] },
   { href: '/admin',     ic: 'shield', key: 'admin',   label: L.nav.admin,   roles: ['admin'] },
+  // El solucionario es el curso entero resuelto, asi que entra en la barra con
+  // el MISMO rol que lo guarda en el servidor: ['admin'], ni tutor ni root por
+  // cortesia. Un enlace visible para quien no puede abrirlo solo produce un 403.
+  { href: '/admin/soluciones', ic: 'eye', key: 'soluciones', label: L.nav.soluciones, roles: ['admin'] },
   { href: '/perfil',    ic: 'user',   key: 'perfil',  label: L.nav.perfil,  roles: ['student', 'tutor', 'admin'] },
   { href: '/ajustes',   ic: 'gear',   key: 'ajustes', label: L.nav.ajustes, roles: ['student', 'tutor', 'admin'] },
 // satisface, no includes: el enlace de Admin exige ['admin'] y root tiene que

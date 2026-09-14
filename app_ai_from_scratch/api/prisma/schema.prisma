@@ -192,6 +192,7 @@ model users {
   token_version Int            @default(0)
   consent_at    DateTime?      @db.Timestamptz(6)
   consent_version String?
+  google_sub    String?        @unique
   attribution   Json?
   achievements  achievements[]
   attempts      attempts[]

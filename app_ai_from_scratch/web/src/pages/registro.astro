@@ -1,6 +1,6 @@
 ---
 export const prerender = false;
-import { getUser } from '../lib/session';
+import { getUser, API_URL } from '../lib/session';
 import { publicPrefs } from '../lib/prefs';
 import { t } from '../lib/i18n';
 import { grafo, org, curso } from '../lib/seo';
@@ -19,6 +19,19 @@ const L = t(lang);
 const P = L.pub.reg;
 // La cuenta nueva nace con el idioma y el tema que el visitante ya eligió aquí.
 const prefs = { lang: langPref, theme };
+// Igual que en /login: el botón solo existe si el servidor puede completarlo.
+let googleListo = false;
+try {
+  const r = await fetch(`${API_URL}/api/v3/auth/google/estado`);
+  googleListo = r.ok && ((await r.json()) as { habilitado?: boolean }).habilitado === true;
+} catch {
+  googleListo = false;
+}
+// El callback manda aquí a quien intentó CREAR cuenta con Google sin haber
+// aceptado. No se crea la cuenta y se le dice por qué, en su idioma.
+const avisoGoogle = Astro.url.searchParams.get('google') === 'falta_consentimiento'
+  ? L.pub.login.gFaltaConsentimiento : '';
+
 const canonical = new URL(Astro.url.pathname, SITE).href;
 const jsonld = grafo(org());
 ---
@@ -116,7 +129,23 @@ const jsonld = grafo(org());
             <span class="s">Acepto los <a href="/terminos">términos</a> y la <a href="/privacidad">política de privacidad</a>, y autorizo el tratamiento de mis datos (Ley 1581).</span>
           </label>
           <p class="fnota" id="n-acepta" aria-live="polite"></p>
+          {avisoGoogle && <p class="fnota" role="alert" style="color:var(--rd)">{avisoGoogle}</p>}
           <button class="btn block" id="go" type="submit">{P.crear}</button>
+          <!-- Un <a> no se puede deshabilitar, así que se marca con aria-disabled
+               y el propio manejador lo corta: crear una cuenta por Google sin
+               aceptar los términos no puede pasar por aquí, y el servidor lo
+               vuelve a comprobar igualmente (el consentimiento viaja firmado
+               dentro del estado).
+               El comentario va FUERA de la expresión: dentro de
+               `{cond && ( ... )}` Astro deja de renderizar el bloque entero sin
+               decir nada, y `astro check` lo da por bueno. Medido: el enlace no
+               aparecía en el HTML servido. -->
+          {googleListo && (
+            <a id="google" class="btn ghost block" href="/api/v3/auth/google?acepta=1" aria-disabled="true"
+               style="text-decoration:none;display:flex;align-items:center;justify-content:center;gap:9px;opacity:.55">
+              <Fragment set:html={icon('user', 15, 'currentColor')} />{L.pub.login.googleRegistro}
+            </a>
+          )}
           <p class="s" style="text-align:center">{P.yaTienes} <a href="/login">{P.entrar}</a></p>
         </form>
       </div>
@@ -126,6 +155,26 @@ const jsonld = grafo(org());
   <script>
     import { montarAvisos } from '../lib/avisos';
     montarAvisos(document.documentElement.lang === 'en' ? 'Close' : 'Cerrar');
+
+    // El enlace de Google sigue al mismo interruptor que el botón de crear.
+    const gLink = document.getElementById('google');
+    const gAcepta = document.getElementById('acepta') as HTMLInputElement | null;
+    const pintarGoogle = () => {
+      if (!gLink || !gAcepta) return;
+      const ok = gAcepta.checked;
+      gLink.setAttribute('aria-disabled', ok ? 'false' : 'true');
+      gLink.style.opacity = ok ? '1' : '.55';
+    };
+    gAcepta?.addEventListener('change', pintarGoogle);
+    gLink?.addEventListener('click', (e) => {
+      if (gAcepta?.checked) return;
+      e.preventDefault();
+      const n = document.getElementById('n-acepta');
+      if (n) n.textContent = document.documentElement.lang === 'en'
+        ? 'Accept the terms to continue.' : 'Acepta los términos para continuar.';
+      gAcepta?.focus();
+    });
+    pintarGoogle();
   </script>
   <script define:vars={{ P, prefs }}>
     const toast = (k, tt, b) => window.toast(k, tt, b);

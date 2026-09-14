@@ -3,7 +3,7 @@
 > Generated from `ai/src/course_ai/ontology/data.py` by `ai-doc`.
 > Regenerate with `pnpm ontology`. Do not edit by hand — edit `data.py`.
 
-16 tables · 123 columns · 44 tools · 63 `jamas` columns · 13 `de_pago` columns
+16 tables · 124 columns · 44 tools · 64 `jamas` columns · 13 `de_pago` columns
 
 ## Isolation is not in the prompt
 
@@ -162,6 +162,7 @@ The bus is indexed by the session's `userId`, so one person's queue is not reach
 | `consent_at` | `propio` | `gratis` | Cuando la persona acepto terminos y habeas data. |
 | `consent_version` | `propio` | `gratis` | Version de la politica aceptada. |
 | `attribution` | `jamas` | `gratis` | UTM de primer toque. Medicion, no ensenanza. |
+| `google_sub` | `jamas` | `gratis` | Identificador de la cuenta de Google vinculada. Solo lo toca auth. |
 
 ### `lessons`
 
@@ -457,7 +458,7 @@ Its companion `forbiddenColumns(table)` **throws for a table it does not know** 
 | `ranking_optin` | `user_id` | — |
 | `reset_tokens` | `id`, `user_id`, `token_hash`, `created_at`, `expires_at`, `used_at` | — |
 | `role_audit` | `id`, `actor_id`, `user_id`, `from_role`, `to_role`, `at` | — |
-| `users` | `id`, `email`, `pass_hash`, `failed`, `locked_until`, `deleted_at`, `token_version`, `attribution` | — |
+| `users` | `id`, `email`, `pass_hash`, `failed`, `locked_until`, `deleted_at`, `token_version`, `attribution`, `google_sub` | — |
 
 Gated tools (9 of 44), which declare that they resolve entitlement before returning: `buscar_en_curso`, `cola_siguiente`, `examen`, `lab_ficha`, `leccion`, `leccion_texto`, `mis_errores`, `mis_intentos`, `quiz_leccion`.
 

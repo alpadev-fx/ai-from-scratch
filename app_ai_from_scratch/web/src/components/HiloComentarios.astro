@@ -1,0 +1,324 @@
+---
+// Hilo de comentarios de un tutorial: lo ya publicado más el compositor.
+//
+// NO PERSISTE NADA, y eso es deliberado mientras no exista la tabla. Publicar
+// añade la burbuja al DOM y se acabó: al recargar desaparece. La pantalla lo
+// dice en voz alta en vez de fingir que guardó — un «publicado» que miente es
+// peor que un botón desactivado.
+//
+// Cuando exista el backend, lo único que cambia aquí es el bloque marcado
+// PUNTO DE ENGANCHE: un POST con content-type (la puerta mutating-fetch lo
+// exige, scripts/mutating-fetch.mjs) y repintar con lo que devuelva el servidor.
+import { icon } from '../lib/icons';
+import { initials } from '../lib/session';
+import { jsonSafe } from '../lib/json-safe';
+import type { ComentarioPlano } from '../data/tutoriales-mock';
+
+interface Props {
+  comentarios: ComentarioPlano[];
+  yo: string;
+  txt: Record<string, string>;
+  maxMb: number;
+}
+const { comentarios, yo, txt, maxMb } = Astro.props;
+
+const ICONO_ADJUNTO: Record<string, string> = { imagen: 'eye', gif: 'play', texto: 'pdf' };
+
+const pesoMb = (bytes: number) => (bytes / 1_048_576).toFixed(1);
+
+// «hace 42 min» / «hace 3 h» / «hace 2 d». El minuto exacto no aporta nada y
+// una fecha absoluta en datos de ejemplo envejece a la vista.
+function hace(min: number): string {
+  if (min < 1) return txt.ahora;
+  if (min < 60) return txt.hMin.replace('{n}', String(min));
+  if (min < 1440) return txt.hHora.replace('{n}', String(Math.floor(min / 60)));
+  return txt.hDia.replace('{n}', String(Math.floor(min / 1440)));
+}
+
+// Las cadenas que necesita el script del cliente viajan como JSON, no como
+// atributos sueltos: jsonSafe escapa «<» porque un «</script>» dentro de un
+// valor cerraría el bloque y el resto se parsearía como HTML (lib/json-safe.ts).
+const paraCliente = {
+  yo, maxMb, ahora: txt.ahora, adjunto: txt.adjunto, quitar: txt.quitar,
+  errVacio: txt.errVacio, errVacioB: txt.errVacioB,
+  errTipo: txt.errTipo, errTipoB: txt.errTipoB,
+  errPeso: txt.errPeso, errPesoB: txt.errPesoB,
+};
+---
+<section class="hilo" aria-label={txt.comentarios}>
+  <div class="hilo-cab">
+    <p class="lbl">{txt.comentarios}</p>
+    <span class="s" style="color:var(--l3)">
+      {comentarios.length === 1 ? txt.unComentario : txt.nComentarios.replace('{n}', String(comentarios.length))}
+    </span>
+  </div>
+
+  <ol id="lista-comentarios" class="hilo-lista">
+    {comentarios.map((c) => (
+      <li class="com">
+        <span class="com-av" aria-hidden="true">{initials(c.autor)}</span>
+        <div class="com-cuerpo">
+          <p class="com-meta"><b>{c.autor}</b><span>{hace(c.haceMin)}</span></p>
+          <p class="com-txt">{c.texto}</p>
+          {c.adjunto && (
+            <p class="adj">
+              <Fragment set:html={icon(ICONO_ADJUNTO[c.adjunto.tipo] ?? 'pdf', 14, 'var(--l3)')} />
+              <span class="adj-n">{c.adjunto.nombre}</span>
+              <span class="s" style="color:var(--l3)">{pesoMb(c.adjunto.bytes)} MB</span>
+            </p>
+          )}
+        </div>
+      </li>
+    ))}
+  </ol>
+
+  {comentarios.length === 0 && <p class="s" style="color:var(--l3)">{txt.sinComentarios}</p>}
+
+  <form id="compositor" class="card comp" novalidate>
+    <span class="com-av" aria-hidden="true">{initials(yo)}</span>
+    <div class="comp-col">
+      <label class="lbl" for="comp-txt">{txt.escribe}</label>
+      <textarea id="comp-txt" class="input comp-txt" rows="3" placeholder={txt.escribe}></textarea>
+
+      <!-- La previsualización arranca con hidden Y con una regla propia de
+           display:none !important en el <style>: el atributo [hidden] del
+           navegador lo gana cualquier display en línea o de clase, y eso ya
+           dejó a la vista un bloque que debía estar oculto (ver pago.astro). -->
+      <div id="comp-vista" class="comp-vista" hidden>
+        <img id="comp-img" class="comp-img" alt="" hidden />
+        <p id="comp-ficha" class="adj" hidden>
+          <Fragment set:html={icon('pdf', 14, 'var(--l3)')} />
+          <span id="comp-nombre" class="adj-n"></span>
+          <span id="comp-peso" class="s" style="color:var(--l3)"></span>
+        </p>
+        <button type="button" id="comp-quitar" class="btn ghost comp-quitar">{txt.quitar}</button>
+      </div>
+
+      <div class="comp-pie">
+        <label class="btn ghost comp-adj" for="comp-file">
+          <Fragment set:html={icon('download', 14, 'currentColor')} />{txt.adjuntar}
+        </label>
+        <input id="comp-file" type="file" class="comp-file"
+               accept="image/png,image/jpeg,image/gif,image/webp,text/plain" />
+        <span class="s comp-ayuda">{txt.adjuntarAyuda.replace('{mb}', String(maxMb))}</span>
+        <button type="submit" class="btn comp-enviar">{txt.publicar}</button>
+      </div>
+      <p class="s comp-nota">{txt.noSeGuarda}</p>
+    </div>
+  </form>
+
+  <!-- PLANTILLA. Los comentarios nuevos se CLONAN de aquí en vez de construirse
+       con createElement, y no es una preferencia de estilo: Astro acota el CSS
+       del componente por atributo (`.com-txt[data-astro-cid-...]`), así que un
+       nodo creado en JS no recibe ni una regla. Medido: una burbuja hecha a
+       mano perdía `overflow-wrap:anywhere` y una URL larga llevaba la página a
+       scrollWidth 579 con la pantalla en 390. Lo que sale del template ya viene
+       con el atributo puesto por el compilador. -->
+  <template id="tpl-com">
+    <li class="com">
+      <span class="com-av" aria-hidden="true"></span>
+      <div class="com-cuerpo">
+        <p class="com-meta"><b></b><span></span></p>
+        <p class="com-txt"></p>
+      </div>
+    </li>
+  </template>
+  <template id="tpl-adj">
+    <p class="adj">
+      <span class="adj-n"></span>
+      <span class="s" style="color:var(--l3)"></span>
+    </p>
+  </template>
+  <template id="tpl-img">
+    <img class="comp-img" alt="" />
+  </template>
+
+  <script type="application/json" id="hilo-txt" is:inline set:html={jsonSafe(paraCliente)} />
+</section>
+
+<style>
+  /* `hidden` no basta por sí solo: cualquier display de autor (aquí .comp-vista
+     es flex) gana a la hoja del agente de usuario. Medido en /pago con el mismo
+     patrón: la caja seguía visible con el interruptor apagado. */
+  [hidden] { display: none !important; }
+
+  .hilo { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+  .hilo-cab { display: flex; align-items: baseline; gap: 10px; }
+  .hilo-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+
+  .com { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 12px; align-items: start; }
+  /* min-width:0 en la columna de texto: un hijo de grid trae min-width:auto y
+     una URL pegada en un comentario infla el contenedor en vez de partirse. */
+  .com-cuerpo { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+  .com-av {
+    width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center;
+    background: var(--fill); color: var(--l2); font: 600 12px/1 var(--m); letter-spacing: .04em;
+  }
+  .com-meta { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; margin: 0; }
+  .com-meta b { color: var(--l1); font: 600 13px/1.3 var(--f); }
+  .com-meta span { color: var(--l3); font: 500 11px/1 var(--m); letter-spacing: .08em; text-transform: uppercase; }
+  .com-txt { margin: 0; color: var(--l2); font: 400 14px/1.6 var(--f); overflow-wrap: anywhere; }
+
+  .adj {
+    display: flex; align-items: center; gap: 8px; margin: 4px 0 0; padding: 8px 10px;
+    border: 1px solid var(--hair); border-radius: 9px; background: var(--fill); min-width: 0;
+  }
+  .adj-n { color: var(--l2); font: 500 12px/1 var(--m); overflow-wrap: anywhere; min-width: 0; }
+
+  .comp { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 12px; align-items: start; }
+  .comp-col { min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+  .comp-txt { width: 100%; resize: vertical; font: 400 14px/1.6 var(--f); min-height: 76px; }
+  .comp-vista { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; }
+  .comp-img { max-width: min(100%, 260px); max-height: 180px; border-radius: 9px; border: 1px solid var(--hair); }
+  .comp-quitar { height: 30px; font-size: 10px; }
+  .comp-pie { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .comp-adj { height: 32px; font-size: 10px; display: inline-flex; align-items: center; gap: 7px; cursor: pointer; }
+  /* El input de archivo real no se pinta, pero sigue enfocable con teclado a
+     través del <label for>: `display:none` lo sacaría del orden de tabulación.
+     Se recorta con clip-path en vez de sacarlo con position:absolute — un
+     absolute sin ancestro posicionado se ancla al documento y su contenido
+     (el nombre del archivo, 176px medidos) puede ensanchar la página: a 390px
+     salió scrollWidth 399 contra clientWidth 390. Con width:1px + clip no hay
+     nada que desbordar, pase lo que pase alrededor. */
+  .comp-file {
+    width: 1px; height: 1px; opacity: 0; pointer-events: none;
+    clip-path: inset(50%); overflow: hidden; flex: 0 0 1px; border: 0; padding: 0;
+  }
+  .comp-ayuda { color: var(--l3); }
+  .comp-enviar { height: 32px; font-size: 10px; margin-left: auto; }
+  .comp-nota { color: var(--or); }
+
+  @media (max-width: 520px) {
+    .com, .comp { grid-template-columns: 1fr; }
+    .com-av { display: none; }
+    .comp-enviar { margin-left: 0; width: 100%; }
+  }
+</style>
+
+<script>
+  // OJO: aqui NO se puede importar nada de lib/session.ts. Ese modulo evalua
+  // `process.env.API_URL` en su primera linea, y en el navegador `process` no
+  // existe: el modulo lanza al cargarse y se lleva por delante TODO este script
+  // sin dejar rastro en la consola (medido: el compositor quedaba inerte y no
+  // habia ni un error visible, porque el fallo ocurre antes de que corra nada).
+  // Las iniciales son dos lineas; duplicarlas cuesta menos que un import que
+  // arrastra el cliente de la API entera al bundle del navegador.
+  const iniciales = (nombre: string) =>
+    nombre.split(/\s+/).slice(0, 2).map((w) => w[0] ?? '').join('').toUpperCase();
+
+  const T = JSON.parse(document.getElementById('hilo-txt')!.textContent ?? '{}');
+  const MAX = Number(T.maxMb) * 1_048_576;
+  const TIPOS = ['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'text/plain'];
+
+  const form = document.getElementById('compositor') as HTMLFormElement | null;
+  const lista = document.getElementById('lista-comentarios');
+  const caja = document.getElementById('comp-txt') as HTMLTextAreaElement | null;
+  const file = document.getElementById('comp-file') as HTMLInputElement | null;
+  const vista = document.getElementById('comp-vista');
+  const img = document.getElementById('comp-img') as HTMLImageElement | null;
+  const ficha = document.getElementById('comp-ficha');
+  const nombre = document.getElementById('comp-nombre');
+  const peso = document.getElementById('comp-peso');
+  const quitar = document.getElementById('comp-quitar');
+
+  // El layout monta window.toast; si por lo que sea no está, un aviso perdido no
+  // debe llevarse por delante el resto del script (mismo guard que AiPanel).
+  const avisar = (kind: string, titulo: string, cuerpo: string, key: string) => {
+    if (typeof window.toast === 'function') window.toast(kind, titulo, cuerpo, key);
+  };
+
+  let adjunto: { archivo: File; url: string | null } | null = null;
+
+  const soltar = () => {
+    if (adjunto?.url) URL.revokeObjectURL(adjunto.url);   // si no, la imagen se queda en memoria
+    adjunto = null;
+    if (file) file.value = '';
+    vista?.setAttribute('hidden', '');
+    img?.setAttribute('hidden', '');
+    ficha?.setAttribute('hidden', '');
+    if (img) img.removeAttribute('src');
+  };
+
+  file?.addEventListener('change', () => {
+    const f = file.files?.[0];
+    if (!f) return;
+    if (!TIPOS.includes(f.type)) {
+      avisar('bad', T.errTipo, T.errTipoB.replace('{t}', f.type || '—'), 'adj-tipo');
+      file.value = '';
+      return;
+    }
+    if (f.size > MAX) {
+      avisar('bad', T.errPeso,
+        T.errPesoB.replace('{mb}', String(T.maxMb)).replace('{p}', (f.size / 1_048_576).toFixed(1)), 'adj-peso');
+      file.value = '';
+      return;
+    }
+    soltar();
+    // La previsualización sale de un blob local del propio navegador: no hay
+    // subida, ni petición, ni recurso remoto.
+    const esImagen = f.type.startsWith('image/');
+    const url = esImagen ? URL.createObjectURL(f) : null;
+    adjunto = { archivo: f, url };
+    if (esImagen && img && url) { img.src = url; img.alt = f.name; img.removeAttribute('hidden'); }
+    else {
+      if (nombre) nombre.textContent = f.name;                       // textContent: lo nombró una persona
+      if (peso) peso.textContent = `${(f.size / 1_048_576).toFixed(1)} MB`;
+      ficha?.removeAttribute('hidden');
+    }
+    vista?.removeAttribute('hidden');
+  });
+
+  quitar?.addEventListener('click', soltar);
+
+  form?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const texto = (caja?.value ?? '').trim();
+    if (!texto && !adjunto) {
+      avisar('bad', T.errVacio, T.errVacioB, 'com-vacio');
+      return;
+    }
+
+    // PUNTO DE ENGANCHE. Aquí irá el POST al API cuando exista la tabla:
+    // fetch('/api/tutoriales/<slug>/comentarios', { method:'POST',
+    //   headers:{'content-type':'application/json'}, body: JSON.stringify({texto}) })
+    // El content-type no es adorno: sin él Astro responde 403 antes de la ruta,
+    // y la puerta mutating-fetch lo caza en CI.
+    const tpl = document.getElementById('tpl-com') as HTMLTemplateElement | null;
+    if (!tpl) return;
+    const li = tpl.content.firstElementChild!.cloneNode(true) as HTMLElement;
+    li.querySelector('.com-av')!.textContent = iniciales(T.yo);
+    li.querySelector('.com-meta b')!.textContent = T.yo;          // textContent, no innerHTML
+    li.querySelector('.com-meta span')!.textContent = T.ahora;
+    li.querySelector('.com-txt')!.textContent = texto;            // lo escribió una persona
+    const cuerpo = li.querySelector('.com-cuerpo')!;
+
+    if (adjunto) {
+      if (adjunto.url) {
+        const tplImg = document.getElementById('tpl-img') as HTMLTemplateElement;
+        const vistaImg = tplImg.content.firstElementChild!.cloneNode(true) as HTMLImageElement;
+        vistaImg.src = adjunto.url;   // blob local; vive mientras viva la pestaña
+        vistaImg.alt = adjunto.archivo.name;
+        cuerpo.append(vistaImg);
+      } else {
+        const tplAdj = document.getElementById('tpl-adj') as HTMLTemplateElement;
+        const fila = tplAdj.content.firstElementChild!.cloneNode(true) as HTMLElement;
+        fila.querySelector('.adj-n')!.textContent = adjunto.archivo.name;
+        fila.querySelector('.s')!.textContent = `${(adjunto.archivo.size / 1_048_576).toFixed(1)} MB`;
+        cuerpo.append(fila);
+      }
+    }
+
+    lista?.append(li);
+
+    // El blob se lo queda la burbuja recién creada, así que no se revoca aquí:
+    // revocarlo dejaría la imagen rota justo después de publicarla.
+    adjunto = null;
+    if (file) file.value = '';
+    vista?.setAttribute('hidden', '');
+    img?.setAttribute('hidden', '');
+    ficha?.setAttribute('hidden', '');
+    if (img) img.removeAttribute('src');
+    if (caja) caja.value = '';
+    li.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  });
+</script>

@@ -322,17 +322,21 @@ func probeArgs(ctx context.Context, dsn string) (map[string]probe, error) {
 		"root.solved_labs":               {args: map[string]any{}},
 		"auth.user":                      {args: map[string]any{}, actor: actor},
 		"auth.user_by_email":             {args: map[string]any{"login": email}},
-		"auth.throttle":                  {args: map[string]any{}, actor: actor},
-		"auth.recovery_by_email":         {args: map[string]any{"login": email}},
-		"auth.reset_rate":                {args: map[string]any{}, actor: actor},
-		"auth.reset_lookup":              {args: map[string]any{"token": "smoke-token-never-used"}},
-		"auth.admin_count":               {args: map[string]any{}},
-		"auth.admin_users":               {args: map[string]any{}},
-		"auth.admin_entitlements":        {args: map[string]any{}},
-		"lab.solutions_all":              {args: map[string]any{}},
-		"question.solutions_all":         {args: map[string]any{}},
-		"user.me":                        {args: map[string]any{}, actor: actor},
-		"user.credentials_by_email":      {args: map[string]any{"login": email}},
+		// Un sujeto de Google que no existe: la operacion tiene que EJECUTARSE y
+		// devolver cero filas. Lo que este humo comprueba es que la consulta
+		// corre y devuelve las columnas declaradas, no que encuentre a alguien.
+		"auth.user_by_google":       {args: map[string]any{"sub": "smoke-no-existe"}},
+		"auth.throttle":             {args: map[string]any{}, actor: actor},
+		"auth.recovery_by_email":    {args: map[string]any{"login": email}},
+		"auth.reset_rate":           {args: map[string]any{}, actor: actor},
+		"auth.reset_lookup":         {args: map[string]any{"token": "smoke-token-never-used"}},
+		"auth.admin_count":          {args: map[string]any{}},
+		"auth.admin_users":          {args: map[string]any{}},
+		"auth.admin_entitlements":   {args: map[string]any{}},
+		"lab.solutions_all":         {args: map[string]any{}},
+		"question.solutions_all":    {args: map[string]any{}},
+		"user.me":                   {args: map[string]any{}, actor: actor},
+		"user.credentials_by_email": {args: map[string]any{"login": email}},
 	}, nil
 }
 

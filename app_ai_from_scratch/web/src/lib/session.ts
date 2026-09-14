@@ -1,4 +1,7 @@
 const API = import.meta.env.API_URL ?? process.env.API_URL ?? 'http://127.0.0.1:8787';
+/** Mismo valor, exportado para las páginas públicas que preguntan al api antes
+ *  de pintar algo (hoy: si el login con Google está configurado). */
+export const API_URL = API;
 
 // Todas las rutas se piden por /api/v3/*. La superficie sin version sigue viva
 // como v2 legacy y responde igual, pero con cabeceras Deprecation y Sunset: si

@@ -116,6 +116,7 @@
     "users.deleted_at": "jamas",
     "users.email": "jamas",
     "users.failed": "jamas",
+    "users.google_sub": "jamas",
     "users.id": "jamas",
     "users.lang": "propio",
     "users.locked_until": "jamas",
@@ -1074,6 +1075,7 @@
     "users.deleted_at": "gratis",
     "users.email": "gratis",
     "users.failed": "gratis",
+    "users.google_sub": "gratis",
     "users.id": "gratis",
     "users.lang": "gratis",
     "users.locked_until": "gratis",
@@ -1194,14 +1196,15 @@
       "locked_until",
       "deleted_at",
       "token_version",
-      "attribution"
+      "attribution",
+      "google_sub"
     ]
   },
   "prompt_sha": {
     "en": "bdc442d2088e",
     "es": "f321741d5147"
   },
-  "sha": "60b2d3910c85ab5c",
+  "sha": "dbe8e3e82d40fcd9",
   "version": 3,
   "violaciones": []
 }

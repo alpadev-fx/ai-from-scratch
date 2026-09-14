@@ -1,7 +1,11 @@
 import { createHash, randomUUID } from 'node:crypto';
+import {
+  COOKIE_ESTADO, ESTADO_MINUTOS, GOOGLE_TOKEN, claveInservible, configGoogle, decidirCuenta,
+  firmarEstado, identidadDe, leerEstado, leerIdToken, nuevoNonce, urlAutorizacion,
+} from './google.ts';
 import { COOKIE, DIAS_CONCESION_POR_DEFECTO, ESTADOS_SUSCRIPCION, EXTERNO_BLOQUEO, EXTERNO_CONCESION,
   FUENTE_BLOQUEO, FUENTE_CONCESION, MAX_DIAS_CONCESION, POLICY_VERSION, ROLES, TOKEN_MINUTES, cookieOpts,
-  hashPassword, hashToken, mandaPlataforma, newToken, satisface, sign, spendKdf, suscripcionDe,
+  firmaSesion, hashPassword, hashToken, mandaPlataforma, newToken, satisface, sign, spendKdf, suscripcionDe,
   ultimasManuales, verify, verifyPassword } from './core.ts';
 import type { FilaManual } from './core.ts';
 
@@ -37,12 +41,24 @@ export interface AuthDependencies {
   forgetTurns?: (userId: number) => Promise<{ ok: true } | { error: string }>;
 }
 
-export interface RequestLike { cookies?: Record<string, string>; headers?: Record<string, unknown>; body?: any }
+export interface RequestLike {
+  cookies?: Record<string, string>;
+  headers?: Record<string, unknown>;
+  body?: any;
+  /** Solo lo usan las rutas de Google: el resto de auth es POST con cuerpo.
+   *  `unknown` y no Record<string,unknown>: Fastify lo tipa como unknown y un
+   *  tipo más estrecho aquí rompe TODAS las llamadas desde server.ts. Quien lo
+   *  usa lo estrecha en su sitio. */
+  query?: unknown;
+}
 export interface ReplyLike {
   code(status: number): ReplyLike;
   send(value: unknown): unknown;
   setCookie(name: string, value: string, options: unknown): void;
   clearCookie(name: string, options: unknown): void;
+  /** Fastify lo trae; se declara opcional para que un doble de prueba no tenga
+   *  que implementar lo que no ejerce. Quien redirige comprueba que está. */
+  redirect?(url: string): unknown;
 }
 
 export const LANGS: readonly string[] = ['es', 'en', 'fr', 'pt', 'auto'];
@@ -214,6 +230,131 @@ export function createAuth(deps: AuthDependencies) {
         deps.log.info({ userId: user!.id }, 'welcome mail skipped: no mail provider configured');
       }
       return reply.code(201).send({ user: shapeUser(user!) });
+    });
+
+    // ---------- Entrar con Google ----------
+    //
+    // Tres rutas y ni una linea de criptografia propia. El id_token se lee, no
+    // se verifica su firma, y eso es correcto SOLO porque llega de una respuesta
+    // directa del endpoint de token de Google sobre TLS autenticada con el
+    // client_secret: es Google quien lo entrega por un canal cerrado. Si el
+    // token llegara por el navegador habria que validarlo contra el JWKS.
+    //
+    // Nada de esto tiene valor por defecto: sin las tres variables de entorno,
+    // `configGoogle` devuelve null y estas rutas contestan 503. Un OAuth a
+    // medias es como se acaba confiando en tokens emitidos para otra aplicacion.
+
+    /** Le dice al front si el boton se puede pintar. Sin esto el boton existiria
+     *  y llevaria a un 503, que para quien lo pulsa es «esto esta roto». */
+    app.get('/api/auth/google/estado', async (_request: RequestLike, reply: ReplyLike) =>
+      reply.code(200).send({ habilitado: configGoogle() !== null }));
+
+    app.get('/api/auth/google', async (request: RequestLike, reply: ReplyLike) => {
+      const cfg = configGoogle();
+      if (!cfg) return reply.code(503).send({ error: 'google_no_configurado' });
+      const acepta = String((request.query as Record<string, unknown> | undefined)?.acepta ?? '') === '1';
+      const nonce = nuevoNonce();
+      const estado = firmarEstado({ nonce, acepta, t: Date.now() }, firmaSesion);
+      // Cookie propia y corta: el estado tiene que sobrevivir al viaje de ida y
+      // vuelta, y el api corre en mas de una instancia, asi que guardarlo en
+      // memoria del proceso haria fallar la vuelta que caiga en otra.
+      reply.setCookie(COOKIE_ESTADO, estado, { ...cookieOpts, maxAge: ESTADO_MINUTOS * 60 });
+      return reply.redirect(urlAutorizacion(cfg, estado, nonce));
+    });
+
+    app.get('/api/auth/google/callback', async (request: RequestLike, reply: ReplyLike) => {
+      const cfg = configGoogle();
+      if (!cfg) return reply.code(503).send({ error: 'google_no_configurado' });
+      const q = (request.query ?? {}) as Record<string, unknown>;
+      const alLogin = (motivo: string) => {
+        reply.clearCookie(COOKIE_ESTADO, { path: '/' });
+        return reply.redirect(`${deps.origin}/login?google=${motivo}`);
+      };
+      // Google manda `error=access_denied` cuando la persona cancela. Eso no es
+      // un fallo: es una respuesta, y merece volver al login sin ruido.
+      if (q.error) return alLogin(String(q.error) === 'access_denied' ? 'cancelado' : 'fallo');
+
+      // El estado firmado es lo unico que ata esta vuelta con aquella ida. Sin
+      // esta comprobacion, un tercero puede hacer que tu navegador complete SU
+      // flujo y te deja dentro de la cuenta del atacante.
+      const estado = leerEstado(request.cookies?.[COOKIE_ESTADO], firmaSesion);
+      if (!estado || String(q.state ?? '') !== String(request.cookies?.[COOKIE_ESTADO] ?? '')) {
+        return alLogin('estado_invalido');
+      }
+      const code = String(q.code ?? '');
+      if (!code) return alLogin('sin_codigo');
+
+      let idToken: unknown;
+      try {
+        const res = await fetch(GOOGLE_TOKEN, {
+          method: 'POST',
+          headers: { 'content-type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            code, client_id: cfg.clientId, client_secret: cfg.clientSecret,
+            redirect_uri: cfg.redirectUri, grant_type: 'authorization_code',
+          }),
+        });
+        if (!res.ok) {
+          deps.log.warn({ status: res.status }, 'google token exchange refused');
+          return alLogin('fallo');
+        }
+        idToken = ((await res.json()) as { id_token?: unknown }).id_token;
+      } catch (error) {
+        deps.log.error({ error }, 'google token exchange failed');
+        return alLogin('fallo');
+      }
+
+      const leida = identidadDe(leerIdToken(idToken), cfg, estado.nonce);
+      if (leida.ok === false) {
+        deps.log.warn({ motivo: leida.error }, 'google identity refused');
+        return alLogin(leida.error);
+      }
+      const { sub, email, nombre } = leida.identidad;
+
+      const [porGoogle, porEmail] = await Promise.all([
+        deps.one<AuthUser>('auth.user_by_google', { sub }),
+        deps.one<AuthUser & { google_sub?: string | null }>('auth.user_by_email', { login: email }),
+      ]);
+      const decision = decidirCuenta({
+        porGoogle: porGoogle ? { id: porGoogle.id } : null,
+        // `auth.user_by_email` no devuelve google_sub y no se le añade: cuantas
+        // menos columnas salga de esa consulta, mejor. El conflicto de dos
+        // identidades sobre la misma cuenta lo detecta el UPDATE de abajo, que
+        // se niega a pisar un sub distinto y devuelve 0 filas.
+        porEmail: porEmail ? { id: porEmail.id, google_sub: null } : null,
+        sub, acepta: estado.acepta,
+      });
+
+      let cuenta: AuthUser | null = null;
+      if (decision.accion === 'falta_consentimiento') {
+        reply.clearCookie(COOKIE_ESTADO, { path: '/' });
+        return reply.redirect(`${deps.origin}/registro?google=falta_consentimiento`);
+      }
+      if (decision.accion === 'conflicto_sujeto') return alLogin('conflicto');
+      if (decision.accion === 'entrar') cuenta = porGoogle;
+      if (decision.accion === 'vincular') {
+        // El UPDATE se niega a pisar otro sub: si no toca ninguna fila es que
+        // esa cuenta ya pertenece a otra identidad de Google, y entonces no se
+        // entra. Contar filas es la comprobacion, no un adorno.
+        const filas = await deps.write('auth.link_google', { sub }, porEmail!.id);
+        if (filas !== 1) return alLogin('conflicto');
+        cuenta = await deps.one<AuthUser>('auth.user', {}, porEmail!.id);
+      }
+      if (decision.accion === 'crear') {
+        cuenta = await deps.one<AuthUser>('auth.register_google', {
+          login: email, name: nombre, password: await hashPassword(claveInservible()),
+          lang: 'auto', theme: 'auto',
+          consent_at: new Date().toISOString(), consent_version: POLICY_VERSION, sub,
+        });
+        await emit('auth.account_registered', { subject: String(cuenta!.id), target: String(cuenta!.id) });
+      }
+      if (!cuenta) return alLogin('fallo');
+      if (isLocked(cuenta)) return alLogin('bloqueada');
+
+      reply.clearCookie(COOKIE_ESTADO, { path: '/' });
+      reply.setCookie(COOKIE, sign({ sub: cuenta.id, role: cuenta.role, v: cuenta.token_version }), cookieOpts);
+      deps.log.info({ userId: cuenta.id, accion: decision.accion }, 'google sign-in');
+      return reply.redirect(`${deps.origin}/panel`);
     });
 
     app.post('/api/auth/recover', async (request: RequestLike, reply: ReplyLike) => {

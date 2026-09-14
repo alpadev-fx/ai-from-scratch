@@ -277,6 +277,17 @@ export interface CookieOpts {
   maxAge: number;
 }
 
+/**
+ * Firma HMAC con el secreto de sesión, para lo que necesite firmar algo que
+ * viaja fuera y vuelve (hoy: el estado del flujo de Google).
+ *
+ * Se exporta la FIRMA y no el secreto a propósito: un `export const SECRET`
+ * pone la llave de todas las sesiones al alcance de cualquier import, y basta
+ * con que alguien la registre en un log una vez.
+ */
+export const firmaSesion = (data: string): string =>
+  createHmac('sha256', SECRET).update(data).digest('base64url');
+
 export const cookieOpts: CookieOpts = {
   httpOnly: true,
   sameSite: 'lax',

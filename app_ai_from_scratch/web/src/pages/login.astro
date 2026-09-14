@@ -1,6 +1,6 @@
 ---
 export const prerender = false;
-import { getUser } from '../lib/session';
+import { getUser, API_URL } from '../lib/session';
 import { publicPrefs } from '../lib/prefs';
 import { t } from '../lib/i18n';
 import { grafo, org, curso } from '../lib/seo';
@@ -18,6 +18,29 @@ const L = t(lang);
 const P = L.pub.login;
 // Si la cuenta todavía está en 'auto', adopta lo que el visitante eligió aquí.
 const prefs = { lang: langPref, theme };
+// EL BOTON SOLO EXISTE SI EL SERVIDOR PUEDE.
+// Sin GOOGLE_CLIENT_ID / SECRET / REDIRECT_URI, `configGoogle` devuelve null y
+// /api/auth/google contesta 503. Pintar el boton igualmente seria ofrecer una
+// puerta que da a un error: quien la pulsa lee «esto esta roto», no «esto no
+// esta configurado». Se pregunta al api, que es quien lo sabe, en vez de
+// duplicar las variables de entorno en este servicio y confiar en que coincidan.
+let googleListo = false;
+try {
+  const r = await fetch(`${API_URL}/api/v3/auth/google/estado`);
+  googleListo = r.ok && ((await r.json()) as { habilitado?: boolean }).habilitado === true;
+} catch {
+  googleListo = false;   // el api caido no puede romper la pagina de entrar
+}
+// Motivo con el que vuelve el callback cuando algo se tuerce. Es una clave, no
+// texto: se traduce aqui y nunca se pinta lo que venga en la URL.
+const MOTIVOS: Record<string, string> = {
+  cancelado: P.gCancelado, fallo: P.gFallo, estado_invalido: P.gFallo, sin_codigo: P.gFallo,
+  token_ilegible: P.gFallo, emisor: P.gFallo, audiencia: P.gFallo, caducado: P.gFallo,
+  nonce: P.gFallo, sin_sujeto: P.gFallo, sin_correo: P.gFallo,
+  correo_sin_verificar: P.gCorreoSinVerificar, conflicto: P.gConflicto, bloqueada: P.gBloqueada,
+};
+const avisoGoogle = MOTIVOS[String(Astro.url.searchParams.get('google') ?? '')] ?? '';
+
 const canonical = new URL(Astro.url.pathname, SITE).href;
 const jsonld = grafo(org());
 ---
@@ -79,6 +102,12 @@ const jsonld = grafo(org());
             <input class="input" id="pass" name="password" type="password" autocomplete="current-password" placeholder="••••••••" required>
           </div>
           <button class="btn block" id="go" type="submit">{P.entrar}</button>
+          {avisoGoogle && <p class="fnota" role="alert" style="color:var(--rd)">{avisoGoogle}</p>}
+          {googleListo && (
+            <a class="btn ghost block" href="/api/v3/auth/google" style="text-decoration:none;display:flex;align-items:center;justify-content:center;gap:9px">
+              <Fragment set:html={icon('user', 15, 'currentColor')} />{P.google}
+            </a>
+          )}
           <div style="display:flex;align-items:center;gap:12px">
             <div style="flex:1;height:1px;background:var(--hair2)"></div><span class="or-txt">{P.o}</span><div style="flex:1;height:1px;background:var(--hair2)"></div>
           </div>

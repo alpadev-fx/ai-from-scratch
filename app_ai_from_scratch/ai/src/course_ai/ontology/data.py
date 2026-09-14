@@ -184,6 +184,12 @@ TABLES: Mapping[str, Table] = {
             "consent_at": _c("propio", "Cuando la persona acepto terminos y habeas data."),
             "consent_version": _c("propio", "Version de la politica aceptada."),
             "attribution": _c("jamas", "UTM de primer toque. Medicion, no ensenanza."),
+            # Mismo tratamiento que email y pass_hash: es un identificador de
+            # cuenta de otra plataforma. Para ensenar no vale nada, y para
+            # cualquiera que lo lea es la llave de «con que identidad entra
+            # esta persona». Que ninguna herramienta pueda devolverlo es lo que
+            # convierte eso en imposible en vez de en improbable.
+            "google_sub": _c("jamas", "Identificador de la cuenta de Google vinculada. Solo lo toca auth."),
         },
     ),
     "lessons": Table(

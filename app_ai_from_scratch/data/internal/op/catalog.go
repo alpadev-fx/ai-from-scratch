@@ -835,6 +835,55 @@ var catalog = []Operation{
 		Justify: "auth needs the password hash, lockout fields, session version and profile to verify login and mint a cookie. It returns a generic credential error and never exposes this row",
 	},
 	{
+		// Identidad de Google -> cuenta. Se busca por `sub` y no por correo: el
+		// correo de una cuenta de Google puede cambiar y el `sub` no, asi que
+		// buscar por correo haria que un cambio de direccion abriese otra cuenta.
+		Name: "auth.user_by_google", Table: "users", Scope: Public, Audience: Internal, Muro: Gratis,
+		Returns: []string{"id", "email", "name", "pass_hash", "role", "lang", "theme", "paid", "cohort", "created_at", "failed", "locked_until", "deleted_at", "token_version"},
+		From:    "users", Where: "google_sub = $1 AND deleted_at IS NULL", Limit: 1,
+		Params:  []Param{{Name: "sub", Kind: Text, Max: 255}},
+		Why:     "resolve which account a verified Google identity opens",
+		Justify: "auth needs the same complete row the password login needs, to mint the cookie and apply the lockout rules. It never leaves auth and shapeUser strips the internal fields",
+	},
+	{
+		// Vincular. El WHERE exige que la fila NO tenga ya otro `sub`: si lo
+		// tiene, la actualizacion no afecta a ninguna fila y auth se entera por
+		// el contador en vez de sobrescribir el vinculo, que seria regalar la
+		// cuenta a la segunda identidad que llegue.
+		// Agent y no Internal, igual que el resto de escrituras de auth sobre la
+		// propia fila (auth.revoke_session, auth.login_failure): no devuelve
+		// ninguna columna, asi que marcarla Internal no protegeria nada y solo
+		// la sacaria del control. El propio validador del catalogo lo rechaza.
+		Name: "auth.link_google", Table: "users", Scope: Own, Audience: Agent, Muro: Gratis, Write: true,
+		Raw: "UPDATE users SET google_sub = $2 WHERE id = $1 AND deleted_at IS NULL " +
+			"AND (google_sub IS NULL OR google_sub = $2)",
+		Params: []Param{{Name: "actor", Kind: Actor}, {Name: "sub", Kind: Text, Max: 255}},
+		Why:    "attach a verified Google identity to the account that already owns that address",
+	},
+	{
+		// Alta por Google. Recibe `password` igual que auth.register porque la
+		// columna es NOT NULL: auth manda el hash de 32 bytes aleatorios que
+		// nadie conoce. Y recibe consent_at/consent_version porque una cuenta
+		// creada por aqui no puede saltarse el consentimiento que el registro
+		// por contrasena si exige.
+		Name: "auth.register_google", Table: "users", Scope: Public, Audience: Internal, Muro: Gratis, Write: true,
+		Raw: "INSERT INTO users (email,name,pass_hash,role,paid,lang,theme,consent_at,consent_version,google_sub) " +
+			"VALUES ($1,$2,$3,'student',0,$4,$5,$6::timestamptz,$7,$8) " +
+			"RETURNING id, email, name, pass_hash, role, lang, theme, paid, cohort, created_at, failed, locked_until, deleted_at, token_version",
+		Returns: []string{"id", "email", "name", "pass_hash", "role", "lang", "theme", "paid", "cohort", "created_at", "failed", "locked_until", "deleted_at", "token_version"},
+		Params: []Param{
+			{Name: "login", Kind: Text, Max: 320}, {Name: "name", Kind: Text, Max: 200},
+			{Name: "password", Kind: Text, Max: 500},
+			{Name: "lang", Kind: Enum, Allowed: []string{"es", "en", "fr", "pt", "auto"}},
+			{Name: "theme", Kind: Enum, Allowed: []string{"dark", "paper", "auto"}},
+			{Name: "consent_at", Kind: Text, Max: 40},
+			{Name: "consent_version", Kind: Text, Max: 32},
+			{Name: "sub", Kind: Text, Max: 255},
+		},
+		Why:     "create one student account from a verified Google identity and return it to auth for cookie issuance",
+		Justify: "same contract as auth.register: the generated id and the complete row are needed to mint the first session, and the internal fields are removed by shapeUser",
+	},
+	{
 		Name: "auth.throttle", Table: "auth_throttles", Scope: Own, Audience: Internal, Muro: Gratis,
 		Returns: []string{"expires_at"}, From: "auth_throttles", Where: "user_id = $1 AND expires_at > now()", Limit: 1,
 		Params:  []Param{{Name: "actor", Kind: Actor}},

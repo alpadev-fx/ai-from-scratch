@@ -166,6 +166,22 @@ const GATES = [
   { id: 'web-i18n', what: 'every i18n key exists in both languages',
     cmd: ['pnpm', ['--dir', 'web', 'i18n']] },
 
+  // Same shape as web-i18n, one axis over: i18n catches a string that exists in
+  // one language and not the other; this catches a COLOUR that is right in one
+  // theme and not the other. Both are invisible to types and to tests, and both
+  // are only noticed by whoever is using the half nobody develops in.
+  { id: 'theme-literals', what: 'the app shell paints from tokens, not one theme’s hex',
+    cmd: ['node', ['scripts/check-theme-literals.mjs']] },
+
+  // The mirror of theme-literals, and the half that actually shipped. That one
+  // catches a hex where a token belongs; this catches a token that belongs to
+  // nobody. `.up-cta` referenced `var(--fg)`, declared nowhere, so `background`
+  // was dropped and the primary CTA painted itself the colour of whatever was
+  // behind it — invisible in BOTH themes, on /pago and on the app-wide upsell.
+  // theme-literals ran green the whole time: there is no literal to find.
+  { id: 'undefined-tokens', what: 'every var(--token) names a token something declares',
+    cmd: ['node', ['scripts/check-undefined-tokens.mjs']] },
+
   { id: 'mutating-fetch', what: "every browser mutation sends content-type (Astro's origin check 403s without it)",
     cmd: ['node', ['scripts/mutating-fetch.mjs']] },
 
@@ -177,6 +193,15 @@ const GATES = [
 
   { id: 'web-scenes', what: 'every lesson has one scene, no orphans',
     cmd: ['node', ['web/scripts/scenes-check.mjs']] },
+
+  // web-scenes proves every lesson HAS an animation. This proves the animation
+  // gets what it reads: the scenes parse the lesson's own example strings at
+  // runtime and every parser falls back rather than throwing, so a `salida`
+  // rewritten without its numbers silently drops a scoreboard in one language
+  // and keeps it in the other. Cross-service, so it lives here: the prose is
+  // authored in api/ and the parsers ship in web/.
+  { id: 'lesson-scenes', what: 'every scene gets what it reads, in both languages',
+    cmd: ['node', ['--experimental-strip-types', 'scripts/check-lesson-scenes.mjs']] },
 
   { id: 'e2e-journey', what: 'Playwright landing/registro/pago journey',
     slow: true, exclusive: 'postgres',

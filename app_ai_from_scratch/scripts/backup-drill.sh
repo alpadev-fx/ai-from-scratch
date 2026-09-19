@@ -29,7 +29,8 @@ src=$(docker run -d --rm -e POSTGRES_PASSWORD=drill postgres:17-alpine)
 i=0
 ready=0
 while [ "$i" -lt 30 ]; do
-  if docker exec "$src" pg_isready -U postgres >/dev/null 2>&1; then
+  if docker exec "$src" pg_isready -U postgres >/dev/null 2>&1 \
+    && docker exec "$src" psql -U postgres -d postgres -c 'select 1' >/dev/null 2>&1; then
     ready=1
     break
   fi

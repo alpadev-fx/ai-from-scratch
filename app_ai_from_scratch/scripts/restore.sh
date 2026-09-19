@@ -15,10 +15,13 @@ fi
 cid=$(docker run -d --rm -e POSTGRES_PASSWORD=restore postgres:17-alpine)
 trap 'docker stop "$cid" >/dev/null 2>&1 || true' EXIT
 
+# pg_isready can succeed during init, then the server restarts and the
+# socket vanishes. Accept ready only when a real query returns.
 i=0
 ready=0
 while [ "$i" -lt 30 ]; do
-  if docker exec "$cid" pg_isready -U postgres >/dev/null 2>&1; then
+  if docker exec "$cid" pg_isready -U postgres >/dev/null 2>&1 \
+    && docker exec "$cid" psql -U postgres -d postgres -c 'select 1' >/dev/null 2>&1; then
     ready=1
     break
   fi

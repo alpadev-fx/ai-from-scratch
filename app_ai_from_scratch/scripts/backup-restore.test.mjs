@@ -31,6 +31,7 @@ test('restore.sh never targets compose live databases', () => {
   assert.doesNotMatch(src, /docker compose/);
   assert.doesNotMatch(src, /\b(payments-db|messages-db)\b/);
   assert.match(src, /throwaway|Never the live DB/i);
+  assert.match(src, /select 1/, 'ready means a query works, not only pg_isready');
 });
 
 test('dump-url.sh without DATABASE_URL fails closed', () => {
@@ -51,7 +52,8 @@ test('a dump without the canary fails integrity, not silently pass', () => {
   try {
     let ready = false;
     for (let i = 0; i < 30; i++) {
-      if (sh(['docker', 'exec', id, 'pg_isready', '-U', 'postgres']).status === 0) {
+      const ping = sh(['docker', 'exec', id, 'psql', '-U', 'postgres', '-d', 'postgres', '-c', 'select 1']);
+      if (ping.status === 0) {
         ready = true;
         break;
       }

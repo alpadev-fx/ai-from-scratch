@@ -246,6 +246,36 @@ which is exactly when the isolation proof earns its keep.
 
 ---
 
+### Raising the HSTS max-age
+
+`web/src/lib/hsts.ts` holds one string, today `max-age=300`. Read this before
+you grow it.
+
+HSTS is the only header here that **cannot be taken back**. A browser that
+cached it refuses to reach the domain over http for the whole `max-age`, and it
+never asks again. If the certificate lapses inside that window the site is
+unreachable, not slow, and there is no way to reach the browsers holding the
+header — not a deploy, not a DNS change, not support. That is the whole risk,
+and it is the reason the number starts at five minutes.
+
+The ramp, one step per renewal actually observed:
+
+| step | value | when |
+| -- | -- | -- |
+| now | `max-age=300` | in production |
+| next | `max-age=86400` | after one Let's Encrypt renewal has been watched end to end |
+| then | `max-age=31536000` | after a second, with the renewal alarmed |
+
+`includeSubDomains` is a separate decision and a wider one: it binds every
+present and future subdomain at once, including any that has no TLS today. Check
+the DNS first, not the default. `preload` is effectively permanent — removal
+from the browser list takes months — and is not something to add from a diff.
+
+`web/test/hsts.test.mts` asserts the exact value, so raising it means editing a
+test that explains why. That is deliberate.
+
+---
+
 ## The services
 
 | Directory | What it is | Its own tools |

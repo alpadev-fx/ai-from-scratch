@@ -26,8 +26,18 @@ const env = (k: string): string | null => {
 export const MESSAGES_URL = (env('MESSAGES_URL') ?? '').replace(/\/+$/, '');
 export const MESSAGES_SECRET = env('MESSAGES_SECRET');
 
-const headers = (): Record<string, string> => ({
+// `content-type: application/json` is a promise that a body follows, and
+// Fastify's default parser believes it: a request that sets the header and
+// sends nothing is refused with FST_ERR_CTP_EMPTY_JSON_BODY before any handler
+// runs. The bodyless DELETE below carried the header anyway, so purging a
+// person's turns answered 400, and deleting an account answered 503 to every
+// user who ever tried. The header now travels with the body, never alone.
+const auth = (): Record<string, string> => ({
   authorization: `Bearer ${MESSAGES_SECRET ?? ''}`,
+});
+
+const sending = (): Record<string, string> => ({
+  ...auth(),
   'content-type': 'application/json',
 });
 
@@ -48,7 +58,7 @@ export async function rememberTurn(input: {
   }
   const write = async (body: Record<string, unknown>): Promise<void> => {
     const res = await fetch(`${MESSAGES_URL}/v1/turns`, {
-      method: 'POST', headers: headers(), body: JSON.stringify(body),
+      method: 'POST', headers: sending(), body: JSON.stringify(body),
     });
     if (!res.ok) {
       loud(`store answered ${res.status}`, (await res.text()).slice(0, 200));
@@ -81,7 +91,7 @@ export async function loadTurns(userId: number, source: ChatSource, limit = 200)
   }
   try {
     const q = new URLSearchParams({ userId: String(userId), source, limit: String(limit) });
-    const res = await fetch(`${MESSAGES_URL}/v1/turns?${q}`, { headers: headers() });
+    const res = await fetch(`${MESSAGES_URL}/v1/turns?${q}`, { headers: auth() });
     if (!res.ok) return { error: `messages_${res.status}` };
     const raw: unknown = await res.json().catch(() => null);
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
@@ -119,7 +129,7 @@ export async function forgetTurns(userId: number): Promise<{ ok: true } | { erro
   if (!MESSAGES_URL || !MESSAGES_SECRET) return { error: 'messages_unavailable' };
   try {
     const res = await fetch(`${MESSAGES_URL}/v1/turns?userId=${userId}`, {
-      method: 'DELETE', headers: headers(),
+      method: 'DELETE', headers: auth(),
     });
     if (!res.ok) return { error: `messages_${res.status}` };
     return { ok: true };

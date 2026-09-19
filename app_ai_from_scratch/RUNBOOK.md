@@ -41,7 +41,7 @@ own — it used to, and that is how you lose a colleague's running service.
 | "check the message store" | `pnpm check:messages` | tsgo + document contracts for `messages/`. |
 | "what are the gates?" | `pnpm verify:list` | The list, and which are slow. |
 | "run the tests" | `pnpm test` | The eight api suites. |
-| "test the Python side" | `pnpm test:py` | pytest. |
+| "test the Python side" | `pnpm test:py` | pytest. Fails with an `ImportError` from the standard library (`cannot import name 'UTC' from 'datetime'`)? The venv is pointing at a path that no longer exists — see below. |
 | "prove the isolation" | `pnpm prove` | P1..P4 over the bridged tools, P5 over the native ones. |
 | "how good is the search we are beating?" | `uv --directory ai run python tests/baseline.py` | Runs `scripts/emit-search-baseline.mjs`, which CALLS `buscar_en_curso` over the corpus `api/src/seed.ts` defines, and prints what it scores over the 138 fixture questions (71/138 = 51%). It is generated on every `pytest` run and never stored: the version of this column that was typed by hand was wrong on 53 of 138 entries. |
 | "check the routing map" | `pnpm concepts` | The concept map in `ai/src/course_ai/retrieval/concepts.py` vs the lesson index Node serves. Fails on a concept pointing at a lesson that does not exist, a lesson no concept covers, an invented glossary term, a term pinned to the wrong lesson, one phrasing routed to two lessons, one slug pointing at two lessons, or a concept nothing can route to. If it cannot read the index it FAILS — it never skips. |
@@ -124,6 +124,35 @@ are pasted by hand. No secret has a working default anywhere: `JWT_SECRET`
 refuses known placeholders and anything under 32 characters. `DATABASE_URL` is
 present only for local migration/seed commands; deployed API and worker receive
 the database credential only through `data`.
+
+### `pnpm test:py` fails with an ImportError from the standard library
+
+```
+src/course_ai/bus.py:67: from datetime import UTC, datetime
+E   ImportError: cannot import name 'UTC' from 'datetime'
+    (/opt/homebrew/Cellar/python@3.10/.../datetime.py)
+```
+
+The code is fine. `datetime.UTC` needs 3.11, `ai/pyproject.toml` requires >=3.12,
+and `ai/.venv` IS 3.12 — read `ai/.venv/pyvenv.cfg` and it says so. What broke is
+the console script:
+
+```
+$ head -1 ai/.venv/bin/pytest
+#!/Users/alpadev/Desktop/course/.../ai/.venv/bin/python3
+```
+
+An absolute shebang to a directory that no longer exists, because the checkout was
+moved or the folder renamed. pytest then runs under whatever Python the system
+resolves, which here is a 3.10 from Homebrew. Rebuild the venv:
+
+```bash
+cd ai && uv sync --extra dev --reinstall
+```
+
+Afterwards the shebang is `#!/bin/sh` (relocatable) and the suite passes. This
+cost a debugging session once because the error points at the code, never at the
+interpreter running it.
 
 ---
 

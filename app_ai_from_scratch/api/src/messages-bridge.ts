@@ -119,7 +119,11 @@ export async function forgetTurns(userId: number): Promise<{ ok: true } | { erro
   if (!MESSAGES_URL || !MESSAGES_SECRET) return { error: 'messages_unavailable' };
   try {
     const res = await fetch(`${MESSAGES_URL}/v1/turns?userId=${userId}`, {
-      method: 'DELETE', headers: headers(),
+      method: 'DELETE',
+      // DELETE has no body. Sending content-type: application/json makes
+      // Fastify 400 FST_ERR_CTP_EMPTY_JSON_BODY, and account deletion then
+      // fail-closes with borrado_incompleto while the chat is still there.
+      headers: { authorization: `Bearer ${MESSAGES_SECRET ?? ''}` },
     });
     if (!res.ok) return { error: `messages_${res.status}` };
     return { ok: true };

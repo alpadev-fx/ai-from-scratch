@@ -35,7 +35,7 @@ interface DiagResult { memo: { consultasAhorradas: number } }
 // moneda no dice nada — 35000 es un precio razonable en pesos y absurdo en dolares.
 interface PriceResult { precio: { monto: number; moneda: string }; garantiaDias: number }
 interface SearchResult { resultados: { leccion: number }[] }
-interface PrivacyResult { deTi: { intentosGuardados: number } }
+interface PrivacyResult { deTi: { intentosGuardados: number }; borrado: { ruta: string } }
 interface LessonTextResult { idioma: string; tecnica: string; analogia: string; nota?: string | null }
 interface GlossaryResult { hallado: boolean; nota?: string | null }
 
@@ -161,6 +161,10 @@ ok(ritmo.faltan === 35 && ritmo.totalLabs === 36, '«¿cuánto me queda?» → 3
 const priv = await llamar<PrivacyResult>('mis_datos_y_privacidad', {}, 'D');
 ok(priv.deTi.intentosGuardados === 3 && !JSON.stringify(priv).includes('@'),
   '«¿qué sabes de mí?» → conteos, y ni un correo');
+ok(priv.borrado.ruta === '/ajustes', 'el borrado de cuenta se documenta en /ajustes, no en /perfil');
+const borrar = await llamar<{ respuestas: { id: string; respuesta: string }[] }>('soporte', { tema: 'borrar cuenta' }, 'D');
+ok(borrar.respuestas[0]?.id === 'borrar_cuenta' && borrar.respuestas[0].respuesta.includes('/ajustes'),
+  '«¿cómo borro mi cuenta?» apunta a /ajustes');
 
 console.log('\n9) El texto de la lección respeta el idioma y no se inventa nada');
 const en = await llamar<LessonTextResult>('leccion_texto', { n: 4 }, 'E', 'en');

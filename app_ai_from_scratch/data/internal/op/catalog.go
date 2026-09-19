@@ -939,7 +939,12 @@ var catalog = []Operation{
 	},
 	{
 		Name: "auth.account_delete", Table: "users", Scope: Own, Audience: Agent, Muro: Gratis, Write: true,
-		Raw:    "UPDATE users SET deleted_at = now(), token_version = token_version + 1, email = $2, name = 'Cuenta borrada' WHERE id = $1",
+		// pass_hash = 'deleted' is not a scrypt string, so verifyPassword fails
+		// closed even if a later query forgets deleted_at IS NULL. attribution
+		// is first-touch UTM tied to the person: the privacy policy says
+		// everything personal goes; the payment row is what the law keeps.
+		Raw: "UPDATE users SET deleted_at = now(), token_version = token_version + 1, " +
+			"email = $2, name = 'Cuenta borrada', pass_hash = 'deleted', attribution = NULL WHERE id = $1",
 		Params: []Param{{Name: "actor", Kind: Actor}, {Name: "replacement", Kind: Text, Max: 320}},
 		Why:    "anonymize and soft-delete the acting account while invalidating sessions",
 	},

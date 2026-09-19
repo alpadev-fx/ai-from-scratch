@@ -149,7 +149,7 @@ app.addHook('onRequest', async (req, reply) => {
 const auth = createAuth({
   one, many, write, writeAuthorized,
   origin: ORIGIN, production: process.env.NODE_ENV === 'production', log: app.log,
-  forgetTurns, mailer,
+  forgetTurns, cancelRenewal: cancelAccountRenewal, mailer,
   signal: async (signal, payload) => {
     await publishEvent('defense.signal', { signal, ...payload }, {
       key: `defense.signal.${signal}`,
@@ -958,6 +958,22 @@ const ENTITLEMENTS_SECRET = process.env.ENTITLEMENTS_SECRET ?? '';
 function paymentsUnavailable(): Response {
   return new Response(JSON.stringify({ error: 'payments_unavailable' }),
     { status: 503, headers: { 'content-type': 'application/json' } });
+}
+
+async function cancelAccountRenewal(userId: number): Promise<{ ok: true } | { error: string }> {
+  // Unconfigured payments means there is nothing to charge. 404 means this
+  // person has no preapproval. 503 is payments down: blocking deletion would
+  // trap every free account behind a billing outage, which is worse than a
+  // rare leftover preapproval ops can cancel from the Mercado Pago panel.
+  if (!PAYMENTS_URL || !PAYMENTS_SECRET) return { ok: true };
+  const res = await callPayments(`/v1/subscriptions/${userId}/cancel`, { method: 'POST' });
+  if (res.ok || res.status === 404 || res.status === 503) {
+    if (res.status === 503) {
+      app.log.warn({ userId }, 'payments unavailable during account deletion; renewal was not cancelled');
+    }
+    return { ok: true };
+  }
+  return { error: `payments_${res.status}` };
 }
 
 async function callPayments(path: string, init: RequestInit = {}): Promise<Response> {

@@ -35,6 +35,10 @@ export interface AuthDependencies {
   signal?: (name: string, payload: Record<string, unknown>) => Promise<void> | void;
   mailer?: { send(input: { to: string; subject: string; text: string }): Promise<void> };
   forgetTurns?: (userId: number) => Promise<{ ok: true } | { error: string }>;
+  // Best-effort against Mercado Pago when the payments service is not
+  // configured; fail-closed when it is configured and the cancel is not a
+  // 404. A deleted account that keeps getting charged is the worse outcome.
+  cancelRenewal?: (userId: number) => Promise<{ ok: true } | { error: string }>;
 }
 
 export interface RequestLike { cookies?: Record<string, string>; headers?: Record<string, unknown>; body?: any }
@@ -278,6 +282,11 @@ export function createAuth(deps: AuthDependencies) {
         const purged = await deps.forgetTurns(user.id);
         if ('error' in purged) return reply.code(503).send({ error: 'borrado_incompleto' });
       }
+      if (deps.cancelRenewal) {
+        const cancelled = await deps.cancelRenewal(user.id);
+        if ('error' in cancelled) return reply.code(503).send({ error: 'borrado_incompleto' });
+      }
+      await deps.write('auth.reset_invalidate', {}, user.id);
       await deps.write('auth.account_delete', { replacement: `borrado+${user.id}@alpadev.local` }, user.id);
       await deps.write('ranking.delete', {}, user.id);
       reply.clearCookie(COOKIE, { path: '/' });

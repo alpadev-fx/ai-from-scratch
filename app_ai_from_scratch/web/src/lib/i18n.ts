@@ -37,7 +37,10 @@ export const STR = {
       temaTit: 'Tema', temaNota: 'Con Auto sigue el tema de tu equipo. Oscuro para pantalla, papel para leer o imprimir.',
       riesgo: 'Zona de riesgo', cerrarTodas: 'Cerrar sesión en todos los dispositivos',
       cerrarTodasNota: 'Invalida la sesión de este navegador ahora mismo.', cerrarBtn: 'Cerrar todas',
-      eliminar: 'Eliminar la cuenta', eliminarBtn: 'Eliminar', detectado: 'Detectado ahora' },
+      eliminar: 'Eliminar la cuenta', eliminarBtn: 'Eliminar', detectado: 'Detectado ahora',
+      claveActual: 'tu contraseña actual',
+      eliminarNota: 'Se van tu nombre, tu correo, tu chat y el acceso. Los intentos de labs y exámenes se conservan sin tu identidad, para que las estadísticas del curso no se rompan. Del pago queda el registro contable que la ley colombiana pide guardar cinco años. Si tenías renovación automática, la cancelamos para que no vuelvan a cobrarte. El correo queda libre para que puedas registrarte de nuevo.',
+      eliminarReembolso: 'Eliminar la cuenta no tramita un reembolso. Para eso está la garantía de 14 días.' },
     guardar: 'Guardar cambios', descartar: 'Descartar',
     ui: {
       // Aviso de acceso para quien entra sin haberlo comprado. El texto no
@@ -575,6 +578,8 @@ export const STR = {
         tDup: 'Ese correo ya tiene cuenta', tDupB: 'Entra con él o usa otro.',
         tErr: 'No pudimos crear la cuenta', tErrB: 'Revisa los datos.',
         tRed: 'No pudimos conectar', tRedB: 'El servidor no responde. Reintenta en un momento.',
+        borradaTit: 'Cuenta eliminada',
+        borradaB: 'Cerramos tu sesión. El correo quedó libre: puedes crear una cuenta nueva con el mismo correo cuando quieras.',
       },
       rec: {
         eb: 'Recuperar', h1a: 'Recupera', h1b: 'tu cuenta.', seguridad: 'Por seguridad',
@@ -674,7 +679,10 @@ export const STR = {
       temaTit: 'Theme', temaNota: 'On Auto it follows your device theme. Dark for screen, paper for reading or printing.',
       riesgo: 'Danger zone', cerrarTodas: 'Sign out on every device',
       cerrarTodasNota: 'Invalidates this browser session right now.', cerrarBtn: 'Sign out all',
-      eliminar: 'Delete the account', eliminarBtn: 'Delete', detectado: 'Detected now' },
+      eliminar: 'Delete the account', eliminarBtn: 'Delete', detectado: 'Detected now',
+      claveActual: 'your current password',
+      eliminarNota: 'Your name, email, chat and access go with it. Lab and exam attempts are kept without your identity so course stats do not break. The payment record stays because Colombian law requires it for five years. If you had auto-renewal, we cancel it so you are not charged again. Your email is freed so you can register again.',
+      eliminarReembolso: 'Deleting the account does not process a refund. That is what the 14-day guarantee is for.' },
     guardar: 'Save changes', descartar: 'Discard',
     ui: {
       upT: 'Your access is not active',
@@ -1199,6 +1207,8 @@ export const STR = {
         tDup: 'That email already has an account', tDupB: 'Sign in with it or use another one.',
         tErr: 'We could not create the account', tErrB: 'Check the details.',
         tRed: 'Could not connect', tRedB: 'The server is not responding. Try again in a moment.',
+        borradaTit: 'Account deleted',
+        borradaB: 'We signed you out. The email is free: you can create a new account with the same address whenever you want.',
       },
       rec: {
         eb: 'Recover', h1a: 'Get back into', h1b: 'your account.', seguridad: 'For your safety',

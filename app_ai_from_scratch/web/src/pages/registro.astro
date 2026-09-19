@@ -17,6 +17,7 @@ if (user) return Astro.redirect('/panel');
 const { lang, langPref, theme } = publicPrefs(Astro.request);
 const L = t(lang);
 const P = L.pub.reg;
+const deleted = Astro.url.searchParams.get('cuenta') === 'eliminada';
 // La cuenta nueva nace con el idioma y el tema que el visitante ya eligió aquí.
 const prefs = { lang: langPref, theme };
 const canonical = new URL(Astro.url.pathname, SITE).href;
@@ -70,6 +71,12 @@ const jsonld = grafo(org());
       </div>
       <div style="flex:1;display:flex;align-items:center;justify-content:center">
         <form id="f" class="pub-card" style="gap:18px" novalidate>
+          {deleted && (
+            <div role="status" style="border-left:2px solid var(--ok);padding:12px 14px">
+              <p class="eb" style="color:var(--ok)">{P.borradaTit}</p>
+              <p class="s" style="color:var(--l2);margin-top:4px">{P.borradaB}</p>
+            </div>
+          )}
           <div style="display:flex;flex-direction:column;gap:8px">
             <p class="eb">{P.eb}</p>
             <h2 class="h1" style="font-size:28px">{P.h2}</h2>

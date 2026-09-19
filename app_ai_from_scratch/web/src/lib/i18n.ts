@@ -168,6 +168,12 @@ export const STR = {
       pitch: 'Pregunta por tu avance, por la siguiente lección o por un concepto. El asistente usa IA y las herramientas de tu cuenta para responder.',
       modoIA: 'Asistente IA',
       phIA: 'Pregúntale a la IA…', enviar: 'Enviar', pensando: 'Pensando…',
+      // El tutor esta dentro de la compra: lo dice upB ("el tutor de IA") y la
+      // oferta solo regala la leccion 01. La pagina se abre igual y muestra el
+      // candado -- una puerta que no se puede ni mirar no explica por que.
+      lockT: 'El tutor de IA está cerrado',
+      lockB: 'Entra con el acceso completo, junto a las 12 lecciones y los 36 labs. La lección 01 sigue siendo gratis y no necesita el tutor.',
+      lockCta: 'Ver el acceso', lockPh: 'Necesitas el acceso completo para escribirle',
       pensandoCiclo: ['Pensando', 'Razonando', 'Analizando', 'Reflexionando', 'Considerando', 'Evaluando', 'Procesando', 'Meditando', 'Deliberando', 'Contemplando', 'Ideando', 'Planificando'],
       hola: 'Hola, {n}. ¿Qué miramos?',
       holaB: 'Estoy en modo IA desde el inicio: puedo razonar sobre tu avance, usar las herramientas de tu cuenta y explicarte conceptos.',
@@ -225,6 +231,7 @@ export const STR = {
       hola: 'Hola, {n}.',
       holaB: 'Pregúntame por tu avance o por un concepto. Y te aviso cuando veo algo que vale la pena retomar.',
       ph: 'Pregúntale a la IA…', enviar: 'Enviar', pensando: 'Pensando…',
+      lock: 'El tutor de IA entra con el acceso completo.', lockCta: 'Ver el acceso',
       pensandoCiclo: ['Pensando', 'Razonando', 'Analizando', 'Reflexionando', 'Considerando', 'Evaluando', 'Procesando', 'Meditando', 'Deliberando', 'Contemplando', 'Ideando', 'Planificando'],
       verChat: 'Abrir el chat completo',
       avisos: 'Avisos', avisosAria: 'Avisos proactivos del asistente',
@@ -802,6 +809,9 @@ export const STR = {
       pitch: 'Ask about your progress, the next lesson or a concept. The assistant uses AI and your account tools to respond.',
       modoIA: 'AI assistant',
       phIA: 'Ask the AI…', enviar: 'Send', pensando: 'Thinking…',
+      lockT: 'The AI tutor is locked',
+      lockB: 'It comes with full access, next to the 12 lessons and the 36 labs. Lesson 01 stays free and does not need the tutor.',
+      lockCta: 'See access', lockPh: 'Full access is needed to write to it',
       pensandoCiclo: ['Thinking', 'Reasoning', 'Analyzing', 'Reflecting', 'Considering', 'Evaluating', 'Processing', 'Pondering', 'Deliberating', 'Contemplating', 'Brainstorming', 'Planning'],
       hola: 'Hi {n}. What are we looking at?',
       holaB: 'I start in AI mode: I can reason about your progress, use your account tools, and explain concepts.',
@@ -851,6 +861,7 @@ export const STR = {
       hola: 'Hi {n}.',
       holaB: 'Ask me about your progress or about a concept. And I speak up when I see something worth picking back up.',
       ph: 'Ask the AI…', enviar: 'Send', pensando: 'Thinking…',
+      lock: 'The AI tutor comes with full access.', lockCta: 'See access',
       pensandoCiclo: ['Thinking', 'Reasoning', 'Analyzing', 'Reflecting', 'Considering', 'Evaluating', 'Processing', 'Pondering', 'Deliberating', 'Contemplating', 'Brainstorming', 'Planning'],
       verChat: 'Open the full chat',
       avisos: 'Nudges', avisosAria: 'Proactive nudges from the assistant',

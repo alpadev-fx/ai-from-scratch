@@ -11,6 +11,7 @@
 // ai/src/course_ai/, so they are unchanged. `descripcion` texts and `nota` texts
 // stay Spanish for the same reason (docs/NAMING.md, "Model-facing strings").
 import { many, one } from '../data.ts';
+import { FREE_LESSONS } from '../paywall.ts';
 import type { LabRow, LessonRow, LessonTextRow, UserRow } from '../db.ts';
 import { assertNoForbidden } from '../ontology.ts';
 import { METALS, MIN_LEAGUE, ZONE, assignMetals, currentWeek, flow } from '../leagues.ts';
@@ -20,7 +21,11 @@ import type { Bus } from '../agent-bus.ts';
 
 export const LAB_ID = /^([1-9]|1[0-2])\.[1-3]$/;
 export const LANGUAGES = ['es', 'en', 'fr', 'pt'] as const;
-export const FREE_LESSONS = 1;   // same as in the server: lesson 1 is the shop window
+// Re-exported, not re-declared. The comment here used to read "same as in the
+// server", which is a promise a constant cannot keep: two 1s drift the day one of
+// them becomes a 2, and the tool catalogue would go on telling students that one
+// lesson is free while the server opened two.
+export { FREE_LESSONS };
 export const TOTAL_LABS = 36;
 export const TOTAL_LESSONS = 12;
 

@@ -41,8 +41,8 @@ import { t } from '../lib/i18n';
 import type { Lang } from '../lib/i18n';
 import type { AiFlags } from '../lib/ai-mode';
 
-interface Props { lang: Lang; flags: AiFlags; nombre: string }
-const { lang, flags, nombre } = Astro.props;
+interface Props { lang: Lang; flags: AiFlags; nombre: string; bloqueado: boolean }
+const { lang, flags, nombre, bloqueado } = Astro.props;
 const L = t(lang);
 const I = L.ia;
 const open = flags.mode && flags.open;
@@ -87,9 +87,21 @@ const open = flags.mode && flags.open;
 
     <div id="ia-pick"></div>
 
+    <!-- El mismo criterio que en /chat: el guardia es el 402 del servidor
+         (api/src/paywall.ts) y esto es el cartel. Los dos controles siguen en el
+         DOM porque el script del panel los busca por id sin comprobar nulos; van
+         `disabled`, que no dispara eventos. -->
+    {bloqueado && (
+      <div class="ia-lock">
+        <span class="ia-lock-ic" aria-hidden="true" set:html={icon('lock')} />
+        <p class="s">{I.lock}</p>
+        <a class="btn ghost ia-mini" href="/pago">{I.lockCta}</a>
+      </div>
+    )}
     <div class="ia-form">
-      <input class="input" id="ia-q" placeholder={I.ph} autocomplete="off" aria-label={I.ph}>
-      <button class="btn ia-send" id="ia-go" type="button">{I.enviar}</button>
+      <input class="input" id="ia-q" placeholder={bloqueado ? I.lock : I.ph} autocomplete="off"
+             aria-label={bloqueado ? I.lock : I.ph} disabled={bloqueado}>
+      <button class="btn ia-send" id="ia-go" type="button" disabled={bloqueado}>{I.enviar}</button>
     </div>
     <p class="s ia-priv">{I.priv}</p>
 
@@ -143,6 +155,12 @@ const open = flags.mode && flags.open;
   .ia-b.bad{border-color:var(--rd);color:var(--rd)}
   .ia-b .lbl{width:70px;flex:none}
   .ia-form{display:flex;gap:8px}
+  .ia-lock{display:flex;flex-direction:column;align-items:flex-start;gap:7px;padding:11px 12px;
+    border:1px solid var(--hair);background:var(--fill);margin-bottom:9px}
+  .ia-lock .s{margin:0}
+  .ia-lock-ic{display:inline-flex;color:var(--l2)}
+  .ia-lock-ic svg{width:17px;height:17px}
+  .ia-form:has(#ia-q:disabled){opacity:.55}
   .ia-pick{display:flex;flex-direction:column;gap:6px}
   .ia-picks{display:grid;grid-template-columns:1fr 1fr;gap:6px}
   .ia-eff{display:flex;gap:6px}
@@ -224,7 +242,10 @@ const open = flags.mode && flags.open;
   const enviarBtn = document.getElementById('ia-go') as HTMLButtonElement;
   const pickHost = document.getElementById('ia-pick') as HTMLElement;
   let leerPick = (): { proveedor: string | null; esfuerzo: string } => ({ proveedor: null, esfuerzo: 'medio' });
-  void fetch('/api/chat/estado').then((r) => r.ok ? r.json() : null).then((d) => {
+  // Con el candado puesto no se pide el estado ni se monta el selector: elegir
+  // modelo y esfuerzo para algo que el servidor va a rechazar con 402 es ruido, y
+  // era una llamada por carga de página que no servía para nada.
+  if (!campo.disabled) void fetch('/api/chat/estado').then((r) => r.ok ? r.json() : null).then((d) => {
     // Se pasan las FILAS, no solo los ids: el carril viene con cada una y es lo
     // que el picker necesita para ofrecer «Rápido» / «Razona» sin llevar su
     // propia tabla de qué modelo es cuál.

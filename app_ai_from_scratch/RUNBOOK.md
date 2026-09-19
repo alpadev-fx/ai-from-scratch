@@ -35,7 +35,9 @@ own — it used to, and that is how you lose a colleague's running service.
 | "readiness" | `pnpm readiness` | Same as `pnpm verify`. |
 | "production smoke" | `pnpm readiness:prod` / `sh scripts/smoke-prod.sh https://aifromscratch.shop` | Read-only HTTPS checks. Fails closed. |
 | "browser journey" | `pnpm e2e` | Playwright. Fails closed if `/api/health` is down. |
-| "backups" | `sh scripts/backup.sh` then `sh scripts/restore.sh <dump>` | Host dumps; restore is throwaway, never the live DB. |
+| "backups" | `sh scripts/backup-drill.sh` | Fixture dump into throwaway Postgres; account and entitlement canary must survive. Never the live DB. |
+| "dump the host databases" | `sh scripts/backup.sh` then `sh scripts/restore.sh <dump> scripts/backup-integrity-live.sql` | Compose dumps of curso, payments, messages. Restore is throwaway. |
+| "dump from a postgres URL" | `DATABASE_URL='postgres://…' sh scripts/dump-url.sh /tmp/course.dump` | Logical dump that does not go through the app. Used for Railway. |
 | "check the message store" | `pnpm check:messages` | tsgo + document contracts for `messages/`. |
 | "what are the gates?" | `pnpm verify:list` | The list, and which are slow. |
 | "run the tests" | `pnpm test` | The eight api suites. |
@@ -76,6 +78,7 @@ Then `pnpm ontology:export && pnpm ontology` and commit all three.
 | "open a shell on the db" | `pnpm db:psql` | |
 | "reseed" | `pnpm seed` | Demo accounts only with `SEED_DEMO_USERS=1` and `SEED_DEMO_PASSWORD` set. |
 | "wipe and start over" | `pnpm reset` | **Destructive**: drops the volume, re-migrates, reseeds. |
+| "restore production data" | `sh scripts/restore.sh <dump> scripts/backup-integrity-live.sql` | Throwaway Postgres only. Never Production. Steps, retention, owner, RPO: `docs/disaster-recovery.md`. |
 
 ### Price and access
 

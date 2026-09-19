@@ -34,6 +34,7 @@ import {
 import { clientIp } from './brake.ts';
 import { authThrottle } from './auth-throttle.ts';
 import { mailer } from './mail.ts';
+import { filesStore } from './files.ts';
 import { coachState } from './coach.ts';
 import { publish as publishEvent } from './bus.ts';
 
@@ -803,20 +804,35 @@ app.get<{ Params: { lang: string } }>('/api/pdf/:lang', async (req, reply) => {
   const u = await requireUser(req, reply); if (!u) return;
   if (!u.paid) return reply.code(402).send({ error: 'sin_compra' });
   const lang = req.params.lang === 'en' ? 'en' : 'es';
+  const key = `curso-${lang}.pdf`;
+
+  if (filesStore) {
+    const object = await filesStore.get(key);
+    if (!object) {
+      return reply.code(503).send({ error: 'pdf_no_generado', msg: `${key} is missing from the files bucket.` });
+    }
+    reply.header('content-type', 'application/pdf');
+    reply.header('content-disposition', `attachment; filename="ia-desde-cero-${lang}.pdf"`);
+    return reply.send(object.body);
+  }
+
+  // Local dev only: filesStore is undefined whenever the AWS_* vars are unset,
+  // which is every non-Railway environment. The PDF stays in git/api/files for
+  // this path; it is no longer copied into the runtime image (see Dockerfile).
   const { existsSync, createReadStream } = await import('node:fs');
-  // The PDFs live at api/files/. This module runs from src/ in development and
-  // from dist/api/src/ in the production image; older build layouts emitted to
-  // dist/src/. Try each real layout explicitly instead of making the Dockerfile
-  // duplicate the same paid artifact under a compiler-owned directory.
+  // This module runs from src/ in development and from dist/api/src/ in the
+  // production image; older build layouts emitted to dist/src/. Try each real
+  // layout explicitly instead of making the Dockerfile duplicate the same
+  // paid artifact under a compiler-owned directory.
   const candidates = [
-    `../files/curso-${lang}.pdf`,
-    `../../files/curso-${lang}.pdf`,
-    `../../../files/curso-${lang}.pdf`,
+    `../files/${key}`,
+    `../../files/${key}`,
+    `../../../files/${key}`,
   ];
   const path = candidates.map((rel) => new URL(rel, import.meta.url).pathname)
     .find((p) => existsSync(p)) ?? new URL(candidates[0]!, import.meta.url).pathname;
   if (!existsSync(path)) {
-    return reply.code(503).send({ error: 'pdf_no_generado', msg: `api/files/curso-${lang}.pdf is missing (the headless Chrome build produces it).` });
+    return reply.code(503).send({ error: 'pdf_no_generado', msg: `api/files/${key} is missing (the headless Chrome build produces it).` });
   }
   reply.header('content-type', 'application/pdf');
   reply.header('content-disposition', `attachment; filename="ia-desde-cero-${lang}.pdf"`);

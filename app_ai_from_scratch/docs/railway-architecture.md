@@ -15,15 +15,18 @@ Implemented: healthchecks, graceful shutdown, signed/idempotent payment events,
 RabbitMQ retries/DLQ, `SKIP LOCKED`, bounded pools, ontology isolation proof,
 Resend mail abstraction, and fail-closed auth/payment secrets.
 
-Partial: rate limiting and agent memo are per-process; backups are host scripts;
-observability is logs and endpoint health; CI deploys by SSH.
+Partial: rate limiting and agent memo are per-process; observability is logs
+and endpoint health; CI deploys by SSH. Logical dump copies in the environment
+bucket are still missing; Railway volume snapshots plus a throwaway restore
+drill cover launch.
 
-Missing: Railway state, DEV/PROD isolation, external logical backup storage,
-measured load capacity, continuous monitoring, and a tested Railway cutover.
+Missing: encrypted off-host dump copies, measured load capacity, continuous
+monitoring, and a tested Railway cutover.
 
-Risky: direct production deploy workflow, local filesystem PDF serving, three
-independent DBs without verified off-host restore, and host-network defense
-containers. No Redis or object-storage integration exists in application code.
+Risky: direct production deploy workflow, local filesystem PDF serving, and
+host-network defense containers. No Redis or object-storage integration exists
+in application code. Off-host restore of course-db and payments-db was run
+2026-09-19 into throwaway Postgres (see disaster-recovery.md).
 
 Target: one Railway project with only `DEV` and `PROD`; each has isolated course,
 payments and messages PostgreSQL, Redis, RabbitMQ, private API/data/AI/workers,

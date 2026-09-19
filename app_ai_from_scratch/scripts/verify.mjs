@@ -300,9 +300,9 @@ const GATES = [
   // In the postgres group because it reads the same database the api suites
   // mutate. DATABASE_URL comes from the environment in CI and from api/.env on a
   // laptop -- the same two places prisma.config.ts looks.
-  { id: 'backup-restore', what: 'backup drill scripts exist and docker is present',
+  { id: 'backup-restore', what: 'fixture dump restores into throwaway postgres; account and entitlement canary survive',
     slow: true, exclusive: 'postgres',
-    cmd: ['sh', ['scripts/backup-drill.sh']] },
+    cmd: ['node', ['--test', 'scripts/backup-restore.test.mjs']] },
 
   { id: 'data-smoke', what: 'every operation actually runs and returns what it declares',
     slow: true, exclusive: 'postgres',

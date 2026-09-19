@@ -805,6 +805,7 @@ app.get<{ Params: { lang: string } }>('/api/pdf/:lang', async (req, reply) => {
   if (!u.paid) return reply.code(402).send({ error: 'sin_compra' });
   const lang = req.params.lang === 'en' ? 'en' : 'es';
   const { existsSync, createReadStream } = await import('node:fs');
+  const { fileURLToPath } = await import('node:url');
   // The PDFs live at api/files/. This module runs from src/ in development and
   // from dist/api/src/ in the production image; older build layouts emitted to
   // dist/src/. Try each real layout explicitly instead of making the Dockerfile
@@ -814,8 +815,17 @@ app.get<{ Params: { lang: string } }>('/api/pdf/:lang', async (req, reply) => {
     `../../files/curso-${lang}.pdf`,
     `../../../files/curso-${lang}.pdf`,
   ];
-  const path = candidates.map((rel) => new URL(rel, import.meta.url).pathname)
-    .find((p) => existsSync(p)) ?? new URL(candidates[0]!, import.meta.url).pathname;
+  // fileURLToPath, NOT `.pathname`. A file: URL percent-encodes everything that
+  // is not URL-safe, so a checkout under a path with a space or an apostrophe --
+  // `Desktop - alpadev's MacBook Pro`, which is where this repository lives --
+  // turned `api/files/curso-es.pdf` into
+  // `/Users/.../Desktop%20-%20alpadev%E2%80%99s%20MacBook%20Pro/.../curso-es.pdf`.
+  // existsSync said false for a file that is right there, and a student who had
+  // paid got 503 "pdf_no_generado" for a PDF that was generated. The container
+  // path is /app/api/..., with nothing to encode, which is why production never
+  // showed it and nobody looked. Same bug, same fix, as api/scripts/types.mjs.
+  const path = candidates.map((rel) => fileURLToPath(new URL(rel, import.meta.url)))
+    .find((p) => existsSync(p)) ?? fileURLToPath(new URL(candidates[0]!, import.meta.url));
   if (!existsSync(path)) {
     return reply.code(503).send({ error: 'pdf_no_generado', msg: `api/files/curso-${lang}.pdf is missing (the headless Chrome build produces it).` });
   }

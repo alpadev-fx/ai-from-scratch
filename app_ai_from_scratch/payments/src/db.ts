@@ -448,18 +448,36 @@ export class Store {
   async quoteCoupon(code: string, userId: number): Promise<CouponQuote> {
     const normalized = normalizeCode(code);
     if (!normalized || normalized.length > 64) return { ok: false, reason: 'no_existe' };
+    // LA VENTANA LA DECIDE POSTGRES, no este proceso.
+    //
+    // Esto comparaba `new Date(row.starts_at).getTime() > Date.now()`: la marca
+    // de tiempo la pone la base y el «ahora» lo ponia Node. Son dos relojes.
+    // createCoupon inserta `starts_at = now()`, asi que un cupon recien creado
+    // empieza en el FUTURO para cualquier proceso cuyo reloj vaya por detras del
+    // de la base, y la puerta lo rechaza con «aun no empieza».
+    //
+    // No es teorico: medido en esta maquina, Postgres (dentro de la VM de
+    // colima) va +39 ms por delante del host, y por eso los dos tests de cupon
+    // de payments/test/db/store.test.ts llevaban en rojo -- crean el cupon y lo
+    // reservan en el mismo milisegundo. En produccion la base y el servicio son
+    // maquinas distintas, asi que el mismo desfase existe y solo hace falta que
+    // alguien aplique un cupon justo despues de crearlo.
+    //
+    // Con los dos predicados evaluados en SQL hay un solo reloj y la pregunta
+    // deja de depender de a que hora cree este contenedor que es.
     const result = await this.pool.query(
-      `SELECT id, code, percent, max_redemptions, active, starts_at, ends_at
+      `SELECT id, code, percent, max_redemptions, active,
+              (starts_at IS NOT NULL AND starts_at >  now()) AS aun_no_empieza,
+              (ends_at   IS NOT NULL AND ends_at   <= now()) AS caducado
          FROM coupons WHERE code=$1`, [normalized]);
     const row = result.rows[0];
-    const now = Date.now();
     // Un motivo por puerta, y no un `null` para las cinco. Sin esto, un 422 en
     // el log no distingue «ese codigo no existe» de «te lo agotaste tu mismo»,
     // y averiguar cual era costaba una ronda entera con el dueño mirando.
     if (!row) return { ok: false, reason: 'no_existe' };
     if (!row.active) return { ok: false, reason: 'revocado' };
-    if (row.starts_at && new Date(row.starts_at).getTime() > now) return { ok: false, reason: 'aun_no_empieza' };
-    if (row.ends_at && new Date(row.ends_at).getTime() <= now) return { ok: false, reason: 'caducado' };
+    if (row.aun_no_empieza) return { ok: false, reason: 'aun_no_empieza' };
+    if (row.caducado) return { ok: false, reason: 'caducado' };
     const prior = await this.pool.query(
       `SELECT 1 FROM coupon_redemptions WHERE coupon_id=$1 AND user_id=$2 AND state='redeemed' LIMIT 1`,
       [row.id, userId]);
@@ -498,13 +516,16 @@ export class Store {
       await client.query('BEGIN');
       await client.query(`UPDATE coupon_redemptions SET state='released'
         WHERE state='reserved' AND reserved_at < now() - interval '30 minutes'`);
+      // Misma ventana, mismo reloj, misma razon que en quoteCoupon: ver la nota
+      // larga alli. Las dos puertas tienen que contestar igual sobre el mismo
+      // cupon, y no pueden si cada una le pregunta la hora a un sitio distinto.
       const result = await client.query(
-        `SELECT id, code, percent, max_redemptions, active, starts_at, ends_at
+        `SELECT id, code, percent, max_redemptions, active,
+                (starts_at IS NOT NULL AND starts_at >  now()) AS aun_no_empieza,
+                (ends_at   IS NOT NULL AND ends_at   <= now()) AS caducado
            FROM coupons WHERE code=$1 FOR UPDATE`, [normalized]);
       const row = result.rows[0];
-      const now = Date.now();
-      if (!row || !row.active || (row.starts_at && new Date(row.starts_at).getTime() > now) ||
-          (row.ends_at && new Date(row.ends_at).getTime() <= now)) {
+      if (!row || !row.active || row.aun_no_empieza || row.caducado) {
         await client.query('ROLLBACK'); return null;
       }
       const prior = await client.query(

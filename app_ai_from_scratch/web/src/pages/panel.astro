@@ -159,7 +159,44 @@ const STATE = (l: Lesson) => {
         ],
       }, TZ.nombre);
     } else if (TT.auto || forceTut) {
-      window.abrirTutorial();
+      // NO mientras el aviso de acceso este abierto. Los dos arrancan al cargar
+      // /panel: el aviso lo abre App.astro (.up-back, z-index 60) y el tutorial
+      // se pinta en #tutorial-root (lib/tutorial.ts, z-index 210). El tutorial
+      // gana, y no solo tapa: medido con document.elementFromPoint sobre el
+      // centro de cada boton del aviso, "Ver el acceso" devolvia un <h3> de la
+      // tarjeta del tutorial y "Ahora no" devolvia .tut-ui. El clic NO llegaba
+      // al boton -- y ese boton es el camino a la compra.
+      //
+      // DOMContentLoaded, no una comprobacion directa: este script vive en la
+      // pagina y el del aviso en el layout que la envuelve, asi que en orden de
+      // documento ESTE corre PRIMERO. Comprobar data-on aqui mismo lo lee
+      // siempre sin poner y el tutorial arranca igual -- medido, fue el primer
+      // intento de este arreglo y no sirvio. Los modulos diferidos terminan
+      // antes de DOMContentLoaded, asi que dentro del listener el aviso ya
+      // decidio.
+      //
+      // El aviso declara aria-modal="true" (App.astro:549): mientras esta
+      // abierto el resto de la pagina es inerte por contrato. Tambien se espera
+      // con ?tutorial=1: pedirlo a mano no lo hace usable debajo de un modal.
+      const decidir = () => {
+        const aviso = document.getElementById('up-modal');
+        if (!aviso?.hasAttribute('data-on')) { window.abrirTutorial!(); return; }
+        const obs = new MutationObserver(() => {
+          if (!aviso.hasAttribute('data-on')) { obs.disconnect(); window.abrirTutorial!(); }
+        });
+        obs.observe(aviso, { attributes: true, attributeFilter: ['data-on'] });
+      };
+      // 'complete', NO 'loading'. Un modulo diferido ya corre con readyState
+      // 'interactive', y en 'interactive' DOMContentLoaded AUN NO ha disparado:
+      // es exactamente el caso que hay que esperar. Comprobar 'loading'
+      // ejecutaba decidir() al instante y volvia a no ver el aviso -- medido,
+      // fue el segundo intento fallido de este arreglo
+      // (__dbgGate="interactive", abierto=false).
+      if (document.readyState === 'complete') {
+        decidir();
+      } else {
+        document.addEventListener('DOMContentLoaded', decidir, { once: true });
+      }
     }
 
     // Una vez por semana y por navegador. La MISMA clave que usa /ligas, para

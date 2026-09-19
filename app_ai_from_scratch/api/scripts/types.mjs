@@ -17,8 +17,16 @@
 //   node scripts/types.mjs --list    prints every message
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
-const ROOT = new URL('..', import.meta.url).pathname;
+// fileURLToPath, NOT `.pathname`: a file: URL percent-encodes everything that is
+// not URL-safe, so a checkout under a path with a space or an apostrophe (this
+// one lives in `Desktop - alpadev's MacBook Pro`) produced
+// `/Users/.../Desktop%20-%20alpadev%E2%80%99s%20.../node_modules/.bin/tsgo` and
+// execFileSync answered ENOENT. The script then exited 2 with "tsgo produced no
+// output", which `pnpm verify` reported as a FAILING type check -- indistinguishable
+// from real type errors, and no amount of fixing the code would clear it.
+const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const BASE = `${ROOT}scripts/types-baseline.json`;
 const args = process.argv.slice(2);
 

@@ -16,7 +16,7 @@ import { createAuth } from '../../auth/src/index.ts';
 import { run, pool } from '../src/db.ts';
 import { many, one, write, writeAuthorized } from '../src/data.ts';
 
-interface MailCall { to: string; subject: string; text: string }
+interface MailCall { to: string; subject: string; text: string; html?: string }
 type Mailer = { send(input: MailCall): Promise<void> };
 
 const log = { info: () => {}, warn: () => {}, error: () => {} };
@@ -73,6 +73,10 @@ try {
     assert.equal(calls[0]!.subject, 'Bienvenida a IA desde cero');
     assert.ok(calls[0]!.text.includes('http://localhost/login'), 'must say how to get in');
     assert.ok(calls[0]!.text.includes('14 días'), 'must state the 14-day guarantee');
+    // HTML too, not just text. The catalogue in design/saas-emails exists to be
+    // the body of these mails; before this wiring the welcome mail was a local
+    // string literal and the rendered template was dead code.
+    assert.ok(calls[0]!.html?.includes('<html lang="es"'), 'the welcome mail must carry the Spanish HTML body');
     assert.ok(!/te avisamos.*antes del.*cobro/i.test(calls[0]!.text),
       'must never promise an email before a charge -- the platform cannot keep it');
 
@@ -85,6 +89,7 @@ try {
     assert.equal(calls[1]!.subject, 'Welcome to IA desde cero');
     assert.ok(calls[1]!.text.includes('http://localhost/login'), 'must say how to get in');
     assert.ok(calls[1]!.text.includes('14-day guarantee'), 'must state the 14-day guarantee');
+    assert.ok(calls[1]!.html?.includes('<html lang="en"'), 'the welcome mail must carry the English HTML body');
   }
 
   // 2. A throwing mailer must never fail the signup: the account is already

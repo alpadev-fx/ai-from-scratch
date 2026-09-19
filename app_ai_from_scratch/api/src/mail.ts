@@ -1,3 +1,5 @@
+import type { EmailKind } from '../../design/saas-emails/templates.ts';
+
 // Transactional mail via Resend. Used today for password recovery
 // (auth/src/index.ts: /api/auth/recover). Without it, recovery answers 503
 // correo_no_configurado in production and logs the reset link in development —
@@ -11,20 +13,44 @@
 const env = (k: string): string | null => { const v = process.env[k]; return v && v.trim() ? v.trim() : null; };
 const EMAIL_RE = /^[^@\s]+@[^@\s.]+\.[^@\s]{2,}$/;
 
+/**
+ * Que plantilla le toca a una transicion de derecho de acceso.
+ *
+ * Pura y exportada a proposito: vivia dentro del handler de
+ * /api/internal/entitlements, donde no se podia probar sin Postgres, Mercado
+ * Pago y un mailer. Aqui la prueba api/test/mail.mts fija las cinco
+ * transiciones y el silencio de las demas.
+ *
+ * `yaPagaba` es el estado del comprador ANTES de aplicar el evento: es lo unico
+ * que distingue una suscripcion nueva de una renovacion. Leido despues siempre
+ * vale 1 y cada cobro mensual anunciaria un alta.
+ *
+ * null = no se manda nada. Un cupon concede acceso pero lleva su propio
+ * mensaje, y una fuente desconocida no inventa correo: fail closed.
+ */
+export function entitlementMailKind(source: string, active: boolean, yaPagaba: boolean): EmailKind | null {
+  if (source === 'mercadopago.payment') return active ? 'purchase_receipt' : 'refund_confirmed';
+  if (source === 'mercadopago.subscription') {
+    if (!active) return 'subscription_cancelled';
+    return yaPagaba ? 'subscription_receipt' : 'subscription_started';
+  }
+  return null;
+}
+
 export interface Mailer {
-  send(input: { to: string; subject: string; text: string }): Promise<void>;
+  send(input: { to: string; subject: string; text: string; html?: string }): Promise<void>;
 }
 
 function resendMailer(apiKey: string, from: string): Mailer {
   return {
-    async send({ to, subject, text }) {
+    async send({ to, subject, text, html }) {
       const ctl = new AbortController();
       const timer = setTimeout(() => ctl.abort(), 10000);
       try {
         const res = await fetch('https://api.resend.com/emails', {
           method: 'POST', signal: ctl.signal,
           headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
-          body: JSON.stringify({ from, to, subject, text }),
+          body: JSON.stringify(html ? { from, to, subject, text, html } : { from, to, subject, text }),
         });
         if (!res.ok) {
           const body = await res.text().catch(() => '');

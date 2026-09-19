@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  PROD sentinel — AI-14.  NOT installed by any script; you install it.
+
+  Install:    launchctl bootstrap gui/$(id -u) /Users/alpadev/Desktop/course/AIFromScratch/app_ai_from_scratch/scripts/sentinel.plist
+  Uninstall:  launchctl bootout gui/$(id -u)/shop.aifromscratch.sentinel
+  Status:     launchctl print gui/$(id -u)/shop.aifromscratch.sentinel | head -20
+  Run once:   launchctl kickstart -p gui/$(id -u)/shop.aifromscratch.sentinel
+
+  StartInterval 120 = worst-case 2 min of customer-visible downtime before the
+  heal attempt starts. A laptop asleep runs nothing; that gap is documented in
+  docs/sentinel.md as the KNOWN GAP.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>shop.aifromscratch.sentinel</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/sh</string>
+    <string>/Users/alpadev/Desktop/course/AIFromScratch/app_ai_from_scratch/scripts/sentinel.sh</string>
+  </array>
+  <key>StartInterval</key>
+  <integer>120</integer>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/Users/alpadev/Library/Logs/aifromscratch/sentinel.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/alpadev/Library/Logs/aifromscratch/sentinel.err.log</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+</dict>
+</plist>

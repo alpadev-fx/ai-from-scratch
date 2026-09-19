@@ -490,3 +490,19 @@ jobs:
           IA_SECRETO: ci-only-ephemeral-service-secret-value-32plus
           DATA_SECRETO: ci-ephemeral-data-key-K7f9Qx2mNv4TzB8LrJ3s
         run: node scripts/verify.mjs --fast
+
+  # The verify-fast job cannot prove a restore: it never starts Docker, and the
+  # backup-restore gate is marked slow. A skip here would be indistinguishable
+  # from a pass, so this job runs the drill on its own. It uses throwaway
+  # Postgres containers and never the compose databases.
+  backup-restore:
+    name: backup restore drill
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: restore drill
+        working-directory: ${{ env.DIR }}
+        run: node --test scripts/backup-restore.test.mjs

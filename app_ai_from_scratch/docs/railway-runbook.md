@@ -15,6 +15,17 @@ For rollback, redeploy the last known-good release, then run
 `scripts/health-check.sh` and the smoke suite. Before migrations create a
 logical dump and a named Railway backup. Never delete or restore a PROD volume
 automatically.
+
+```sh
+railway postgres pitr backup list --project 4015473a-e3f1-4bad-b2c0-6969428c2d65 --environment Production --service course-db --json
+railway postgres pitr backup lock <id> --project 4015473a-e3f1-4bad-b2c0-6969428c2d65 --environment Production --service course-db --json
+DATABASE_URL='postgres://…' sh scripts/dump-url.sh /tmp/course.dump
+sh scripts/restore.sh /tmp/course.dump scripts/backup-integrity-live.sql
+```
+
+`backup restore <id>` overwrites the named service. Restore into throwaway
+Postgres or a new service, never Production. Full steps, retention and the
+recovery owner: [disaster-recovery.md](disaster-recovery.md).
 # Incidente Cloudflare 1033: `aifromscratch.shop`
 
 El dominio continúa conectado al túnel Cloudflare nombrado `aifromscratch`.

@@ -2,18 +2,38 @@
 # Restore a dump into a throwaway postgres container. Never the live DB.
 set -eu
 dump=${1:-}
+integrity=${2:-}
 if [ -z "$dump" ] || [ ! -f "$dump" ]; then
-  echo "usage: restore.sh <dump>" >&2
+  echo "usage: restore.sh <dump> [integrity.sql]" >&2
   exit 1
 fi
-cid=$(docker run -d --rm -e POSTGRES_PASSWORD=restore -p 127.0.0.1::5432 postgres:17-alpine)
-trap 'docker stop "$cid" >/dev/null' EXIT
-# wait
+if [ -n "$integrity" ] && [ ! -f "$integrity" ]; then
+  echo "restore.sh: integrity file missing: $integrity" >&2
+  exit 1
+fi
+
+cid=$(docker run -d --rm -e POSTGRES_PASSWORD=restore postgres:17-alpine)
+trap 'docker stop "$cid" >/dev/null 2>&1 || true' EXIT
+
 i=0
+ready=0
 while [ "$i" -lt 30 ]; do
-  docker exec "$cid" pg_isready -U postgres && break
+  if docker exec "$cid" pg_isready -U postgres >/dev/null 2>&1; then
+    ready=1
+    break
+  fi
   i=$((i + 1))
   sleep 1
 done
-docker exec -i "$cid" pg_restore --no-owner -U postgres -d postgres < "$dump"
+if [ "$ready" -ne 1 ]; then
+  echo "restore.sh: postgres never became ready" >&2
+  exit 1
+fi
+
+docker exec -i "$cid" pg_restore --exit-on-error --no-owner --no-acl -U postgres -d postgres < "$dump"
 echo "restore ok"
+
+if [ -n "$integrity" ]; then
+  docker exec -i "$cid" psql -v ON_ERROR_STOP=1 -U postgres -d postgres < "$integrity"
+  echo "integrity ok"
+fi

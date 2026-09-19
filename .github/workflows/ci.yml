@@ -221,6 +221,8 @@ jobs:
           # Type checking passes happily when a lesson has no animation at all:
           # the page falls back to the static rows and nothing errors.
           node web/scripts/scenes-check.mjs
+          node --experimental-strip-types scripts/check-lesson-scenes.mjs
+          node scripts/check-theme-literals.mjs
 
   python:
     name: ai

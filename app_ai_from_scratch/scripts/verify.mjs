@@ -166,6 +166,9 @@ const GATES = [
   { id: 'web-i18n', what: 'every i18n key exists in both languages',
     cmd: ['pnpm', ['--dir', 'web', 'i18n']] },
 
+  { id: 'theme-literals', what: 'the app shell paints from tokens, not one theme’s hex',
+    cmd: ['node', ['scripts/check-theme-literals.mjs']] },
+
   { id: 'web-unit', what: 'attribution and proxy-guard unit tests',
     cmd: ['pnpm', ['--dir', 'web', 'test']] },
 
@@ -174,6 +177,9 @@ const GATES = [
 
   { id: 'web-scenes', what: 'every lesson has one scene, no orphans',
     cmd: ['node', ['web/scripts/scenes-check.mjs']] },
+
+  { id: 'lesson-scenes', what: 'every scene gets what it reads, in both languages',
+    cmd: ['node', ['--experimental-strip-types', 'scripts/check-lesson-scenes.mjs']] },
 
   { id: 'e2e-journey', what: 'Playwright landing/registro/pago journey',
     slow: true, exclusive: 'postgres',

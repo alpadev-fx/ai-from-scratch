@@ -17,8 +17,23 @@ const ok = (cond: boolean, txt: string, extra?: unknown): void => {
   if (!cond) fallos++;
 };
 
+// La cuenta demo del seed. Sin ella esto reventaba con
+//
+//   TypeError: Cannot read properties of null (reading 'id')
+//
+// en la primera linea que tocaba `YO!.id`, veinte lineas mas abajo y sin decir
+// que faltaba ni como traerlo. El seed solo crea las cuentas demo cuando se le
+// pide (api/src/seed.ts:91), asi que en una base recien migrada este gate no
+// puede correr — y un gate que no puede correr cuenta como fallo, no como
+// saltado: lo que hay que arreglar es el mensaje, no el aserto.
 const YO = await get<{ id: number }>("SELECT id FROM users WHERE email = 'ricardo@velez.co'");
-const ctx = (turn = 'T1', lang = 'es'): Ctx => ({ userId: YO!.id, lang, turn });
+if (!YO) {
+  console.error('tools: falta la cuenta demo ricardo@velez.co en la base de pruebas.');
+  console.error('Siembrala con:  SEED_DEMO_USERS=1 SEED_DEMO_PASSWORD=<clave> pnpm --dir api seed');
+  console.error('(api/test/bridge.mts entra con esa misma cuenta, asi que necesita la clave.)');
+  process.exit(1);
+}
+const ctx = (turn = 'T1', lang = 'es'): Ctx => ({ userId: YO.id, lang, turn });
 // The shapes the assertions below read. Declaring them is the whole point of the
 // migration: `plan.plan[0].lab_id` written with the wrong column name is now a
 // compile error, instead of an `undefined` that quietly makes the check pass.
@@ -45,10 +60,10 @@ function llamar<T = ToolResult>(name: string, args: Record<string, unknown> = {}
 }
 
 // Estado de partida conocido: un lab resuelto, otro fallado y nada más.
-await run('DELETE FROM attempts WHERE user_id = ?', [YO!.id]);
-await run('INSERT INTO attempts (user_id, lab_id, answer, correct) VALUES (?,?,?,1)', [YO!.id, '1.1', '"buena"']);
-await run('INSERT INTO attempts (user_id, lab_id, answer, correct) VALUES (?,?,?,0)', [YO!.id, '2.1', '"mala"']);
-await run('INSERT INTO attempts (user_id, lab_id, answer, correct) VALUES (?,?,?,0)', [YO!.id, '2.1', '"otra mala"']);
+await run('DELETE FROM attempts WHERE user_id = ?', [YO.id]);
+await run('INSERT INTO attempts (user_id, lab_id, answer, correct) VALUES (?,?,?,1)', [YO.id, '1.1', '"buena"']);
+await run('INSERT INTO attempts (user_id, lab_id, answer, correct) VALUES (?,?,?,0)', [YO.id, '2.1', '"mala"']);
+await run('INSERT INTO attempts (user_id, lab_id, answer, correct) VALUES (?,?,?,0)', [YO.id, '2.1', '"otra mala"']);
 forgetAll();
 
 console.log('\n1) El catálogo está completo y clasificado');
@@ -110,7 +125,7 @@ const err = await llamar<MistakesResult>('mis_errores');
 ok(err.atascados === 1 && err.labs[0].lab_id === '2.1', 've el lab intentado y no resuelto');
 ok(err.labs[0].misRespuestasMalas.length === 2, 'con las dos respuestas malas que dio');
 ok(!JSON.stringify(err).includes('solution'), 'sin la solución del lab');
-ok(viewQueue(bus(YO!.id)).some((i) => i.ref === '2.1' && i.motivo === 'atascado'), 'y lo deja en la cola marcado como atascado');
+ok(viewQueue(bus(YO.id)).some((i) => i.ref === '2.1' && i.motivo === 'atascado'), 'y lo deja en la cola marcado como atascado');
 
 console.log('\n6) El memo ahorra consultas y caduca lo propio en el turno siguiente');
 forgetAll();
@@ -178,7 +193,7 @@ ok(!!liga.explicacion, 'mi_liga explica por qué está o no está en liga');
 const tabla = await llamar('ligas_tabla', {}, 'F');
 ok(!JSON.stringify(tabla).includes('user_id'), 'la tabla de la liga no lleva ningún user_id');
 
-await run('DELETE FROM attempts WHERE user_id = ?', [YO!.id]);
+await run('DELETE FROM attempts WHERE user_id = ?', [YO.id]);
 await pool.end();
 console.log(fallos ? `\n${fallos} FALLO(S)` : '\nsin fallos');
 process.exit(fallos ? 1 : 0);

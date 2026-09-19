@@ -89,14 +89,14 @@ const ROLE_ES = { student: 'Estudiante', tutor: 'Tutor', admin: 'Admin', root: '
           <div class="fila-ajuste" style="display:flex;align-items:flex-start;justify-content:space-between;gap:24px">
             <div style="max-width:520px">
               <div class="h3">{L.ajustes.eliminar}</div>
-              <p class="s" style="color:var(--l2);margin-top:4px">Se desactiva el acceso y tu nombre se anonimiza. Tus intentos permanecen en las estadísticas de la cohorte, sin datos personales. Tu correo queda libre para que puedas registrarte de nuevo.</p>
-              <p class="s" style="margin-top:6px">Eliminar la cuenta no tramita un reembolso. Para eso está la garantía de 14 días.</p>
+              <p class="s" style="color:var(--l2);margin-top:4px">{L.ajustes.eliminarNota}</p>
+              <p class="s" style="margin-top:6px">{L.ajustes.eliminarReembolso}</p>
             </div>
             <button class="btn danger" id="del-open" style="flex:none">{L.ajustes.eliminarBtn}</button>
           </div>
           <div id="del-box" hidden style="border:1px solid var(--rd);padding:18px;display:flex;flex-direction:column;gap:12px">
             <p class="lbl" style="color:var(--rd)">{L.ui.confirmaClave}</p>
-            <input class="input" id="del-pass" type="password" placeholder="tu contraseña actual">
+            <input class="input" id="del-pass" type="password" placeholder={L.ajustes.claveActual}>
             <div style="display:flex;gap:10px">
               <button class="btn danger" id="del-go">{L.ui.siElimina}</button>
               <button class="btn ghost" id="del-cancel">{L.ui.cancelar}</button>
@@ -160,7 +160,7 @@ const ROLE_ES = { student: 'Estudiante', tutor: 'Tutor', admin: 'Admin', root: '
       const d = await res.json().catch(() => ({}));
       if (res.ok) {
         window.toast('info', U.cuentaFuera, U.cuentaFueraB);
-        setTimeout(() => location.assign('/registro'), 1200);
+        setTimeout(() => location.assign('/registro?cuenta=eliminada'), 1200);
         return;
       }
       window.toast('bad', U.noElimino, d.msg ?? U.noEliminoB);

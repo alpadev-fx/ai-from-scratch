@@ -15,9 +15,11 @@ pnpm dev               # http://127.0.0.1:8787
 - **La corrección de los labs vive en el servidor** (`src/grading.ts`). La columna
   `labs.solution` no sale nunca en una respuesta: `publicLab()` filtra. Si mueves la
   corrección al cliente, las respuestas quedan en el bundle de JS.
-- **Borrado de cuenta = soft delete.** La fila se conserva (los intentos siguen contando
-  para la cohorte), `deleted_at` se marca, el nombre se anonimiza y el correo se rota a
-  `borrado+{id}@alpadev.local` para liberarlo. Todas las consultas de usuario filtran
+- **Borrado de cuenta = soft delete, desde /ajustes.** La fila se conserva (los intentos
+  siguen contando para la cohorte), `deleted_at` se marca, el nombre se anonimiza, el
+  hash de la contraseña se invalida, el chat se borra, el ranking se quita y el correo
+  se rota a `borrado+{id}@alpadev.local` para liberarlo. Si hay renovación automática,
+  se cancela. El registro del pago se queda. Todas las consultas de usuario filtran
   `deleted_at IS NULL`.
 - **Nunca queda la plataforma sin admins**: bajar de rol o borrar al último admin
   devuelve 409.

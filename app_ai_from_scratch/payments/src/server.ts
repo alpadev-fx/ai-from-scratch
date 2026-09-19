@@ -45,7 +45,19 @@ export class EntitlementError extends Error {
   }
 }
 
-async function sendEntitlement(userId: number, source: string, externalId: string, deliveryId: number): Promise<void> {
+/**
+ * `charge` es el importe REALMENTE cobrado por el proveedor, en unidades del
+ * proveedor (`transaction_amount`), no el precio de lista. Viaja porque el api
+ * imprime el recibo y no tiene de dónde sacarlo: antes ponía `PRICE.monto` fijo,
+ * así que una compra con cupón del 50% pagaba 19.995 COP y recibía un correo
+ * titulado «Recibo de tu compra» diciendo 39.990 COP. Un recibo con un importe
+ * que el comprador no pagó es un documento falso, no un detalle de copy.
+ *
+ * Opcional a propósito: una renovación de suscripción no pasa por aquí con un
+ * importe, y el api prefiere OMITIR la línea del total antes que inventarla.
+ */
+async function sendEntitlement(userId: number, source: string, externalId: string, deliveryId: number,
+  charge?: { amount: number; currency: string }): Promise<void> {
   // The state of THIS grant, never the user's whole access. The api keeps the latest
   // state per (source, externalId) and ORs them. Reporting the aggregate under one
   // key left a cancelled subscription's key saying "active until <the charge's end>",
@@ -59,7 +71,8 @@ async function sendEntitlement(userId: number, source: string, externalId: strin
   const response = await fetch(config.entitlementsUrl, {
     method: 'POST', headers: { authorization: `Bearer ${config.entitlementsSecret}`, 'content-type': 'application/json' },
     body: JSON.stringify({ eventKey, userId, active, source, externalId, occurredAt: new Date().toISOString(),
-      ...(periodEnd ? { periodEnd } : {}) }),
+      ...(periodEnd ? { periodEnd } : {}),
+      ...(charge && Number.isFinite(charge.amount) ? { amount: charge.amount, currency: charge.currency } : {}) }),
   });
   if (!response.ok) throw new EntitlementError(response.status, (await response.text()).slice(0, 300));
   await store.markDelivered(eventKey, userId, active);
@@ -142,7 +155,16 @@ async function processPaymentItem(event: { id: number; providerId: string }, ite
     await store.redeemCouponReservation(redemptionId, paymentId);
   }
 
-  if (userId && eligible) await sendEntitlement(userId, 'mercadopago.payment', paymentId, event.id);
+  if (userId && eligible) {
+    // `facts.amountMinor` sale de `transaction_amount`, que Mercado Pago manda en
+    // unidades MAYORES (39990 COP, 9.99 USD). Con DECIMALS = 0 coinciden; el
+    // nombre del campo miente para una moneda con decimales, pero el valor que
+    // se imprime en el recibo es este y no el precio de lista. Sin restar
+    // reembolsos: un reembolso revoca el derecho (active = false) y el api no
+    // manda recibo, así que restar aquí solo podría deformar el importe.
+    await sendEntitlement(userId, 'mercadopago.payment', paymentId, event.id,
+      { amount: facts.amountMinor, currency: facts.currency });
+  }
   if (userId && eligible && facts.status === 'approved' && facts.amountMinor > 0) {
     await queuePurchase(paymentId, userId, item);
   }
@@ -404,7 +426,7 @@ app.post<{ Body: { userId?: unknown; email?: unknown; mode?: unknown; couponCode
       await store.upsertPayment({ providerId, userId, status: 'approved', amount: 0,
         currency: CURRENCY, raw: { source: 'coupon', coupon: reservation.offer.code, order_key: orderKey },
         eligible: true, ineligibleReason: null, orderKey, liveMode: config.production });
-      await sendEntitlement(userId, 'coupon', providerId, reservation.id);
+      await sendEntitlement(userId, 'coupon', providerId, reservation.id, { amount: 0, currency: CURRENCY });
       await store.redeemCouponReservation(reservation.id, providerId);
       return { mode, coupon: reservation.offer.code, discountPercent: reservation.offer.percent,
         discountMinor: reservation.offer.discountMinor, totalMinor: 0, granted: true, orderKey };

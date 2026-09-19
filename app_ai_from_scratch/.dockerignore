@@ -56,6 +56,12 @@
 !api/scripts/
 !auth/
 
+# The purchase-receipt email renderer api/src/server.ts imports directly.
+# One file, not the whole design/ tree: that tree also carries multi-MB
+# canvas HTML exports (see ../.gitignore) that have no business in this image.
+!design/saas-emails/
+!design/saas-emails/templates.ts
+
 # Never, under any allowlist. Listed explicitly because a future `!something`
 # broad enough to catch them would be a secret baked into an image layer, which
 # survives deletion of the file.

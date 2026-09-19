@@ -33,9 +33,8 @@ import {
 } from './chat-brake.ts';
 import { clientIp } from './brake.ts';
 import { authThrottle } from './auth-throttle.ts';
-import { mailer } from './mail.ts';
-import { PRICE } from './product.ts';
-import { renderEmailHtml } from '../../design/saas-emails/templates.ts';
+import { entitlementMailKind, mailer } from './mail.ts';
+import { mailLang, renderEmailHtml } from '../../design/saas-emails/templates.ts';
 import { coachState } from './coach.ts';
 import { publish as publishEvent } from './bus.ts';
 
@@ -1109,7 +1108,8 @@ app.post<{ Body: unknown; Querystring: Record<string, string> }>(
   });
 
 app.post<{ Body: { eventKey?: unknown; userId?: unknown; active?: unknown; source?: unknown;
-  externalId?: unknown; occurredAt?: unknown; periodEnd?: unknown } }>('/api/internal/entitlements', async (req, reply) => {
+  externalId?: unknown; occurredAt?: unknown; periodEnd?: unknown; amount?: unknown;
+  currency?: unknown } }>('/api/internal/entitlements', async (req, reply) => {
   const bearer = String(req.headers.authorization ?? '').replace(/^Bearer\s+/i, '');
   if (!matchesEntitlementBearer(bearer)) {
     return reply.code(401).send({ error: 'unauthorized' });
@@ -1122,6 +1122,14 @@ app.post<{ Body: { eventKey?: unknown; userId?: unknown; active?: unknown; sourc
     active: body.active === true, source: String(body.source ?? ''),
     externalId: String(body.externalId ?? ''), occurredAt: String(body.occurredAt ?? ''),
     periodEnd: body.periodEnd === undefined || body.periodEnd === null ? '' : String(body.periodEnd) };
+  // Lo que el proveedor cobro DE VERDAD (payments/src/server.ts, sendEntitlement).
+  // Solo sirve para imprimir el recibo, asi que no entra en la validacion que
+  // decide el acceso: un importe con mala pinta no puede tumbar una concesion ya
+  // cobrada. Se descarta y el recibo sale sin la linea del total.
+  const charged = Number(body.amount);
+  const currency = String(body.currency ?? '');
+  const receipt = Number.isFinite(charged) && charged >= 0 && /^[A-Z]{3}$/.test(currency)
+    ? { amount: charged, currency } : null;
   if (!event.eventKey || !Number.isSafeInteger(event.userId) || event.userId < 1 ||
       !event.source || !event.externalId || !Number.isFinite(Date.parse(event.occurredAt))) {
     return reply.code(400).send({ error: 'invalid_entitlement_event' });
@@ -1132,24 +1140,66 @@ app.post<{ Body: { eventKey?: unknown; userId?: unknown; active?: unknown; sourc
   if (event.periodEnd && !Number.isFinite(Date.parse(event.periodEnd))) {
     return reply.code(400).send({ error: 'invalid_entitlement_event' });
   }
+  // ANTES de aplicar, no despues: `paid` aqui es el estado en que estaba el
+  // comprador cuando el proveedor confirmo, y es lo unico que distingue una
+  // suscripcion NUEVA de una RENOVACION. Leido despues siempre vale 1, y cada
+  // cobro mensual mandaria «tu membresia esta activa» como si acabara de
+  // empezar. No es una consulta extra: es la misma fila que el recibo ya leia,
+  // movida de sitio.
+  const buyer = mailer ? await one<AuthUser>('auth.user', {}, event.userId).catch(() => null) : null;
   const result = await auth.applyEntitlement(event);
-  // Purchase receipt, sent once per real payment that actually granted access.
-  // `accepted` is false for a retry of the same eventKey, so Mercado Pago's own
-  // redeliveries cannot mail the buyer twice; the source guard keeps subscription
-  // and coupon grants out, since those carry their own message.
-  // Deliberately not awaited: a Resend outage must not fail this response, or
-  // Mercado Pago retries a payment whose entitlement already applied.
-  if (result.accepted && result.active && event.source === 'mercadopago.payment' && mailer) {
-    one<AuthUser>('auth.user', {}, event.userId)
-      .then((buyer) => {
+  // Un correo por transicion real de acceso. `accepted` es false para un
+  // reintento del mismo eventKey, asi que las redelivery de Mercado Pago no
+  // pueden mandar dos veces. Las concesiones por cupon no llevan correo: son un
+  // regalo y llevan su propio mensaje.
+  //
+  // No se espera a proposito: una caida de Resend no puede tumbar esta
+  // respuesta, o Mercado Pago reintenta un pago cuyo derecho ya se aplico.
+  const kind = result.accepted
+    ? entitlementMailKind(event.source, result.active, Boolean(buyer?.paid))
+    : null;
+  if (kind && mailer) {
+    Promise.resolve()
+      .then(() => {
         if (!buyer?.email) return;
-        const rendered = renderEmailHtml({ kind: 'purchase_receipt', name: buyer.name || buyer.email,
-          actionUrl: 'https://aifromscratch.shop/panel',
-          fields: [{ label: 'Producto', value: 'Fundamentos Vol. 1' },
-            { label: 'Total', value: `${PRICE.monto.toLocaleString('es-CO')} ${PRICE.moneda}` }] });
+        const lang = mailLang(buyer.lang);
+        // El total sale del cobro real que reporto el proveedor. NUNCA de
+        // PRICE.monto: con un cupon del 50% el comprador paga 19.995 COP y el
+        // precio de lista habria impreso 39.990 COP en un documento titulado
+        // «Recibo de tu compra».
+        const fields = [{ label: lang === 'en' ? 'Product' : 'Producto', value: 'Fundamentos Vol. 1' }];
+        // El importe SOLO donde significa lo que dice. En un recibo de compra o
+        // de renovacion es lo cobrado. En un REEMBOLSO no: el evento trae el
+        // importe del cargo original, y un reembolso puede ser parcial, asi que
+        // imprimirlo como total reembolsado seria afirmar una cifra que nadie
+        // verifico. Se omite -- incompleto antes que falso.
+        const conImporte = kind === 'purchase_receipt' || kind === 'subscription_receipt';
+        if (conImporte && receipt) {
+          fields.push({ label: 'Total',
+            // currencyDisplay 'code': en es-CO, COP se rinde como «$ 39.990», que en
+            // un recibo se lee como dolares. «COP 39.990» no se puede confundir.
+            value: new Intl.NumberFormat(lang === 'en' ? 'en-US' : 'es-CO',
+              { style: 'currency', currency: receipt.currency, currencyDisplay: 'code' })
+              .format(receipt.amount) });
+        } else if (conImporte) {
+          app.log.warn({ userId: event.userId, externalId: event.externalId, kind },
+            'receipt sent without a total: the entitlement event carried no usable amount');
+        }
+        // La vigencia solo se imprime si el proveedor la mando. La ruta ya
+        // rechaza una periodEnd ilegible mas arriba.
+        if (event.periodEnd && kind !== 'refund_confirmed') {
+          fields.push({ label: lang === 'en' ? 'Access until' : 'Acceso hasta',
+            value: new Date(event.periodEnd).toLocaleDateString(lang === 'en' ? 'en-US' : 'es-CO',
+              { year: 'numeric', month: 'long', day: 'numeric' }) });
+        }
+        // Un recibo se lee en el panel; una suscripcion o un reembolso se
+        // gestionan en el perfil, que es donde vive el boton de cancelar.
+        const destino = kind === 'purchase_receipt' ? `${ORIGIN}/panel` : `${ORIGIN}/perfil`;
+        const rendered = renderEmailHtml({ kind, lang,
+          name: buyer.name || buyer.email, actionUrl: destino, fields });
         return mailer!.send({ to: buyer.email, subject: rendered.subject, text: rendered.text, html: rendered.html });
       })
-      .catch((err) => app.log.error({ err, userId: event.userId }, 'purchase receipt email failed'));
+      .catch((err) => app.log.error({ err, userId: event.userId, kind }, 'entitlement email failed'));
   }
   return result;
 });

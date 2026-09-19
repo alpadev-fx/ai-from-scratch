@@ -2,6 +2,9 @@ import { createHash } from 'node:crypto';
 import { COOKIE, POLICY_VERSION, ROLES, TOKEN_MINUTES, cookieOpts, hashPassword, hashToken, mandaPlataforma,
   newToken, satisface, sign, spendKdf, verify, verifyPassword } from './core.ts';
 
+import { mailLang, renderEmailHtml } from '../../design/saas-emails/templates.ts';
+import type { EmailKind } from '../../design/saas-emails/templates.ts';
+
 export * from './core.ts';
 
 export interface AuthUser {
@@ -30,7 +33,7 @@ export interface AuthDependencies {
   production: boolean;
   log: { info(...args: unknown[]): void; warn(...args: unknown[]): void; error(...args: unknown[]): void };
   signal?: (name: string, payload: Record<string, unknown>) => Promise<void> | void;
-  mailer?: { send(input: { to: string; subject: string; text: string }): Promise<void> };
+  mailer?: { send(input: { to: string; subject: string; text: string; html?: string }): Promise<void> };
   forgetTurns?: (userId: number) => Promise<{ ok: true } | { error: string }>;
 }
 
@@ -54,44 +57,6 @@ const pref = (value: unknown, allowed: readonly string[]): string =>
 const subject = (email: unknown): string =>
   `account:${createHash('sha256').update(String(email).trim().toLowerCase()).digest('hex').slice(0, 20)}`;
 
-// The welcome mail on successful registration (AI-36). Spanish is the
-// product-copy default everywhere else server-side (lesson-meta.ts,
-// assess.ts, grading.ts all key off `lang === 'en'` with Spanish as the
-// fallback for everything else, including 'auto'); English is an explicit
-// overlay, never the other way around. Plain text only -- mail.ts's Mailer
-// has no HTML layer today.
-//
-// Content is deliberately narrow: what they signed up for, the one link to
-// get in, and the 14-day guarantee -- and nothing this platform cannot keep.
-// It must never promise a heads-up email before a charge: no job in this
-// codebase sends one, so that promise would be a lie the first time someone
-// tested it.
-const WELCOME_MAIL: Record<'es' | 'en', { subject: string; body: (name: string, link: string) => string }> = {
-  es: {
-    subject: 'Bienvenida a IA desde cero',
-    body: (name, link) => [
-      `Hola, ${name}.`,
-      'Tu cuenta en IA desde cero ya está lista. Empiezas con la lección 1, gratis; el curso completo son 12 lecciones y 36 labs, en español e inglés.',
-      `Entra aquí: ${link}`,
-      'Si más adelante te llevas el curso completo, tienes 14 días de garantía desde el primer cobro, sin explicar por qué.',
-    ].join('\n\n'),
-  },
-  en: {
-    subject: 'Welcome to IA desde cero',
-    body: (name, link) => [
-      `Hi ${name},`,
-      'Your IA desde cero account is ready. You start with lesson 1, free; the full course is 12 lessons and 36 labs, in Spanish and English.',
-      `Log in here: ${link}`,
-      'If you take the full course later, you get a 14-day guarantee from the first charge, no reason needed.',
-    ].join('\n\n'),
-  },
-};
-
-const welcomeMailFor = (lang: string, origin: string, name: string): { subject: string; text: string } => {
-  const copy = lang === 'en' ? WELCOME_MAIL.en : WELCOME_MAIL.es;
-  return { subject: copy.subject, text: copy.body(name, `${origin}/login`) };
-};
-
 export const shapeUser = (user: AuthUser) => ({
   id: user.id, email: user.email, name: user.name, role: user.role,
   lang: user.lang, theme: user.theme, paid: Boolean(user.paid), cohort: user.cohort,
@@ -101,6 +66,33 @@ export function createAuth(deps: AuthDependencies) {
   const emit = async (name: string, payload: Record<string, unknown>): Promise<void> => {
     try { await deps.signal?.(name, payload); }
     catch (error) { deps.log.warn({ error, signal: name }, 'auth signal was not published'); }
+  };
+
+  // Transactional mail. NEVER on the critical path: every caller below has
+  // already committed the fact the mail describes, so a Resend outage is logged
+  // and dies here -- a 500 because mail is down would be worse than a signup,
+  // a reset or a lockout with no email. `deps.mailer` undefined is mail.ts's
+  // fail-closed "unconfigured" state: logged, never a silent miss.
+  //
+  // Copy, HTML and the bilingual split all live in design/saas-emails. Nothing
+  // in this file writes mail bodies any more: the welcome text used to be a
+  // local literal that no other trigger could reuse, which is why `password_reset`
+  // shipped as one line of plain text and `password_changed` did not exist.
+  const sendMail = async (
+    kind: EmailKind,
+    to: { id: number; email: string; name: string; lang: string },
+    extra: { actionUrl?: string; fields?: Array<{ label: string; value: string }> } = {},
+  ): Promise<void> => {
+    if (!deps.mailer) {
+      deps.log.info({ userId: to.id, kind }, 'mail skipped: no mail provider configured');
+      return;
+    }
+    try {
+      const mail = renderEmailHtml({ kind, name: to.name || to.email, lang: mailLang(to.lang), ...extra });
+      await deps.mailer.send({ to: to.email, subject: mail.subject, text: mail.text, html: mail.html });
+    } catch (error) {
+      deps.log.error({ error, userId: to.id, kind }, 'transactional mail failed to send');
+    }
   };
 
   async function resolveSession(token: unknown): Promise<AuthUser | null> {
@@ -148,6 +140,14 @@ export function createAuth(deps: AuthDependencies) {
         if (user && !isLocked(user)) {
           const failed = user.failed + 1;
           await deps.write('auth.login_failure', { failed, locked: failed >= MAX_FAILED }, user.id);
+          // NO `account_locked` mail here, on purpose. The template exists and is
+          // translated, but this trigger is UNAUTHENTICATED and attacker-chosen:
+          // five wrong passwords against any known address mails its owner, and
+          // it repeats every time the lock lapses. That is a harassment amplifier
+          // and a sender-reputation risk with nothing capping it -- /recover is
+          // capped at 3/hour per account precisely because this codebase already
+          // knows attacker-triggered mail is a real cost. Wire it once there is a
+          // per-recipient send cap to hang it on.
         }
         await emit('auth.login_failed', { subject: subject(email), target: user ? String(user.id) : undefined,
           accountKnown: Boolean(user) });
@@ -200,16 +200,8 @@ export function createAuth(deps: AuthDependencies) {
       // a 500 here because Resend is down would be worse than a signup with no
       // welcome mail. `mailer` undefined is the fail-closed "unconfigured" state
       // (see mail.ts) -- logged, never a silent miss and never a fallback sender.
-      if (deps.mailer) {
-        const { subject: welcomeSubject, text: welcomeText } = welcomeMailFor(user!.lang, deps.origin, user!.name);
-        try {
-          await deps.mailer.send({ to: mail, subject: welcomeSubject, text: welcomeText });
-        } catch (error) {
-          deps.log.error({ error, userId: user!.id }, 'welcome mail failed to send');
-        }
-      } else {
-        deps.log.info({ userId: user!.id }, 'welcome mail skipped: no mail provider configured');
-      }
+      await sendMail('welcome', { id: user!.id, email: mail, name: user!.name, lang: user!.lang },
+        { actionUrl: `${deps.origin}/login` });
       return reply.code(201).send({ user: shapeUser(user!) });
     });
 
@@ -232,23 +224,23 @@ export function createAuth(deps: AuthDependencies) {
       const token = newToken();
       await deps.write('auth.reset_create', { token: hashToken(token), minutes: TOKEN_MINUTES }, user.id);
       const link = `${deps.origin}/recuperar?t=${token}`;
-      if (deps.mailer) {
-        // A send failure must not escape. This route answers identically whether
-        // or not the account exists (that is the whole point of `answer`), and an
-        // uncaught throw turns it into an enumeration oracle: a registered address
-        // 500s while an unknown one 200s, so anyone can harvest the user list by
-        // walking a wordlist. Loud in the log, uniform to the caller.
-        try {
-          await deps.mailer.send({
-            to: mail, subject: 'Recuperar acceso',
-            text: `Abre este enlace para cambiar la clave: ${link}`,
-          });
-        } catch (err) {
-          deps.log.error({ err, userId: user.id }, 'recover: mail send failed');
-        }
-      } else {
-        deps.log.info({ link }, 'recover: link generated (no mail provider configured)');
-      }
+      // A send failure must not escape. This route answers identically whether
+      // or not the account exists (that is the whole point of `answer`), and an
+      // uncaught throw turns it into an enumeration oracle: a registered address
+      // 500s while an unknown one 200s, so anyone can harvest the user list by
+      // walking a wordlist. `sendMail` swallows and logs, so the caller sees one
+      // shape either way.
+      //
+      // The extra read is for `lang` and the stored spelling of the address:
+      // `auth.recovery_by_email` returns only id and name (data/internal/op/
+      // catalog.go), and a Spanish reset link for an English-speaking student is
+      // the bug this wiring exists to remove. The route is capped at 3/hour per
+      // account above, so the read is not a load concern.
+      const full = await deps.one<AuthUser>('auth.user', {}, user.id);
+      await sendMail('password_reset',
+        { id: user.id, email: full?.email ?? mail, name: full?.name ?? user.name, lang: full?.lang ?? 'es' },
+        { actionUrl: link });
+      if (!deps.mailer) deps.log.info({ link }, 'recover: link generated (no mail provider configured)');
       return deps.production ? answer : { ...answer, dev_enlace: link };
     });
 
@@ -268,6 +260,9 @@ export function createAuth(deps: AuthDependencies) {
       await deps.write('auth.reset_invalidate', {}, row.user_id);
       reply.setCookie(COOKIE, sign({ sub: user!.id, role: user!.role, v: user!.token_version }), cookieOpts);
       await emit('auth.password_reset', { subject: String(user!.id), target: String(user!.id) });
+      // Confirmation of a security change the account owner may not have made.
+      // Without it a stolen reset link changes the password in silence.
+      await sendMail('password_changed', user!, { actionUrl: `${deps.origin}/login` });
       return { user: shapeUser(user!), sesionesCerradas: true };
     });
 

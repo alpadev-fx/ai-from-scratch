@@ -9,7 +9,7 @@ export type Lang = 'es' | 'en' | 'fr' | 'pt';
 
 export const STR = {
   es: {
-    nav: { panel: 'Panel', curso: 'Curso', labs: 'Labs', chat: 'Chat', logros: 'Logros', ranking: 'Ranking', ligas: 'Ligas', cohorte: 'Cohorte', admin: 'Admin', perfil: 'Perfil', ajustes: 'Ajustes' },
+    nav: { panel: 'Panel', curso: 'Curso', labs: 'Labs', chat: 'Chat', logros: 'Logros', ranking: 'Ranking', ligas: 'Ligas', cohorte: 'Cohorte', admin: 'Admin', soluciones: 'Soluciones', perfil: 'Perfil', ajustes: 'Ajustes' },
     salir: 'Salir', continuar: 'Continuar', continuarLeccion: 'Continuar lección',
     comprobar: 'Comprobar', deNuevo: 'Empezar de nuevo',
     progreso: 'Tu progreso', lecciones: 'lecciones', labsResueltos: 'labs resueltos',
@@ -646,7 +646,7 @@ export const STR = {
     },
   },
   en: {
-    nav: { panel: 'Dashboard', curso: 'Course', labs: 'Labs', chat: 'Chat', logros: 'Path', ranking: 'Leaderboard', ligas: 'Leagues', cohorte: 'Cohort', admin: 'Admin', perfil: 'Profile', ajustes: 'Settings' },
+    nav: { panel: 'Dashboard', curso: 'Course', labs: 'Labs', chat: 'Chat', logros: 'Path', ranking: 'Leaderboard', ligas: 'Leagues', cohorte: 'Cohort', admin: 'Admin', soluciones: 'Answer key', perfil: 'Profile', ajustes: 'Settings' },
     salir: 'Sign out', continuar: 'Continue', continuarLeccion: 'Continue lesson',
     comprobar: 'Check', deNuevo: 'Start over',
     progreso: 'Your progress', lecciones: 'lessons', labsResueltos: 'labs solved',

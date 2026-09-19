@@ -8,7 +8,7 @@ import { COOKIE, mandaPlataforma } from '../../auth/src/core.ts';
 import { localizeLesson } from './lesson-meta.ts';
 import { createAuth } from '../../auth/src/index.ts';
 import type { AuthUser } from '../../auth/src/index.ts';
-import { grade, hint, publicLab } from './grading.ts';
+import { grade, hint, publicLab, answerFor} from './grading.ts';
 import type { BestAttempt, PublicLabSource } from './grading.ts';
 import { examGate, ofPack, packScore, publicQuestion } from './assess.ts';
 import type { QuestionBest, QuestionRow } from './assess.ts';
@@ -248,7 +248,13 @@ async function syncAchievements(userId: number) {
   const has = new Set((await many<{ code: string }>('achievement.codes', {}, userId)).map((r) => r.code));
   const nuevos = should.filter((l) => !has.has(l.code));
   for (const l of nuevos) {
-    await write('achievement.record', { code: l.code, kind: l.kind, lesson_n: l.lesson_n }, userId);
+    // A rank belongs to no lesson. It used to go through the same operation with
+    // lesson_n: null, and the data service refuses a null for a declared Int —
+    // so closing any lesson threw here, the browser got a 400 on the very
+    // attempt that finished it, and no rank was ever written. The two shapes are
+    // now two operations; see achievement.record_rank in data's catalogue.
+    if (l.lesson_n === null) await write('achievement.record_rank', { code: l.code }, userId);
+    else await write('achievement.record', { code: l.code, kind: l.kind, lesson_n: l.lesson_n }, userId);
   }
   return { nuevos, todos: should, perLesson };
 }
@@ -877,6 +883,61 @@ app.get<{ Params: { id: string } }>('/api/admin/students/:id/timeline', async (r
 // The catalog operation deliberately exposes only a successful lab id, its
 // position, the completion time and the student's display identity -- never an
 // answer, prompt, explanation or solution.
+// EL SOLUCIONARIO, solo para admin.
+//
+// Es la ruta que devuelve labs.solution y questions.solution -- las dos columnas
+// que la ontologia clasifica `jamas` y que todo lo demas en este repositorio se
+// esfuerza en no dejar salir. Tres cosas la sostienen, y ninguna es opcional:
+//
+//   1. requireRole(['admin']). Un tutor NO pasa: acompanar a un estudiante no
+//      exige el solucionario entero, y cuanta menos gente lo lea, mejor.
+//   2. Las operaciones del catalogo son Internal, asi que si alguien las cablea
+//      a una herramienta del agente la prueba de aislamiento cae al arrancar.
+//      La guarda no depende de que nadie se acuerde de esta ruta.
+//   3. `cache-control: no-store`. Delante hay Cloudflare, y una respuesta con el
+//      curso entero resuelto que se quede en un cache compartido es el curso
+//      regalado. La cookie ya evita el cacheo en la practica; esto lo dice.
+//
+// No devuelve nada de ninguna persona: es contenido del curso, no respuestas
+// enviadas. Para lo segundo estan /api/admin/students/:id/timeline y
+// /api/root/solved-labs, que a proposito NO traen soluciones.
+app.get('/api/admin/soluciones', async (req, reply) => {
+  const admin = await requireRole(req, reply, ['admin']); if (!admin) return;
+  reply.header('cache-control', 'no-store');
+  const [labs, questions] = await Promise.all([
+    many<{ id: string; lesson_n: number; idx: number; level: string; kind: string;
+      prompt: string; payload: string; solution: string; explanation: string; draft: number }>('lab.solutions_all'),
+    many<{ id: string; kind: string; pack: string; idx: number; lesson_n: number;
+      prompt_es: string; prompt_en: string; payload: string; solution: string;
+      explanation_es: string; explanation_en: string }>('question.solutions_all'),
+  ]);
+  // Lo que este admin ya tiene resuelto, para que la pantalla apague el boton en
+  // vez de invitarle a repetir 90 veces. Las dos operaciones son Scope: Own y
+  // van con SU actor: lee su propio progreso, no el de nadie mas, y por eso esto
+  // no necesita ninguna operacion nueva ni toca P3.
+  const [labsHechos, preguntasHechas] = await Promise.all([
+    many<BestAttempt>('attempt.best_by_lab', {}, admin.id),
+    many<QuestionBest>('qattempt.best_by_question', {}, admin.id),
+  ]);
+  const resueltos = new Set(labsHechos.filter((r) => r.solved === 1).map((r) => r.lab_id));
+  const resueltasQ = new Set(preguntasHechas.filter((r) => r.solved === 1).map((r) => r.question_id));
+  req.log.info({ adminId: admin.id, labs: labs.length, questions: questions.length },
+    'admin read the answer key');
+  // `respuesta` es lo que hay que ENVIAR a POST /api/labs/:id/attempt para
+  // acertar, y se deriva aqui y no en la pantalla a proposito: la forma de
+  // `solution` no es la de `answer`, y una derivacion equivocada no seria un
+  // boton roto sino un intento FALLIDO escrito en el progreso de quien lo pulse.
+  // Aqui `grade()` esta al lado y api/test/resolver.mts pasa las 36 y las 54 por
+  // las dos funciones. `null` = no derivable sin inventar; el boton se apaga.
+  //
+  // Una pregunta de quiz se corrige como un `choice`, igual que en su propia ruta
+  // de intento unas lineas mas arriba: el mismo grader, el mismo tipo.
+  return {
+    labs: labs.map((l) => ({ ...l, respuesta: answerFor(l.kind, l.solution), hecho: resueltos.has(l.id) })),
+    questions: questions.map((q) => ({ ...q, respuesta: answerFor('choice', q.solution), hecho: resueltasQ.has(q.id) })),
+  };
+});
+
 app.get('/api/root/solved-labs', async (req, reply) => {
   const root = await requireRole(req, reply, ['root']); if (!root) return;
   const labs = await many<{

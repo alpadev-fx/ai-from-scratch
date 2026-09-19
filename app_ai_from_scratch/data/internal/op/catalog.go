@@ -73,6 +73,34 @@ var catalog = []Operation{
 			"only a boolean. The solution is never put in a response, and this operation is the " +
 			"reason the agent-facing lab operations can omit the column entirely",
 	},
+	{
+		// EL SOLUCIONARIO. La operacion mas peligrosa de este catalogo, y por eso
+		// se declara mas alto que ninguna otra.
+		//
+		// `labs.solution` es la columna que la ontologia describe como «LA MAS
+		// IMPORTANTE: si el agente puede leerla, "dime la respuesta del 5.2"
+		// destruye el curso». Aqui sale entera, para las 36. Lo que hace que eso
+		// sea defendible y no un agujero:
+		//
+		//   · Internal, asi que P1 sigue siendo estructural: si alguien cablea
+		//     esta operacion a una herramienta del agente, la prueba de
+		//     aislamiento cae en el arranque y no en produccion.
+		//   · muro de_pago declarado, porque prompt, payload y explanation lo
+		//     son. Declararla gratis habria sido la forma silenciosa de sacar el
+		//     corpus de pago por una puerta con nombre de administracion.
+		//   · la unica ruta que la llama exige rol admin. Un tutor no pasa.
+		//
+		// No lleva `attempts` ni ninguna columna de una persona: esto es el
+		// contenido del curso, no lo que alguien respondio.
+		Name: "lab.solutions_all", Table: "labs", Scope: Public, Audience: Internal, Muro: DePago,
+		Returns: []string{"id", "lesson_n", "idx", "level", "kind", "prompt", "payload", "solution", "explanation", "draft"},
+		From:    "labs", Order: "lesson_n, idx", Limit: 500,
+		Why: "the admin-only answer key for the 36 labs",
+		Justify: "an administrator supporting a student, or reviewing what was written, cannot do it " +
+			"without the answer beside the statement. labs.solution is the column this catalogue " +
+			"exists to keep away from the agent, so it travels Internal and behind an admin-only " +
+			"route, and never through a tool",
+	},
 
 	// --------------------------------------------------------------- attempts
 	// `attempts.id` and `attempts.user_id` are both jamas, so an agent-facing
@@ -281,6 +309,22 @@ var catalog = []Operation{
 		Params: []Param{{Name: "actor", Kind: Actor}},
 		Why:    "the acting person's earned codes, used to insert only missing achievements",
 	},
+	// TWO OPERATIONS, because there are two shapes and `achievements.lesson_n`
+	// is nullable.
+	//
+	// There was one, taking lesson_n as an Int. A rank ("all three labs of the
+	// lesson, twelve times") belongs to no single lesson, so api sent
+	// lesson_n: null -- and bind() refuses a null for an Int, correctly: an Int
+	// that also accepts null is a validator with a hole in it. The 400 came back
+	// out of POST /api/labs/:id/attempt, so closing ANY lesson answered the
+	// browser with an error and no rank was ever written. Nothing caught it
+	// because no suite had ever solved three labs of one lesson, and `data smoke`
+	// probes reads only.
+	//
+	// The fix is not a nullable Int. It is saying out loud that a rank insert is
+	// a different statement: three columns, no lesson, `kind` a literal rather
+	// than a parameter, so this operation can only ever write the row it is named
+	// after.
 	{
 		Name: "achievement.record", Table: "achievements", Scope: Own, Audience: Agent, Muro: Gratis, Write: true,
 		Raw: "INSERT INTO achievements (user_id, code, kind, lesson_n) VALUES ($1,$2,$3,$4) " +
@@ -291,7 +335,17 @@ var catalog = []Operation{
 			{Name: "kind", Kind: Text, Max: 40},
 			{Name: "lesson_n", Kind: Int, Max: 99},
 		},
-		Why: "persist one achievement calculated for the acting person",
+		Why: "persist one per-lesson achievement calculated for the acting person",
+	},
+	{
+		Name: "achievement.record_rank", Table: "achievements", Scope: Own, Audience: Agent, Muro: Gratis, Write: true,
+		Raw: "INSERT INTO achievements (user_id, code, kind, lesson_n) VALUES ($1,$2,'rango',NULL) " +
+			"ON CONFLICT (user_id, code) DO NOTHING",
+		Params: []Param{
+			{Name: "actor", Kind: Actor},
+			{Name: "code", Kind: Text, Max: 80},
+		},
+		Why: "persist one global rank for the acting person; a rank belongs to no lesson, so lesson_n is NULL",
 	},
 	{
 		Name: "ranking.table", Table: "ranking_optin", Scope: Public, Audience: Agent, Muro: Gratis,
@@ -377,6 +431,18 @@ var catalog = []Operation{
 		Justify: "grade() compares the submitted option id against questions.solution inside api and returns " +
 			"only a boolean. The solution is never put in a response, and this operation is the " +
 			"reason the agent-facing question operations can omit the column entirely",
+	},
+	{
+		// El mismo solucionario para los 15 packs de quiz y examen. Mismas tres
+		// guardas que lab.solutions_all: Internal, de_pago declarado, y una sola
+		// ruta que exige admin.
+		Name: "question.solutions_all", Table: "questions", Scope: Public, Audience: Internal, Muro: DePago,
+		Returns: []string{"id", "kind", "pack", "idx", "lesson_n", "prompt_es", "prompt_en", "payload",
+			"solution", "explanation_es", "explanation_en"},
+		From: "questions", Order: "pack, idx", Limit: 1000,
+		Why: "the admin-only answer key for every quiz and exam question",
+		Justify: "the same need as lab.solutions_all over the quiz and exam corpus: questions.solution " +
+			"read beside its statement, by an administrator, never by a tool",
 	},
 	{
 		Name: "question.packs", Table: "questions", Scope: Public, Audience: Agent, Muro: Gratis,
@@ -912,12 +978,49 @@ var catalog = []Operation{
 		Why: "idempotently record one signed payments entitlement event for the target actor",
 	},
 	{
+		// DOS FUENTES, Y UNA MANDA SOBRE LA OTRA.
+		//
+		// `source = 'admin'` es la concesion a mano desde /admin: un mes de
+		// acceso sin cupon y sin pasar por Mercado Pago. Entra por la misma
+		// puerta que un webhook firmado a proposito -- si viviera en una columna
+		// aparte de `users`, el barrido de caducidad de abajo la borraria en la
+		// siguiente hora, porque ese barrido recalcula users.paid SOLO desde esta
+		// tabla. Un segundo origen de la verdad para el acceso es exactamente el
+		// fallo que este catalogo existe para no tener.
+		//
+		// `source = 'admin_block'` es el corte a mano, y es la unica fuente que
+		// NO se suma con un OR: la derivacion normal concede si CUALQUIER fuente
+		// concede, asi que sin esta resta un admin no podia cerrarle el acceso a
+		// alguien con una suscripcion viva en Mercado Pago -- la fila del pago
+		// seguia concediendo y el corte no se notaba. Por eso el bloqueo se
+		// excluye del EXISTS que concede (si no, contaria como concesion) y se
+		// comprueba aparte como NOT EXISTS.
 		Name: "auth.entitlement_apply", Table: "users", Scope: Own, Audience: Agent, Muro: Gratis, Write: true,
-		Raw: "UPDATE users SET paid = CASE WHEN EXISTS (SELECT 1 FROM (SELECT DISTINCT ON (source, external_id) active, period_end " +
+		Raw: "UPDATE users SET paid = CASE WHEN EXISTS (SELECT 1 FROM (SELECT DISTINCT ON (source, external_id) active, period_end, source " +
 			"FROM entitlement_events WHERE user_id = $1 ORDER BY source, external_id, occurred_at DESC, id DESC) current_entitlements " +
+			"WHERE active = true AND (period_end IS NULL OR period_end > now()) AND source <> 'admin_block') " +
+			"AND NOT EXISTS (SELECT 1 FROM (SELECT DISTINCT ON (external_id) active, period_end " +
+			"FROM entitlement_events WHERE user_id = $1 AND source = 'admin_block' ORDER BY external_id, occurred_at DESC, id DESC) manual_blocks " +
 			"WHERE active = true AND (period_end IS NULL OR period_end > now())) THEN 1 ELSE 0 END WHERE id = $1 RETURNING paid",
 		Returns: []string{"paid"}, Params: []Param{{Name: "actor", Kind: Actor}},
 		Why: "derive current paid access from the target actor's latest unexpired signed entitlement states",
+	},
+	{
+		// Lo que /admin pinta en la columna «Suscripción». Son filas `jamas` de
+		// una tabla que el agente no ve nunca, y esta operacion tampoco se las
+		// acerca: Internal, y la consume la pantalla de administracion.
+		//
+		// Devuelve las filas crudas de las DOS fuentes a mano y deja que auth
+		// elija la ultima por (user_id, source). Se podria resolver con un
+		// DISTINCT ON aqui, pero entonces la regla de «cual gana» viviria en dos
+		// sitios -- este SQL y la derivacion de arriba -- y dos copias de una
+		// regla se separan en cuanto una cambie.
+		Name: "auth.admin_entitlements", Table: "entitlement_events", Scope: Public, Audience: Internal, Muro: Gratis,
+		Returns: []string{"id", "user_id", "source", "active", "period_end", "occurred_at"},
+		From:    "entitlement_events", Where: "source IN ('admin','admin_block')",
+		Order: "occurred_at DESC, id DESC", Limit: 20000,
+		Why:     "the manual subscription state /admin shows and edits per account",
+		Justify: "the admin subscription column has to say whose access was granted or cut by hand, until when, and which of the two rows is the newest. user_id and period_end are the answer, id and occurred_at are the tie-break, and none of it enters the agent tool surface",
 	},
 	{
 		// EL BARRIDO DE CADUCIDAD.
@@ -948,12 +1051,23 @@ var catalog = []Operation{
 		// Sin esa condicion NOT EXISTS es verdadero para «ningun evento», y el
 		// primer barrido tras el despliegue cerraba a todos esos compradores.
 		Name: "auth.entitlement_sweep", Table: "users", Scope: Public, Audience: Agent, Muro: Gratis, Write: true,
-		Raw: "UPDATE users SET paid = 0 WHERE paid = 1 " +
-			"AND EXISTS (SELECT 1 FROM entitlement_events WHERE user_id = users.id) " +
+		//
+		// Y cierra tambien por BLOQUEO a mano, no solo por caducidad. Un admin
+		// que corta a alguien con una suscripcion viva en Mercado Pago depende
+		// de que `auth.entitlement_apply` haya corrido; si esa llamada fallo, sin
+		// esta rama el corte no se aplicaba nunca, porque la fila del pago sigue
+		// concediendo y la condicion de caducidad no se cumple. El barrido sigue
+		// sin conceder nada: las dos ramas ponen paid = 0.
+		Raw: "UPDATE users SET paid = 0 WHERE paid = 1 AND (" +
+			"EXISTS (SELECT 1 FROM (SELECT DISTINCT ON (external_id) active, period_end " +
+			"FROM entitlement_events WHERE user_id = users.id AND source = 'admin_block' " +
+			"ORDER BY external_id, occurred_at DESC, id DESC) b " +
+			"WHERE b.active = true AND (b.period_end IS NULL OR b.period_end > now())) " +
+			"OR (EXISTS (SELECT 1 FROM entitlement_events WHERE user_id = users.id) " +
 			"AND NOT EXISTS (" +
-			"SELECT 1 FROM (SELECT DISTINCT ON (source, external_id) active, period_end " +
+			"SELECT 1 FROM (SELECT DISTINCT ON (source, external_id) active, period_end, source " +
 			"FROM entitlement_events WHERE user_id = users.id ORDER BY source, external_id, occurred_at DESC, id DESC) e " +
-			"WHERE e.active = true AND (e.period_end IS NULL OR e.period_end > now()))",
+			"WHERE e.active = true AND (e.period_end IS NULL OR e.period_end > now()) AND e.source <> 'admin_block')))",
 		// Sin RETURNING. Solo hace falta CUANTAS filas se cerraron, y eso ya lo
 		// da el conteo de la escritura; devolver users.id seria sacar una
 		// columna `jamas` de la tabla para no usarla.

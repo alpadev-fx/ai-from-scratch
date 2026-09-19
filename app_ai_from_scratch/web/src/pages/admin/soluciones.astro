@@ -1,0 +1,300 @@
+---
+// EL SOLUCIONARIO. Las 36 respuestas y las 54 de quiz y examen, en una pantalla.
+//
+// `prerender = false` NO es rutina aqui. Prerenderizar esta pagina dejaria el
+// curso entero resuelto dentro del build estatico, servido a cualquiera que pida
+// la ruta -- sin sesion, sin rol y sin que nada fallara. El resto de /admin lo
+// lleva por costumbre; esta lo lleva porque es la diferencia entre una pantalla
+// de administracion y regalar el producto.
+export const prerender = false;
+import App from '../../layouts/App.astro';
+import { gate, apiFetch } from '../../lib/session';
+import { t, resolveLang } from '../../lib/i18n';
+import { icon } from '../../lib/icons';
+
+const { user, redirect } = await gate(Astro.request, ['admin']);
+if (redirect) return Astro.redirect(redirect);
+
+// La barra marca la entrada activa comparando con su propia etiqueta, asi que
+// el literal 'Admin' dejaba esta pagina sin marcar en cuanto la cuenta estaba
+// en ingles ('Answer key' !== 'Admin'). Se pasa la misma cadena que pinta la
+// barra, no una copia.
+const L = t(resolveLang(user!.lang, Astro.request));
+
+type Lab = { id: string; lesson_n: number; idx: number; level: string; kind: string;
+  prompt: string; payload: string; solution: string; explanation: string; draft: number;
+  respuesta: unknown; hecho: boolean };
+type Question = { id: string; kind: string; pack: string; idx: number; lesson_n: number;
+  prompt_es: string; prompt_en: string; payload: string; solution: string;
+  explanation_es: string; explanation_en: string; respuesta: unknown; hecho: boolean };
+
+const data = await apiFetch<{ labs: Lab[]; questions: Question[] }>('/api/admin/soluciones', Astro.request);
+const labs = data?.labs ?? [];
+const questions = data?.questions ?? [];
+
+const json = (raw: unknown): any => {
+  try { return typeof raw === 'string' ? JSON.parse(raw) : raw; } catch { return null; }
+};
+
+/**
+ * La solucion en castellano, por tipo de ejercicio.
+ *
+ * REGLA: si la forma no es la esperada, se devuelve el JSON crudo. Nunca se
+ * inventa una lectura. Una respuesta bonita y equivocada en el solucionario es
+ * peor que un JSON feo: el admin la usaria para corregir a un estudiante.
+ */
+function leerLab(l: Lab): { texto: string; crudo: boolean } {
+  const s = json(l.solution);
+  const p = json(l.payload);
+  const crudo = { texto: typeof l.solution === 'string' ? l.solution : JSON.stringify(l.solution), crudo: true };
+  if (!s || typeof s !== 'object') return crudo;
+
+  if (l.kind === 'choice' && typeof s.value === 'string') return { texto: s.value, crudo: false };
+  if (l.kind === 'hotcold' && typeof s.value === 'number') return { texto: String(s.value), crudo: false };
+  if (l.kind === 'knob' && typeof s.min === 'number' && typeof s.max === 'number') {
+    return { texto: `cualquier valor entre ${s.min} y ${s.max}`, crudo: false };
+  }
+  if (l.kind === 'cut' && Array.isArray(s.cuts)) {
+    const palabras: string[] = Array.isArray(p?.words) ? p.words : [];
+    // «0-4» = corta la palabra 0 tras el caracter 4. Sin las palabras del
+    // payload el par no dice nada, asi que se muestra el corte hecho.
+    const leido = s.cuts.map((c: unknown) => {
+      const [i, n] = String(c).split('-').map(Number);
+      const w = palabras[i];
+      if (!w || !Number.isInteger(n)) return String(c);
+      return `${w.slice(0, n)}|${w.slice(n)}`;
+    });
+    return { texto: leido.join('   ·   '), crudo: false };
+  }
+  if (l.kind === 'order' && Array.isArray(s.order)) {
+    const pasos: { id?: string; text?: string }[] = Array.isArray(p?.steps) ? p.steps : [];
+    const porId = new Map(pasos.map((x) => [x.id, x.text]));
+    if (pasos.length && s.order.every((id: string) => porId.has(id))) {
+      return { texto: s.order.map((id: string, n: number) => `${n + 1}. ${porId.get(id)}`).join('\n'), crudo: false };
+    }
+    return { texto: s.order.join(' → '), crudo: false };
+  }
+  if (l.kind === 'build' && Array.isArray(s.slots) && s.accept && typeof s.accept === 'object') {
+    const filas = s.slots.map((slot: string, n: number) => {
+      const acepta = (s.accept as Record<string, unknown>)[String(n)];
+      const lista = Array.isArray(acepta) ? acepta.join('  |  ') : String(acepta ?? '');
+      return `${slot}: ${lista}`;
+    });
+    return { texto: filas.join('\n'), crudo: false };
+  }
+  return crudo;
+}
+
+/** Para quiz y examen: el id correcto resuelto al texto de su opcion. */
+function leerPregunta(q: Question, lang: 'es' | 'en'): { texto: string; crudo: boolean } {
+  const s = json(q.solution);
+  const p = json(q.payload);
+  if (!s || typeof s.value !== 'string') {
+    return { texto: typeof q.solution === 'string' ? q.solution : JSON.stringify(q.solution), crudo: true };
+  }
+  const ops: { id?: string; es?: string; en?: string }[] = Array.isArray(p?.options) ? p.options : [];
+  const elegida = ops.find((o) => o.id === s.value);
+  const txt = elegida?.[lang] ?? elegida?.es ?? elegida?.en;
+  return txt ? { texto: `${s.value})  ${txt}`, crudo: false } : { texto: s.value, crudo: true };
+}
+
+const NIVEL: Record<string, string> = { facil: 'var(--ok)', medio: 'var(--or)', dificil: 'var(--rd)' };
+const porLeccion = new Map<number, Lab[]>();
+for (const l of labs) porLeccion.set(l.lesson_n, [...(porLeccion.get(l.lesson_n) ?? []), l]);
+const porPack = new Map<string, Question[]>();
+for (const q of questions) porPack.set(q.pack, [...(porPack.get(q.pack) ?? []), q]);
+const borradores = labs.filter((l) => l.draft).length;
+---
+<App user={user!} title="Soluciones" crumb="ADMIN / SOLUCIONES" active={L.nav.soluciones}>
+  <span slot="topbar" class="lbl" style="color:var(--rd)">SOLUCIONARIO</span>
+  <a slot="topbar" class="btn ghost" style="height:36px;font-size:10px;text-decoration:none" href="/admin">Volver a admin</a>
+
+  <div style="padding:30px 28px 48px;display:flex;flex-direction:column;gap:22px;max-width:1180px">
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <p class="eb">Panel · Admin</p>
+      <h1 class="h1">Soluciones</h1>
+    </div>
+
+    <div class="card" style="border-color:var(--hair);border-left:2px solid var(--rd);display:flex;gap:12px;align-items:flex-start">
+      <Fragment set:html={icon('alert', 18, 'var(--rd)')} />
+      <div><div class="h3">Esta pantalla es el curso entero resuelto</div><p class="s" style="color:var(--l2);margin-top:4px">
+        {labs.length} labs y {questions.length} preguntas con su respuesta. Solo rol admin: un tutor no entra, y el asistente de IA no puede leer estas columnas por diseño.
+        No la proyectes en una pantalla compartida ni la dejes abierta. Cada vez que se abre queda en el registro del servidor con tu id.
+        El botón «Resolver» manda la respuesta al mismo endpoint de intento que usa un estudiante, así que el acierto queda en <b>tu</b> progreso, no en el de nadie más.
+      </p></div>
+    </div>
+
+    <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+      <input id="q" class="input" type="search" placeholder="Filtrar por id, enunciado o respuesta…" style="flex:1;min-width:260px" autocomplete="off">
+      <span id="cuenta" class="s" style="color:var(--l3)"></span>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <p class="lbl">Labs · {labs.length}{borradores > 0 && ` · ${borradores} en borrador`}</p>
+      {[...porLeccion.entries()].sort((a, b) => a[0] - b[0]).map(([n, items]) => (
+        <div class="card" style="display:flex;flex-direction:column;gap:0;padding:0" data-bloque>
+          <p class="lbl" style="padding:14px 18px;border-bottom:1px solid var(--hair)">Lección {n}</p>
+          {items.sort((a, b) => a.idx - b.idx).map((l) => {
+            const sol = leerLab(l);
+            return (
+              <div data-fila data-buscar={`${l.id} ${l.prompt} ${sol.texto}`.toLowerCase()}
+                style="display:grid;grid-template-columns:92px minmax(0,1fr) minmax(0,1fr) 132px;gap:16px;padding:14px 18px;border-bottom:1px solid var(--hair2);align-items:start">
+                <div style="display:flex;flex-direction:column;gap:4px">
+                  <span class="num" style="font:700 14px/1 var(--m)">{l.id}</span>
+                  <span class="s" style={`color:${NIVEL[l.level] ?? 'var(--l3)'}`}>{l.level}</span>
+                  <span class="s" style="color:var(--l3)">{l.kind}</span>
+                  {l.draft > 0 && <span class="s" style="color:var(--or)">borrador</span>}
+                </div>
+                <div style="display:flex;flex-direction:column;gap:6px;min-width:0">
+                  <span class="s" style="color:var(--l2)">{l.prompt}</span>
+                  {l.explanation && <span class="s" style="color:var(--l3)">{l.explanation}</span>}
+                </div>
+                <div style="min-width:0">
+                  <p class="lbl" style="margin-bottom:4px">Respuesta</p>
+                  <pre style={`margin:0;white-space:pre-wrap;word-break:break-word;font:600 13px/1.5 var(--m);color:${sol.crudo ? 'var(--or)' : 'var(--ok)'}`}>{sol.texto}</pre>
+                  {sol.crudo && <span class="s" style="color:var(--or)">sin lectura para este tipo: se muestra el dato tal cual</span>}
+                </div>
+                <div style="display:flex;flex-direction:column;gap:4px;align-items:stretch">
+                  <button class="btn ghost" style="height:32px;font-size:10px" data-resolver
+                    data-url={`/api/labs/${l.id}/attempt`} data-respuesta={JSON.stringify(l.respuesta)}
+                    disabled={l.respuesta === null || l.draft > 0}>{l.hecho && l.respuesta !== null ? 'Resolver otra vez' : 'Resolver'}</button>
+                  <span class="s" data-estado style={`color:${l.hecho ? 'var(--ok)' : 'var(--l3)'}`}>
+                    {l.respuesta === null ? 'sin respuesta derivable' : l.draft > 0 ? 'borrador: no admite intentos' : l.hecho ? 'ya resuelto por ti' : 'lo resuelve a tu nombre'}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <p class="lbl">Quiz y examen · {questions.length}</p>
+      {[...porPack.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([pack, items]) => (
+        <div class="card" style="display:flex;flex-direction:column;gap:0;padding:0" data-bloque>
+          <p class="lbl" style="padding:14px 18px;border-bottom:1px solid var(--hair)">{pack} · {items[0].kind}</p>
+          {items.sort((a, b) => a.idx - b.idx).map((q) => {
+            const sol = leerPregunta(q, 'es');
+            return (
+              <div data-fila data-buscar={`${q.id} ${q.prompt_es} ${q.prompt_en} ${sol.texto}`.toLowerCase()}
+                style="display:grid;grid-template-columns:92px minmax(0,1fr) minmax(0,1fr) 132px;gap:16px;padding:14px 18px;border-bottom:1px solid var(--hair2);align-items:start">
+                <div style="display:flex;flex-direction:column;gap:4px">
+                  <span class="num" style="font:700 14px/1 var(--m)">{q.id}</span>
+                  <span class="s" style="color:var(--l3)">lección {q.lesson_n}</span>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:6px;min-width:0">
+                  <span class="s" style="color:var(--l2)">{q.prompt_es}</span>
+                  {q.explanation_es && <span class="s" style="color:var(--l3)">{q.explanation_es}</span>}
+                </div>
+                <div style="min-width:0">
+                  <p class="lbl" style="margin-bottom:4px">Respuesta</p>
+                  <pre style={`margin:0;white-space:pre-wrap;word-break:break-word;font:600 13px/1.5 var(--m);color:${sol.crudo ? 'var(--or)' : 'var(--ok)'}`}>{sol.texto}</pre>
+                  {sol.crudo && <span class="s" style="color:var(--or)">no se pudo resolver a texto: se muestra el id</span>}
+                </div>
+                <div style="display:flex;flex-direction:column;gap:4px;align-items:stretch">
+                  <button class="btn ghost" style="height:32px;font-size:10px" data-resolver
+                    data-url={`/api/questions/${q.id}/attempt`} data-respuesta={JSON.stringify(q.respuesta)}
+                    disabled={q.respuesta === null}>{q.hecho && q.respuesta !== null ? 'Resolver otra vez' : 'Resolver'}</button>
+                  <span class="s" data-estado style={`color:${q.hecho ? 'var(--ok)' : 'var(--l3)'}`}>
+                    {q.respuesta === null ? 'sin respuesta derivable' : q.hecho ? 'ya resuelto por ti' : 'lo resuelve a tu nombre'}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  </div>
+
+  <style>
+    /* `hidden` NO basta aqui, y el filtro parecia funcionar sin hacer nada.
+       Las filas llevan display:grid y los bloques display:flex en estilo EN
+       LINEA, y un estilo en linea gana al `display:none` que el navegador aplica
+       a [hidden] desde su hoja de agente de usuario. Medido: el contador decia
+       «12 de 90» mientras seguian a la vista los 90 -- un admin buscando el lab
+       5.2 leia la respuesta de otro.
+
+       Se arregla con una regla propia e !important en vez de mover el display
+       desde JS: asi `hidden` sigue siendo el estado, que es lo que leen los
+       lectores de pantalla y lo que hace que Ctrl+F del navegador no encuentre
+       lo que esta filtrado. */
+    [data-fila][hidden], [data-bloque][hidden] { display: none !important; }
+  </style>
+
+  <script>
+    // Filtro en cliente sobre lo que ya esta en la pagina. No hay segunda
+    // peticion: los datos ya viajaron, y volver a pedirlos por cada tecla seria
+    // mandar el solucionario entero por la red una vez por pulsacion.
+    const q = document.getElementById('q') as HTMLInputElement | null;
+    const cuenta = document.getElementById('cuenta')!;
+    const filas = [...document.querySelectorAll<HTMLElement>('[data-fila]')];
+    const bloques = [...document.querySelectorAll<HTMLElement>('[data-bloque]')];
+    const pintar = () => {
+      const t = (q?.value ?? '').trim().toLowerCase();
+      let vistas = 0;
+      for (const f of filas) {
+        const ok = !t || (f.dataset.buscar ?? '').includes(t);
+        f.hidden = !ok;
+        if (ok) vistas++;
+      }
+      // Un bloque sin ninguna fila visible es una cabecera huerfana.
+      for (const b of bloques) {
+        b.hidden = ![...b.querySelectorAll<HTMLElement>('[data-fila]')].some((f) => !f.hidden);
+      }
+      cuenta.textContent = t ? `${vistas} de ${filas.length}` : `${filas.length} ejercicios`;
+    };
+    q?.addEventListener('input', pintar);
+    pintar();
+
+    // «Resolver»: manda la respuesta al endpoint de intento REAL, el mismo que
+    // usa un estudiante. No hay atajo de admin que marque resuelto por detras --
+    // si lo hubiera, el solucionario podria escribir progreso sin pasar por el
+    // corrector, y entonces un boton verde ya no probaria que la respuesta es
+    // correcta. El intento queda a nombre de quien pulsa: la sesion es la suya.
+    //
+    // `respuesta` viene del SERVIDOR (answerFor), no se deriva aqui: la forma de
+    // `solution` no es la de `answer`, y una derivacion equivocada escribiria un
+    // intento FALLIDO en el progreso del admin.
+    for (const btn of document.querySelectorAll<HTMLButtonElement>('[data-resolver]')) {
+      btn.addEventListener('click', async () => {
+        const url = btn.dataset.url!;
+        const estado = btn.parentElement?.querySelector<HTMLElement>('[data-estado]');
+        const decir = (txt: string, color: string) => {
+          if (!estado) return;
+          estado.textContent = txt;
+          estado.style.color = color;
+        };
+        btn.disabled = true;
+        decir('enviando…', 'var(--l3)');
+        try {
+          const res = await fetch(url, {
+            method: 'POST', headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ answer: JSON.parse(btn.dataset.respuesta ?? 'null'), lang: 'es' }),
+          });
+          const d = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            decir(d.error ? `no se pudo: ${d.error}` : `no se pudo (${res.status})`, 'var(--rd)');
+            btn.disabled = false;
+            return;
+          }
+          // `correct: false` no es un fallo de red: es el solucionario diciendo
+          // que su propia respuesta no pasa el corrector. Se dice tal cual y en
+          // rojo, porque es un dato del curso que hay que arreglar.
+          if (d.correct) {
+            decir('resuelto', 'var(--ok)');
+            btn.textContent = 'Resolver otra vez';
+            btn.disabled = false;
+          } else {
+            decir('el corrector la dio por incorrecta', 'var(--rd)');
+            btn.disabled = false;
+          }
+        } catch {
+          decir('sin red', 'var(--rd)');
+          btn.disabled = false;
+        }
+      });
+    }
+  </script>
+</App>

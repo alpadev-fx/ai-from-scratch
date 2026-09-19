@@ -241,6 +241,33 @@ if (!existsSync(ONTO)) {
 // de tipo, no guarda historial y no detecta que alguien alteró la base a mano.
 // Ahora manda Prisma (api/prisma/migrations) y aplicarlo es un paso aparte:
 // con dos instancias, dos procesos corriendo DDL a la vez es una carrera.
+// La base SOMBRA, antes de las migraciones. `prisma migrate diff
+// --from-migrations` -- el gate `schema-drift` de `pnpm verify` -- REPLICA todo
+// prisma/migrations dentro de ella, y docker-compose.yml:220 la declara en
+// SHADOW_DATABASE_URL, pero nadie la creaba nunca. El gate fallaba con
+//
+//   Error: P1003
+//   Database `curso_shadow` does not exist
+//
+// que no es drift: es una base que no existe, y el mensaje no dice cómo crearla.
+// CREATE DATABASE no admite IF NOT EXISTS en Postgres, así que se pregunta antes;
+// dos arranques seguidos no pueden chocar porque el segundo ve la fila.
+paso('Asegurando la base sombra (curso_shadow) que usa el gate de drift');
+{
+  const sql = "SELECT 1 FROM pg_database WHERE datname = 'curso_shadow'";
+  const existe = correr('docker', ['compose', 'exec', '-T', 'db',
+    'psql', '-U', 'curso', '-d', 'curso', '-tAc', sql],
+    { stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8' });
+  if (existe.status === 0 && !String(existe.stdout ?? '').trim()) {
+    const creada = correr('docker', ['compose', 'exec', '-T', 'db',
+      'psql', '-U', 'curso', '-d', 'curso', '-c', 'CREATE DATABASE curso_shadow OWNER curso']);
+    if (creada.status !== 0) {
+      aviso('No pude crear curso_shadow. `pnpm verify` fallará en schema-drift con P1003;');
+      aviso('créala a mano con: pnpm db:psql -c "CREATE DATABASE curso_shadow OWNER curso"');
+    }
+  }
+}
+
 paso('Aplicando migraciones de esquema (Prisma)');
 if (correr('pnpm', ['--dir', 'api', 'db:deploy']).status !== 0) {
   console.error('\nLas migraciones fallaron. El servidor no arranca contra un esquema sin aplicar: paro aquí.');

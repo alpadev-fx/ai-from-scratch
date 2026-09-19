@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { loadMailer } from '../src/mail.ts';
+import { entitlementMailKind, loadMailer } from '../src/mail.ts';
 
 const KEYS = ['RESEND_API_KEY', 'MAIL_FROM'];
 
@@ -68,4 +68,35 @@ test('a non-2xx Resend response throws with the status and body', async () => {
       /resend_429/,
     );
   } finally { globalThis.fetch = original; }
+});
+
+// Que plantilla le toca a cada transicion de derecho. Cinco transiciones reales
+// y el silencio de todo lo demas. Antes esto vivia dentro del handler HTTP y
+// solo se podia ejercitar con Postgres, Mercado Pago y un mailer de verdad.
+test('un pago aprobado manda el recibo de compra', () => {
+  assert.equal(entitlementMailKind('mercadopago.payment', true, false), 'purchase_receipt');
+});
+
+test('un pago que revoca el acceso manda la confirmacion de reembolso', () => {
+  assert.equal(entitlementMailKind('mercadopago.payment', false, true), 'refund_confirmed');
+});
+
+test('una suscripcion de alguien que NO pagaba es un alta, no una renovacion', () => {
+  assert.equal(entitlementMailKind('mercadopago.subscription', true, false), 'subscription_started');
+});
+
+test('la misma suscripcion sobre alguien que YA pagaba es una renovacion', () => {
+  // La regresion que este caso cierra: leyendo `paid` DESPUES de aplicar el
+  // evento siempre vale 1, asi que cada cobro mensual habria anunciado un alta.
+  assert.equal(entitlementMailKind('mercadopago.subscription', true, true), 'subscription_receipt');
+});
+
+test('una suscripcion inactiva manda la cancelacion', () => {
+  assert.equal(entitlementMailKind('mercadopago.subscription', false, true), 'subscription_cancelled');
+});
+
+test('un cupon no manda correo, y una fuente desconocida tampoco', () => {
+  assert.equal(entitlementMailKind('coupon', true, false), null);
+  assert.equal(entitlementMailKind('', true, false), null);
+  assert.equal(entitlementMailKind('paypal.payment', true, false), null);
 });

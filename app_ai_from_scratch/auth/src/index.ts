@@ -280,7 +280,13 @@ export function createAuth(deps: AuthDependencies) {
       }
       if (deps.forgetTurns) {
         const purged = await deps.forgetTurns(user.id);
-        if ('error' in purged) return reply.code(503).send({ error: 'borrado_incompleto' });
+        if ('error' in purged) {
+          // The caller gets no detail on purpose, but somebody has to. This
+          // branch was silent while it refused every deletion in production,
+          // so the reason only existed in another service's access log.
+          console.error(`[account.delete] purge refused for user ${user.id}: ${purged.error}`);
+          return reply.code(503).send({ error: 'borrado_incompleto' });
+        }
       }
       await deps.write('auth.account_delete', { replacement: `borrado+${user.id}@alpadev.local` }, user.id);
       await deps.write('ranking.delete', {}, user.id);

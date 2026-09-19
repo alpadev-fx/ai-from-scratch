@@ -115,7 +115,16 @@ export interface RespuestaIA {
   proveedor?: string;
   modelo?: string;
   traza?: Traza[];
-  /** sin_ia | sin_proveedor | demasiadas_preguntas | sin_mensaje | sin_sesion */
+  /**
+   * requiere_compra | sin_ia | sin_proveedor | demasiadas_preguntas |
+   * sin_mensaje | sin_sesion
+   *
+   * `requiere_compra` comes with HTTP 402 and means the account is outside the
+   * purchase. Both front ends render the padlock from the server-side `paid`
+   * flag instead, so this is the answer to someone who got past the disabled
+   * composer — a second sender, a stale tab, curl. It is not a state the UI has
+   * to recover from; it is the proof that the gate is the API and not the page.
+   */
   error?: string;
   msg?: string;
   /** minuto | dia | dia_global — which of the three ceilings was hit. */

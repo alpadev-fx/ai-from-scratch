@@ -48,7 +48,16 @@ const ROL: Record<string, string> = { student: L.ui.rolStudent, tutor: L.ui.rolT
 // lib/session.ts) y acabaria viendo una venta dirigida a otra persona. La
 // comparacion tiene que ser exacta.
 const UNA_VEZ_POR_SESION = false;
-const avisoAcceso = user.role === 'student' && user.paid !== true;
+const sinCompra = user.role === 'student' && user.paid !== true;
+// El aviso es un modal y se puede cerrar: tiene que poder cerrarse. Sale en TODA
+// la app, y una capa sin salida dejaría a una cuenta sin pago sin llegar a
+// /perfil, que es donde se cancela y se borra la cuenta — algo que la copia
+// pública promete en un clic.
+//
+// En /chat NO sale, y no por cadencia: esa página ya lleva su propio candado
+// dentro del contenido, que no se descarta porque no es un diálogo. Dos avisos
+// del mismo hecho, uno encima del otro, y el de arriba tapando al de abajo.
+const avisoAcceso = sinCompra && Astro.url.pathname !== '/chat';
 
 // AI mode replaces the «Chat» nav entry. A nav entry NAVIGATES: it took the
 // student off the lesson they were reading to go and ask about it. The toggle
@@ -529,7 +538,7 @@ const actionHtml = hasAction ? await Astro.slots.render('action') : '';
   </div>
 
   <div id="toasts"></div>
-  <AiPanel lang={lang} flags={ia} nombre={user.name.split(' ')[0] ?? ''} />
+  <AiPanel lang={lang} flags={ia} nombre={user.name.split(' ')[0] ?? ''} bloqueado={sinCompra} />
 
   <!-- Aviso de acceso. Se renderiza en el servidor y SOLO para role 'student'
        sin compra: un admin, un tutor o root no tienen por que ver una venta.

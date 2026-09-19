@@ -25,6 +25,7 @@ import { catalog, families, run as runTool } from './tools/index.ts';
 import { AI_SECRET, AI_URL, aiHealth, hasAi, talkToAi } from './ai-bridge.ts';
 import { forgetTurns, loadTurns, rememberTurn, type ChatSource } from './messages-bridge.ts';
 import { increment, readCounter, queueState } from './jobs.ts';
+import { FREE_LESSONS, lessonAccess, paidAccess } from './paywall.ts';
 import {
   chatBrake,
   chatTokDayKey,
@@ -166,9 +167,10 @@ const LANGS = [...auth.langs];
 // ---------- course ----------
 // Paywall: lesson 01 and its three labs are free; the rest of Vol. 1 opens with
 // the purchase. Tutors and admins see everything because accompanying is their job.
-export const FREE_LESSONS = 1;
+// The two gates and why they are two: api/src/paywall.ts.
+export { FREE_LESSONS };
 const hasAccess = (u: Pick<AuthUser, 'paid' | 'role'>, n: unknown): boolean =>
-  !!u.paid || u.role !== 'student' || Number(n) <= FREE_LESSONS;
+  lessonAccess(u, n);
 
 type LessonCard = Pick<LessonRow, 'n' | 'eyebrow' | 'title' | 'summary' | 'math' | 'math_cap'>;
 type LabIndex = Pick<LabRow, 'id' | 'lesson_n' | 'idx' | 'level' | 'kind' | 'draft'>;
@@ -728,6 +730,26 @@ interface ChatBody { mensajes?: unknown; lang?: unknown; fuente?: unknown; prove
 
 app.post<{ Body: ChatBody }>('/api/chat', { schema: SCHEMA_CHAT }, async (req, reply) => {
   const u = await requireUser(req, reply); if (!u) return;
+
+  // THE TUTOR IS INSIDE THE PURCHASE. The upgrade notice sells it by name — "el
+  // tutor de IA" / "the AI tutor", web/src/lib/i18n.ts upB — and the landing
+  // promises exactly one free thing: lesson 01. Until now this endpoint served
+  // free accounts anyway, on a cheaper provider and capped at CHAT_TOPE_DIA_GRATIS
+  // (20) questions a day. Twenty agent loops a day per registered address, each
+  // one four turns against a billed provider, for something the page says you have
+  // to buy. Registration costs an email.
+  //
+  // It sits BEFORE the hasAi() check on purpose: whether the AI service is
+  // configured is our problem, not the buyer's. A free account must read
+  // "requiere_compra", never "sin_ia" — otherwise the answer to "why can't I use
+  // the tutor" depends on our deployment state.
+  //
+  // `fuente` is not consulted: the floating panel and /chat are the same endpoint,
+  // so one guard covers both surfaces and neither front end can forget it.
+  if (!paidAccess(u)) {
+    return reply.code(402).send({ error: 'requiere_compra', libres: FREE_LESSONS, ruta: '/pago' });
+  }
+
   if (!hasAi()) {
     return reply.code(501).send({ error: 'sin_ia',
       msg: 'IA_SECRETO is missing: the API cannot talk to the AI service (ai/). Generate the keys with scripts/keys.sh.' });
@@ -747,6 +769,10 @@ app.post<{ Body: ChatBody }>('/api/chat', { schema: SCHEMA_CHAT }, async (req, r
   // It sits AFTER requireUser so the counter is per person rather than per IP, and
   // BEFORE talkToAi so a refused message costs a Postgres increment instead of
   // four model calls.
+  // Past the paywall `unpaid` no longer means "free student" — that one is gone
+  // by now. What is left is staff: a tutor or an admin whose `paid` is false.
+  // They keep the cheaper provider and the smaller ceiling, which is what they had
+  // before and is right: accompanying does not need the expensive lane.
   const unpaid = !u.paid;
   const brake = await chatBrake(u.id, unpaid, increment, readCounter, app.log, CHAT_BRAKE_CAPS);
   if (brake) {

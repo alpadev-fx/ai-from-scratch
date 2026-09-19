@@ -4,6 +4,7 @@ import App from '../layouts/App.astro';
 import { gate, apiFetch } from '../lib/session';
 import { t, resolveLang } from '../lib/i18n';
 import { jsonSafe } from '../lib/json-safe';
+import { icon } from '../lib/icons';
 
 const { user, redirect } = await gate(Astro.request);
 if (redirect) return Astro.redirect(redirect);
@@ -41,7 +42,17 @@ const datos = {
   ranking: { alias: rank?.yo.alias ?? null, puesto: rank?.yo.puesto ?? null, cuantos: rank?.tabla.length ?? 0 },
   txt: { ...C, rangos: L.logros.rangos, sinRango: L.logros.sinRango },
 };
-const hayIA = !!estado?.disponible;
+// EL TUTOR ESTA DENTRO DE LA COMPRA. Lo decide el servidor: POST /api/chat
+// responde 402 requiere_compra a una cuenta sin pago (api/src/paywall.ts). Esto
+// de aquí no es el guardia, es el cartel — y tiene que decir lo mismo que el
+// guardia, o la persona escribe una pregunta y la pierde contra un error.
+//
+// La página se abre igual, con su rail de progreso: son sus propios datos y no
+// cuestan una llamada al modelo. Lo que desaparece es el composer.
+const bloqueado = user!.role === 'student' && user!.paid !== true;
+// Con el candado puesto no hay selector de modelo: elegir el motor de algo que
+// no se puede usar es ruido.
+const hayIA = !bloqueado && !!estado?.disponible;
 const provs = estado?.proveedores ?? [];
 const tools = estado?.herramientas ?? [];
 // Treinta y siete nombres en fila no dicen nada. Agrupados por familia sí: es lo
@@ -84,29 +95,45 @@ const SUGERENCIAS = [C.sugFallo, C.sugSimple, C.sugPrueba];
     <!-- ── Columna de conversación ──────────────────────────────────────── -->
     <div class="ch-col">
       <div id="hilo" class="ch-hilo">
-        <div class="ch-turno">
-          <div class="ch-av" aria-hidden="true">IA</div>
-          <div class="pr">
-            <p class="pr-p">{C.hola.replace('{n}', datos.nombre)}</p>
-            <p class="pr-p">{C.holaB}</p>
-            <div class="ch-pills">
-              {[C.aEmpezar, C.aSiguiente, C.aAyuda].map((a) => (
-                <button class="ch-pill" data-atajo={a} type="button">{a}</button>
-              ))}
+        {bloqueado ? (
+          <div class="ch-lock" role="note">
+            <span class="ch-lock-ic" aria-hidden="true" set:html={icon('lock')} />
+            <h2 class="h3">{C.lockT}</h2>
+            <p class="s" style="color:var(--l2)">{C.lockB}</p>
+            <a class="btn ch-lock-cta" href="/pago">{C.lockCta}</a>
+          </div>
+        ) : (
+          <div class="ch-turno">
+            <div class="ch-av" aria-hidden="true">IA</div>
+            <div class="pr">
+              <p class="pr-p">{C.hola.replace('{n}', datos.nombre)}</p>
+              <p class="pr-p">{C.holaB}</p>
+              <div class="ch-pills">
+                {[C.aEmpezar, C.aSiguiente, C.aAyuda].map((a) => (
+                  <button class="ch-pill" data-atajo={a} type="button">{a}</button>
+                ))}
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
 
       <!-- Composer de DOS filas. Arriba el texto, que crece; abajo los mandos.
            Una sola fila no admite entrada multilínea y no cabe en móvil. -->
-      <div class="ch-comp">
+      <!-- Bloqueada, la caja sigue en el DOM y sale DESHABILITADA en el servidor.
+           No es decoración: el script de abajo hace getElementById('q')! y le
+           cuelga listeners, así que quitarla lo rompe entero; y un control
+           `disabled` no dispara eventos, de modo que no hay nada que interceptar.
+           El guardia de verdad es el 402 del servidor — esto solo evita que
+           alguien escriba una pregunta larga para perderla contra un error. -->
+      <div class="ch-comp" data-bloqueado={bloqueado ? '1' : undefined}>
         <div class="ch-caja">
-          <textarea id="q" class="ch-ta" data-tut="chat-2" rows="1"
-            placeholder={C.phIA} autocomplete="off" aria-label={C.phIA}></textarea>
+          <textarea id="q" class="ch-ta" data-tut="chat-2" rows="1" disabled={bloqueado}
+            placeholder={bloqueado ? C.lockPh : C.phIA} autocomplete="off"
+            aria-label={bloqueado ? C.lockPh : C.phIA}></textarea>
           <div class="ch-ctl">
             <div id="ch-pick"></div>
-            <button class="btn ch-go" id="go" type="button">{C.enviar}</button>
+            <button class="btn ch-go" id="go" type="button" disabled={bloqueado}>{C.enviar}</button>
           </div>
         </div>
         <p class="ch-priv" id="aviso">{C.privAviso}</p>
@@ -159,6 +186,11 @@ const SUGERENCIAS = [C.sugFallo, C.sugSimple, C.sugPrueba];
         </div>
       </div>
 
+      <!-- Las sugerencias escriben en el composer, que está deshabilitado: un
+           botón que no hace nada enseña que la página está rota. Los ATAJOS de
+           arriba sí se quedan — esos responden en local o navegan, y siguen
+           funcionando sin tutor. -->
+      {!bloqueado && (
       <div class="ch-bloque">
         <p class="lbl">{C.preguntaEsto}</p>
         <div class="ch-pills">
@@ -167,8 +199,13 @@ const SUGERENCIAS = [C.sugFallo, C.sugSimple, C.sugPrueba];
           ))}
         </div>
       </div>
+      )}
 
-      {!hayIA && (
+      <!-- Este aviso dice "falta la llave de un proveedor en el servidor", que es
+           culpa nuestra. A una cuenta sin compra eso es MENTIRA: lo que falta es
+           el acceso, no la llave. Antes de esto `hayIA` era false por las dos
+           razones y el candado y el fallo de servidor salían juntos. -->
+      {!hayIA && !bloqueado && (
         <div class="ch-bloque">
           <p class="lbl" style="color:var(--or)">{C.sinProveedor}</p>
           <div class="ch-lab" style="border-left:2px solid var(--or)">
@@ -251,6 +288,23 @@ const SUGERENCIAS = [C.sugFallo, C.sugSimple, C.sugPrueba];
       border-top:1px solid var(--hair2)}
     .ch-go{height:36px;padding:0 22px;margin-left:auto;flex:none}
     .ch-priv{margin:11px 0 0;font:400 11.5px/1.5 var(--f);color:var(--l3)}
+
+    /* El candado. Es CONTENIDO de la página, no un diálogo encima: no se puede
+       descartar porque no hay nada que descartar, y el rail y la barra lateral
+       siguen alcanzables. Un modal sin salida en esta pantalla dejaría a una
+       cuenta sin pago sin manera de llegar a /perfil, que es justo donde se
+       cancela — y eso lo promete la copia pública. */
+    .ch-lock{max-width:520px;margin:0 auto;padding:26px 22px;border:1px solid var(--hair);
+      background:var(--panel);display:flex;flex-direction:column;align-items:flex-start;gap:10px}
+    .ch-lock-ic{display:inline-flex;color:var(--l2)}
+    .ch-lock-ic svg{width:26px;height:26px}
+    .ch-lock .h3{margin:0}
+    .ch-lock .s{margin:0}
+    .ch-lock-cta{margin-top:6px}
+    /* El composer deshabilitado se ve deshabilitado. Sin esto queda idéntico al
+       normal y parece que la página se rompió, no que está cerrada. */
+    .ch-comp[data-bloqueado] .ch-caja{opacity:.55}
+    .ch-comp[data-bloqueado] .ch-ta{cursor:not-allowed}
 
     .ch-pick{display:flex;align-items:center;gap:14px;min-width:0}
     .ch-eff{display:flex;align-items:center;gap:9px;width:104px;flex:none}

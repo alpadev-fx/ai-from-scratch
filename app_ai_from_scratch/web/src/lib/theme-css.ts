@@ -4,7 +4,7 @@
 const PAPER = `--bg:#F2F2F2;--panel:#fff;color-scheme:light;
   --l1:#000;--l2:rgba(0,0,0,.66);--l3:rgba(0,0,0,.58);
   --hair:rgba(0,0,0,.22);--hair2:rgba(0,0,0,.08);--fill:rgba(120,120,128,.20);
-  --ac:#0A5AD6;--ac-solid:#0A5AD6;--ok:#0C6B3E;--or:#8A5000;--rd:#C21B12;
+  --ac:#0A5AD6;--ac-solid:#0A5AD6;--ok:#0C6B3E;--or:#8A5000;--rd:#C21B12;--ac-hi:#0847A8;
   --btn-bg:#000;--btn-fg:#fff;`;
 
 export const TOKENS = `
@@ -14,7 +14,7 @@ export const TOKENS = `
   --bg:#000;--panel:#0B0B0C;color-scheme:dark;
   --l1:#fff;--l2:rgba(235,235,245,.62);--l3:rgba(235,235,245,.50);
   --hair:rgba(84,84,88,.46);--hair2:rgba(84,84,88,.16);--fill:rgba(120,120,128,.22);
-  --ac:#0A84FF;--ac-solid:#0A6CFF;--ok:#30D158;--or:#FF9F0A;--rd:#FF453A;
+  --ac:#0A84FF;--ac-solid:#0A6CFF;--ok:#30D158;--or:#FF9F0A;--rd:#FF453A;--ac-hi:#409CFF;
   --btn-bg:#fff;--btn-fg:#000;
   /* Text on top of an accent fill. White in BOTH themes — --btn-fg cannot stand
      in for it, that one is black in dark — and until now it was written as a

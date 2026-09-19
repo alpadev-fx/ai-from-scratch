@@ -291,7 +291,17 @@ var catalog = []Operation{
 			{Name: "kind", Kind: Text, Max: 40},
 			{Name: "lesson_n", Kind: Int, Max: 99},
 		},
-		Why: "persist one achievement calculated for the acting person",
+		Why: "persist one per-lesson achievement calculated for the acting person",
+	},
+	{
+		Name: "achievement.record_rank", Table: "achievements", Scope: Own, Audience: Agent, Muro: Gratis, Write: true,
+		Raw: "INSERT INTO achievements (user_id, code, kind, lesson_n) VALUES ($1,$2,'rango',NULL) " +
+			"ON CONFLICT (user_id, code) DO NOTHING",
+		Params: []Param{
+			{Name: "actor", Kind: Actor},
+			{Name: "code", Kind: Text, Max: 80},
+		},
+		Why: "persist one global rank for the acting person; a rank belongs to no lesson, so lesson_n is NULL",
 	},
 	{
 		Name: "ranking.table", Table: "ranking_optin", Scope: Public, Audience: Agent, Muro: Gratis,

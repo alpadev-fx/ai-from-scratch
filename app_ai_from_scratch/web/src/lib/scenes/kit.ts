@@ -404,6 +404,27 @@ export function quoted(s: string): string | null {
 
 export const wordsOf = (s: string) => s.split(/\s+/).filter(Boolean);
 
+/** Ten runs is lesson 9's unit: the slider scene draws exactly that many tiles. */
+export const RUNS_OF_TEN = 10;
+
+/**
+ * How many of ten runs came out different, read off the lesson's own count.
+ * "10 out of 10 the same" -> none; "4 in 10 odd" -> four; nothing countable -> 3,
+ * enough for the dial to visibly do something.
+ *
+ * Here rather than in variety-slider.ts because every other per-lesson reader is
+ * here, and because scripts/check-lesson-scenes.mjs has to be able to IMPORT it:
+ * the scene files import their siblings with extensionless specifiers that only a
+ * bundler resolves, so a gate that reached into one would have to re-implement
+ * this instead — and a re-implementation is a copy that drifts.
+ */
+export function oddOfTen(s: string): number {
+  const ns = [...s.matchAll(/\d+/g)].map((m) => Number(m[0]));
+  if (!ns.includes(RUNS_OF_TEN)) return ns.length ? clamp(ns[0]!, 1, RUNS_OF_TEN - 1) : 3;
+  const other = ns.find((n) => n !== RUNS_OF_TEN);
+  return other === undefined ? 0 : clamp(other, 1, RUNS_OF_TEN - 1);
+}
+
 /** Stable per string, so a dial panel looks the same on every replay. */
 export function hash(s: string): number {
   let h = 2166136261;

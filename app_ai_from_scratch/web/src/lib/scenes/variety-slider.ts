@@ -14,11 +14,14 @@
 // still sees the dial's effect rather than an empty box.
 
 import {
-  appear, clamp, decor, el, knob, lbl, line, makeScene, scaleTo, slide, spread,
-  stageFrame, track, veil, type SceneBuilder,
+  appear, clamp, decor, el, knob, lbl, line, makeScene, oddOfTen, RUNS_OF_TEN,
+  scaleTo, slide, spread, stageFrame, track, veil, type SceneBuilder,
 } from './kit';
 
-const RUNS = 10;
+// The reader that turns this lesson's own count into "how many of ten differ"
+// lives in kit.ts with every other per-lesson reader, so the gate that checks
+// both languages animate alike can import it instead of re-deriving it.
+const RUNS = RUNS_OF_TEN;
 const COLD = 0.1;
 
 export const scene: SceneBuilder = (ctx) => makeScene(ctx, (tl, motion) => {
@@ -57,15 +60,3 @@ export const scene: SceneBuilder = (ctx) => makeScene(ctx, (tl, motion) => {
   });
   tl.at(1120 + odd * 90 + 320, frame.showOutcome);
 });
-
-/**
- * How many of ten runs came out different, read off the lesson's own count.
- * "10 out of 10 the same" -> none; "4 in 10 odd" -> four; nothing countable -> 3,
- * enough for the dial to visibly do something.
- */
-function oddOfTen(s: string): number {
-  const ns = [...s.matchAll(/\d+/g)].map((m) => Number(m[0]));
-  if (!ns.includes(RUNS)) return ns.length ? clamp(ns[0], 1, RUNS - 1) : 3;
-  const other = ns.find((n) => n !== RUNS);
-  return other === undefined ? 0 : clamp(other, 1, RUNS - 1);
-}

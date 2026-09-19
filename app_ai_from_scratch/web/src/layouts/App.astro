@@ -78,7 +78,7 @@ const actionHtml = hasAction ? await Astro.slots.render('action') : '';
     *{box-sizing:border-box}
     body{margin:0;background:var(--bg);font-family:var(--f);color:var(--l1);-webkit-font-smoothing:antialiased;transition:background .2s,color .2s}
     a{color:var(--ac);text-decoration:none}
-    a:hover{color:#409CFF}
+    a:hover{color:var(--ac-hi)}
     .lbl{font:500 10px/1 var(--m);letter-spacing:.18em;text-transform:uppercase;color:var(--l3);margin:0}
     .eb{font:600 10px/1 var(--m);letter-spacing:.22em;text-transform:uppercase;color:var(--ac);margin:0}
     .h1{font:700 34px/1.06 var(--f);letter-spacing:-.035em;margin:0}
@@ -90,7 +90,7 @@ const actionHtml = hasAction ? await Astro.slots.render('action') : '';
     .card{border:1px solid var(--hair2);padding:22px}
     /* primario blanco, azul al hover — igual que .buy de la landing */
     .btn{height:44px;display:inline-flex;align-items:center;justify-content:center;gap:10px;padding:0 20px;border:0;border-radius:6px;background:var(--btn-bg);color:var(--btn-fg);font:600 11px/1 var(--m);letter-spacing:.1em;text-transform:uppercase;cursor:pointer;transition:background .2s,color .2s;font-family:var(--m)}
-    .btn:hover{background:var(--ac);color:#fff}
+    .btn:hover{background:var(--ac);color:var(--on-ac)}
     .btn:disabled{opacity:.45;cursor:default}
     .btn.ghost{background:transparent;border:1px solid var(--hair);color:var(--l1)}
     .btn.ghost:hover{background:var(--fill);color:var(--l1)}
@@ -112,7 +112,7 @@ const actionHtml = hasAction ? await Astro.slots.render('action') : '';
     .segb{height:30px;padding:0 10px;background:transparent;border:0;border-right:1px solid var(--hair2);color:var(--l3);font:600 10px/1 var(--m);letter-spacing:.12em;text-transform:uppercase;cursor:pointer;transition:background .15s,color .15s}
     .segb:last-child{border-right:0}
     .segb:hover{color:var(--l1);background:var(--fill)}
-    .segb[aria-pressed="true"]{background:var(--ac-solid);color:#fff}
+    .segb[aria-pressed="true"]{background:var(--ac-solid);color:var(--on-ac)}
     .tblhead{font:500 10px/1 var(--m);letter-spacing:.16em;text-transform:uppercase;color:var(--l3)}
     /* Carril compartido por los toasts y por los avisos de desbloqueo. El ancho es
        automatico porque la tarjeta de rango mide 436px; con width fijo a 372 se
@@ -122,8 +122,10 @@ const actionHtml = hasAction ? await Astro.slots.render('action') : '';
     .toast{width:372px;box-sizing:border-box;display:flex;align-items:flex-start;gap:12px;padding:14px 16px;border:1px solid var(--hair);background:var(--panel);animation:tin .18s ease-out}
     @keyframes tin{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
     input[type=range]{-webkit-appearance:none;appearance:none;background:transparent;height:30px;width:100%}
-    input[type=range]::-webkit-slider-runnable-track{height:1px;background:rgba(235,235,245,.34)}
+    input[type=range]::-webkit-slider-runnable-track{height:1px;background:var(--hair)}
     input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:26px;margin-top:-13px;border-radius:0;background:var(--l1);cursor:ew-resize}
+    input[type=range]::-moz-range-track{height:1px;background:var(--hair);border:0}
+    input[type=range]::-moz-range-thumb{width:14px;height:26px;border:0;border-radius:0;background:var(--l1);cursor:ew-resize}
     /* Sidebar: persistent rail on desktop, overlay on a phone. Collapsed width
        is the icon column. The preference lives in a cookie so the first paint
        already matches — the same reason lang, theme and AI mode do. */

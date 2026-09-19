@@ -13,6 +13,8 @@ export interface Solution {
   cuts?: unknown[];
   order?: unknown[];
   slots?: unknown[];
+  /** `build` only: the tile texts each slot will take, by slot index. */
+  accept?: Record<number, string[]>;
   min?: number;
   max?: number;
 }
@@ -33,12 +35,30 @@ export function grade(lab: GradableLab, answer: Answer): boolean {
     case 'order':
       return Array.isArray(answer)
         && answer.map(String).join(',') === (sol.order ?? []).map(String).join(',');
-    case 'build':
-      return !!answer && typeof answer === 'object' &&
-             (sol.slots ?? []).every((_k, i) => {
-               const v = (answer as Record<number, unknown>)[i];
-               return typeof v === 'string' && v.trim().length > 0;
-             });
+    case 'build': {
+      // Every slot filled, AND filled with a piece that slot will take.
+      //
+      // "Every slot holds a non-empty string" was the whole check, and the widget
+      // pins each tile to its own declared slot — so no student could ever
+      // produce a wrong answer except by leaving a slot empty. Three labs ship a
+      // second tile set their own explanation calls wrong, and all three were
+      // graded correct: lab 1.2 put a tick next to "3 photos / nothing labelled"
+      // over the sentence "with 3 unlabelled examples it learns nothing".
+      //
+      // `accept` is REQUIRED, and its absence fails closed. A build lab whose
+      // solution carries no allow-list is one this function cannot check, and an
+      // answer that was never checked is not a correct answer (house rule 1).
+      if (!answer || typeof answer !== 'object') return false;
+      const slots = sol.slots ?? [];
+      const accept = sol.accept;
+      if (!slots.length || !accept) return false;
+      return slots.every((_k, i) => {
+        const v = (answer as Record<number, unknown>)[i];
+        if (typeof v !== 'string') return false;
+        const picked = v.trim();
+        return picked.length > 0 && (accept[i] ?? []).includes(picked);
+      });
+    }
     case 'knob': {
       const t = Number(answer);
       return Number.isFinite(t) && t >= Number(sol.min) && t <= Number(sol.max);
@@ -106,7 +126,18 @@ export interface PublicLabSource {
   draft: number;
 }
 
-/** What the client MAY see. */
+/**
+ * What the client MAY see.
+ *
+ * `solved` comes from the row's own `solved`, not from the row EXISTING. It used
+ * to be `!!best`, which made the caller responsible for passing null on an
+ * unsolved lab — and server.ts did exactly that, with
+ * `best.solved === 1 ? best : null`. That is how the attempt counter was lost:
+ * the null took `attempts` down with it, so a student who had missed a lab four
+ * times was shown "sin intentos" under it, and the lesson page has no other
+ * source for that number. Deciding it here from the value means there is no way
+ * to pass the row and lose the count.
+ */
 export function publicLab(lab: PublicLabSource, best: BestAttempt | null | undefined): PublicLab {
   return {
     id: lab.id,
@@ -117,7 +148,7 @@ export function publicLab(lab: PublicLabSource, best: BestAttempt | null | undef
     prompt: lab.prompt,
     payload: JSON.parse(lab.payload),
     draft: !!lab.draft,
-    solved: !!best,
+    solved: best?.solved === 1,
     attempts: best?.attempts ?? 0,
   };
 }

@@ -220,8 +220,7 @@ app.get<{ Params: { n: string }; Querystring: { lang?: string } }>('/api/lessons
   ]);
   if (!lesson) return reply.code(404).send({ error: 'no_existe' });
   const best = new Map(bestRows.map((r) => [r.lab_id, r]));
-  const labs = paidLabs
-    .map((l) => publicLab(l, best.get(l.id)?.solved === 1 ? best.get(l.id) : null));
+  const labs = paidLabs.map((l) => publicLab(l, best.get(l.id) ?? null));
   // Technical explanation + analogy + examples: without this the lab cannot be solved.
   type TextRow = { technical: string; analogy: string; examples: unknown };
   let texto = await one<TextRow>('lesson_text.get', { lesson_n: n, lang });
@@ -253,7 +252,8 @@ async function syncAchievements(userId: number) {
   const has = new Set((await many<{ code: string }>('achievement.codes', {}, userId)).map((r) => r.code));
   const nuevos = should.filter((l) => !has.has(l.code));
   for (const l of nuevos) {
-    await write('achievement.record', { code: l.code, kind: l.kind, lesson_n: l.lesson_n }, userId);
+    if (l.lesson_n === null) await write('achievement.record_rank', { code: l.code }, userId);
+    else await write('achievement.record', { code: l.code, kind: l.kind, lesson_n: l.lesson_n }, userId);
   }
   return { nuevos, todos: should, perLesson };
 }

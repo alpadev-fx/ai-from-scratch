@@ -252,7 +252,17 @@ export const STR = {
       errDe: 'Tu error fue de {err} ({word}).', rangoRep: 'El rango que cuenta como repetible es {a}–{b}.',
       tusIntentos: 'Tus intentos · error',
       gatoMaestro: 'Lección cerrada. Bien hecho.',
-      nuevoLogro: 'Logro nuevo', nuevoLogroB: '{grado} de la lección {n}.' },
+      nuevoLogro: 'Logro nuevo', nuevoLogroB: '{grado} de la lección {n}.',
+      // The chrome inside the lab widgets themselves. These were written into
+      // labs-client.ts in Spanish, so an English lesson rendered an English
+      // reading over a Spanish exercise: "Pasos disponibles", "vacío", "FRÍA".
+      // The i18n gate only compares this tree against its English twin, so a
+      // string that never became a key was invisible to it.
+      pasos: 'Pasos disponibles', tuOrden: 'Tu orden',
+      empieza: 'Haz clic en un paso para empezar.',
+      cortes: '{n} cortes puestos', cortarTras: 'cortar tras {ch}',
+      vacio: 'vacío', fria: 'FRÍA', creativa: 'CREATIVA',
+      ganador: 'gana {name} con {n} de 100' },
     logros: {
       crumb: 'LOGROS / TU CAMINO', titulo: 'Tu camino', eb: 'Rango nuevo',
       pitch: 'Tres grados por lección y un rango por cada lección que cierras completa. Nada de esto caduca.',
@@ -867,7 +877,12 @@ export const STR = {
       errDe: 'You were off by {err} ({word}).', rangoRep: 'The range that counts as repeatable is {a}–{b}.',
       tusIntentos: 'Your tries · error',
       gatoMaestro: 'Lesson closed. Nice work.',
-      nuevoLogro: 'New achievement', nuevoLogroB: '{grado} of lesson {n}.' },
+      nuevoLogro: 'New achievement', nuevoLogroB: '{grado} of lesson {n}.',
+      pasos: 'Steps available', tuOrden: 'Your order',
+      empieza: 'Click a step to start.',
+      cortes: '{n} cuts placed', cortarTras: 'cut after {ch}',
+      vacio: 'empty', fria: 'COLD', creativa: 'CREATIVE',
+      ganador: '{name} wins with {n} out of 100' },
     logros: {
       crumb: 'ACHIEVEMENTS / YOUR PATH', titulo: 'Your path', eb: 'New rank',
       pitch: 'Three grades per lesson and one rank for every lesson you close completely. None of it expires.',

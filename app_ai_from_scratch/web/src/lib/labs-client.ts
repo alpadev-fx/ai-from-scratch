@@ -28,6 +28,10 @@ type LabTxt = {
   logroEb: string; logroTitulo: string; logroSub: string; logroCerrar: string; logroSeguir: string;
   logroParada: string; rangos: string[]; grados: Record<string, string>;
   nuevoLogro: string; nuevoLogroB: string; tusIntentos: string; gatoMaestro?: string;
+  // The chrome each mechanic draws around itself. It used to be Spanish
+  // literals in this file, which an English lesson rendered verbatim.
+  pasos: string; tuOrden: string; empieza: string; cortes: string; cortarTras: string;
+  vacio: string; fria: string; creativa: string; ganador: string;
   db: Record<string, string>; lang?: 'es' | 'en';
 };
 const TXT: LabTxt = (() => {
@@ -182,6 +186,11 @@ export function mountLabs() {
         });
         stage.append(row);
       };
+      // Every other mechanic clears its own state on «De nuevo»; choice was the
+      // one that did not, so the button cleared the verdict text and left the
+      // wrong chip sitting there selected. "Try again" that changes nothing
+      // visible reads as a dead button.
+      reset.addEventListener('click', () => { answer = null; });
     }
 
     if (lab.kind === 'cut') {
@@ -197,7 +206,7 @@ export function mountLabs() {
             if (i < w.length - 1) {
               const key = `${wi}-${i}`;
               const gap = el('button', `width:16px;height:44px;display:grid;place-items:center;background:none;border:0;cursor:pointer;padding:0`);
-              gap.setAttribute('aria-label', `cortar tras ${ch}`);
+              gap.setAttribute('aria-label', fill(TXT.cortarTras, { ch }));
               gap.append(el('div', `width:2px;height:30px;background:${cuts.has(key) ? 'var(--ac)' : 'rgba(84,84,88,.46)'}`));
               gap.addEventListener('click', () => {
                 cuts.has(key) ? cuts.delete(key) : cuts.add(key);
@@ -209,7 +218,7 @@ export function mountLabs() {
           row.append(wrap);
         });
         stage.append(row);
-        stage.append(el('p', '', `<span class="s num">${cuts.size} cortes puestos</span>`));
+        stage.append(el('p', '', `<span class="s num">${fill(TXT.cortes, { n: cuts.size })}</span>`));
       };
       reset.addEventListener('click', () => { cuts.clear(); answer = []; });
     }
@@ -221,7 +230,7 @@ export function mountLabs() {
         stage.innerHTML = '';
         const grid = el('div', 'display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px');
         const pool = el('div', 'display:flex;flex-direction:column;gap:9px');
-        pool.append(el('p', '', '<span class="lbl">Pasos disponibles</span>'));
+        pool.append(el('p', '', `<span class="lbl">${TXT.pasos}</span>`));
         steps.filter((s) => !seq.includes(s.id)).forEach((s) => {
           const c = el('button', 'justify-content:flex-start;text-align:left;font:400 15px/1.4 var(--f);padding:12px 14px;min-height:52px', s.text);
           c.className = 'chip';
@@ -229,8 +238,8 @@ export function mountLabs() {
           pool.append(c);
         });
         const mine = el('div', 'display:flex;flex-direction:column;gap:9px');
-        mine.append(el('p', '', '<span class="lbl">Tu orden</span>'));
-        if (!seq.length) mine.append(el('div', 'border:1px dashed var(--hair);padding:16px;text-align:center', '<p class="s">Haz clic en un paso para empezar.</p>'));
+        mine.append(el('p', '', `<span class="lbl">${TXT.tuOrden}</span>`));
+        if (!seq.length) mine.append(el('div', 'border:1px dashed var(--hair);padding:16px;text-align:center', `<p class="s">${TXT.empieza}</p>`));
         seq.forEach((id, i) => {
           const s = steps.find((x) => x.id === id)!;
           // This used to compare steps[i].id against the placed id, i.e. against
@@ -260,11 +269,21 @@ export function mountLabs() {
         const box = el('div', 'display:flex;flex-direction:column;gap:10px');
         slots.forEach((label, i) => {
           const done = !!filled[i];
-          const color = root.dataset.result ? (done ? 'var(--ok)' : 'var(--rd)') : done ? 'var(--ac)' : 'var(--hair)';
+          // A filled slot used to go GREEN on any verdict, so a wrong answer
+          // showed "Todavía no" over three green slots. That was harmless while
+          // an empty slot was the only way to be wrong; the grader now also
+          // refuses a piece that does not belong in its slot, and the client
+          // cannot tell which one that was. So: green only when the server said
+          // the whole thing is right, red only for a slot this code can SEE is
+          // wrong (an empty one), accent for filled-but-not-yet-judged.
+          const verdict = root.dataset.result;
+          const color = verdict === 'ok' ? 'var(--ok)'
+                      : verdict === 'bad' ? (done ? 'var(--ac)' : 'var(--rd)')
+                      : done ? 'var(--ac)' : 'var(--hair)';
           box.append(el('div', 'display:flex;align-items:center;gap:12px',
             `<span class="lbl" style="width:92px;flex:none">${label}</span>
              <div style="flex:1;border:1px solid ${color};min-height:44px;display:flex;align-items:center;padding:0 14px;background:rgba(120,120,128,.10)">
-               <span style="font:400 15px/1.4 var(--f);color:${done ? 'var(--l1)' : 'var(--l3)'}">${filled[i] ?? 'vacío'}</span></div>`));
+               <span style="font:400 15px/1.4 var(--f);color:${done ? 'var(--l1)' : 'var(--l3)'}">${filled[i] ?? TXT.vacio}</span></div>`));
         });
         const pool = el('div', 'display:flex;gap:8px;flex-wrap:wrap;border-top:1px solid var(--hair2);padding-top:14px;margin-top:4px');
         tiles.filter((t) => filled[t.slot] !== t.text).forEach((t) => {
@@ -288,15 +307,23 @@ export function mountLabs() {
         const ps = softmax(cands.map((c) => c.logit), T);
         const top = ps.indexOf(Math.max(...ps));
         const slider = el('div', 'display:flex;align-items:center;gap:16px');
-        slider.innerHTML = `<span class="num" style="font:600 13px/1 var(--m);color:var(--l3)">FRÍA</span>
+        slider.innerHTML = `<span class="num" style="font:600 13px/1 var(--m);color:var(--l3)">${TXT.fria}</span>
           <input type="range" min="0" max="100" value="${t}">
-          <span class="num" style="font:600 13px/1 var(--m);color:var(--l3)">CREATIVA</span>`;
+          <span class="num" style="font:600 13px/1 var(--m);color:var(--l3)">${TXT.creativa}</span>`;
         slider.querySelector('input')!.addEventListener('input', (e) => {
           t = Number((e.target as HTMLInputElement).value); answer = t; delete root.dataset.result; out.innerHTML = ''; render();
         });
+        // The candidate name is authored lab content, not anything a reader typed,
+        // so wrapping it in <b> before filling the template is safe — and it is
+        // the only way one string can carry both word orders ("gana Max con 63 de
+        // 100" / "Max wins with 63 out of 100").
+        const winner = fill(TXT.ganador, {
+          name: `<b style="color:var(--l1);font-weight:600">${cands[top].name}</b>`,
+          n: Math.round(ps[top] * 100),
+        });
         const head = el('div', 'display:flex;align-items:baseline;gap:10px',
           `<span class="num" style="font:700 26px/1 var(--f);letter-spacing:-.03em">T = ${T.toFixed(2)}</span>
-           <span class="s">gana <b style="color:var(--l1);font-weight:600">${cands[top].name}</b> con ${Math.round(ps[top] * 100)} de 100</span>`);
+           <span class="s">${winner}</span>`);
         const bars = el('div', 'display:flex;flex-direction:column;gap:9px');
         cands.forEach((c, i) => bars.append(el('div', 'display:flex;align-items:center;gap:12px',
           `<span class="s" style="width:108px;flex:none;color:var(--l2)">${c.name}</span>
@@ -330,12 +357,23 @@ export function mountLabs() {
         });
         stage.append(row, list);
       };
+      // Hot-and-cold is a guessing game and «De nuevo» is how you restart it.
+      // Without this the button re-rendered the same slider with the same list of
+      // tries still under it — the one mechanic where a stale history is actively
+      // misleading, because the history IS the feedback.
+      reset.addEventListener('click', () => { g = 50; answer = g; tries.length = 0; });
       custom = true;
       btn.addEventListener('click', async () => {
         btn.disabled = true;
         try {
+          // `lang` matters more here than anywhere else: the hot/cold word IS the
+          // mechanic, and the server defaults to Spanish when the body omits it.
+          // Without this an English reader played the whole guessing game against
+          // «frío / tibio / caliente». The shared `send` above has always sent it;
+          // this handler is a copy that did not.
           const res = await fetch(`/api/labs/${lab.id}/attempt`, {
-            method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ answer: g }),
+            method: 'POST', headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ answer: g, lang: TXT.lang }),
           });
           const d = await res.json();
           if (!res.ok) { window.toast('bad', `Lab ${lab.id}`, d.msg ?? TXT.noGuardo, `lab-${lab.id}`); return; }

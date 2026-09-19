@@ -56,6 +56,20 @@ produced one confident, wrong "exit 0" in this repository.
 service that does not exist yet, reported as ABSENT on its own line so it can
 never be mistaken for a pass.
 
+### Publishing the course PDF
+
+`GET /api/pdf/:lang` serves from the `prod-files` S3-compatible bucket in
+Production (`api/src/files.ts`), not from the API image (AI-56). After changing
+or adding a file under `api/files/`:
+
+```bash
+pnpm --dir api run files:upload   # needs Production AWS_* vars in the environment
+```
+
+This is the whole publishing step — no image rebuild, no deploy. Local dev keeps
+working unchanged: with no `AWS_*` vars set, the route falls back to reading
+`api/files/` off disk.
+
 ### The ontology
 
 | You say | Command | Notes |

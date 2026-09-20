@@ -215,12 +215,48 @@ section[id]{scroll-margin-top:72px}
    contenedor da W-32, asi que una fila aguanta a partir de ~430 px. A 520 hay
    margen de sobra. Por encima de eso, forzar dos filas gastaba 74 px de nav
    fija sin motivo: medido en 820 px daba 131 px de alto. */
+/* Una sola fila de 56 en todos los anchos. Las dos filas existian para dar
+   sitio a PrefToggles dentro de la barra; ahora vive en el pie, asi que la
+   barra baja de 131px a 56 en movil y el hero recupera 75px de pantalla. */
 @media (max-width:520px){
-  .lnav-in{flex-wrap:wrap;height:auto!important;padding:0 16px 10px!important;row-gap:10px}
-  .lnav-in > div:first-child{width:100%;height:56px}
-  .lnav-in > div:last-child{width:100%;gap:14px!important}
-  .lnav-buy{flex:1;justify-content:center}
-  .hero-sec{padding-top:176px!important}
+  .lnav-in{padding:0 16px!important;gap:12px!important}
+}
+/* A 320 el CTA de la barra se salia del viewport por 2px: medido right 322
+   contra innerWidth 320, con white-space:nowrap, asi que se recortaba la Y
+   final del precio. Se recorta el aire, no el texto: el precio es la mitad del
+   argumento del boton y quitarlo obliga a leer mas abajo para saber cuanto
+   cuesta. */
+@media (max-width:360px){
+  .lnav-buy{padding:0 10px!important;letter-spacing:.12em!important}
+}
+/* La marca partia en dos lineas a 390 ("IA desde / cero") porque compartia fila
+   con ENTRAR y el CTA. Es un nombre, no un parrafo: no se parte. El que cede
+   espacio es ENTRAR, que ademas esta repetido en el pie. */
+@media (max-width:420px){
+  .lnav-marca{font-size:14px!important}
+}
+/* El CTA de la barra pierde el precio por debajo de 400.
+   Medido a 320: marca 90 + ENTRAR 47 + CTA 143 + gaps + 32 de padding no caben
+   y el boton se salia 48px. Barriendo anchos, la etiqueta completa necesita
+   386px en espanol y 388 en INGLES ("START · 39,990 COP" es mas larga que
+   "EMPEZAR · $39.990"), asi que manda el ingles.
+
+   El corte va en 400 y no en 388 a proposito: a 390 entraba por 3px, y 3px no
+   es un margen, es suerte. Si la mono no carga y el navegador pone una de
+   respaldo con metricas mas anchas, se sale. 400 deja 12px reales.
+
+   Lo que cede es el precio y no ENTRAR: href="/login" aparece UNA sola vez en
+   toda la pagina, asi que esconderlo deja la landing sin acceso a la cuenta. El
+   precio no se pierde, sigue en la tabla del hero (visible en la primera
+   pantalla a 390), en la barra inferior y en §05.
+
+   Y el corte va por clave propia, no partiendo navCta por su ' · ': un separador
+   dentro de una cadena traducida se rompe callado el dia que alguien traduzca
+   sin el. */
+.lnav-cta-min{display:none}
+@media (max-width:400px){
+  .lnav-cta-full{display:none}
+  .lnav-cta-min{display:inline}
 }
 .tokin:focus{border-color:var(--l1)!important}
 .navlink:hover{color:var(--l1)!important}
@@ -335,19 +371,9 @@ section[id]{scroll-margin-top:72px}
   <div class="lnav-in" style="max-width:1240px;margin:0 auto;padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;gap:20px">
     <div style="display:flex;align-items:center;gap:14px">
       <span class="lg" style="--lg:24px" role="img" aria-label={P.figMarca}>IA</span>
-      <div style="font:700 15px/1 var(--f);letter-spacing:-.01em">{P.figMarca}</div>
+      <div class="lnav-marca" style="font:700 15px/1 var(--f);letter-spacing:-.01em;white-space:nowrap">{P.figMarca}</div>
       <div class="lnav-meta" style="width:1px;height:16px;background:var(--hair)"></div>
       <div class="lnav-meta" style="font:500 10px/1 var(--m);letter-spacing:.18em;color:var(--l3)">{P.figVol}</div>
-      <!-- El selector va en el grupo de la MARCA, no en el de las acciones. Ese
-           grupo pide ya ~375px medidos (marca 142 + ENTRAR 47 + gaps + CTA 144) y
-           por debajo de 520 la nav parte en dos filas, cada una de ancho completo:
-           aqui el toggle cabe, en el otro lado desbordaba.
-           Ya no va soloIdioma: la landing ahora lee TOKENS (theme-css.ts) igual que
-           login/registro/pago, asi que el boton PAPEL deja de ser el "boton que no
-           cambia nada" que motivo soloIdioma -- ver 2026-09-07. -->
-      <div class="lnav-lang" style="display:flex;align-items:center">
-        <PrefToggles lang={langPref} theme={theme} labels={{ auto: L.pub.auto, dark: L.pub.oscuro, paper: L.pub.papel, langAria: L.pub.ariaIdioma, themeAria: L.pub.ariaTema }} />
-      </div>
     </div>
     <div style="display:flex;align-items:center;gap:22px">
       <div class="lnav-pct" data-el="pct" style="font:500 10px/1 var(--m);letter-spacing:.14em;color:var(--l3);font-variant-numeric:tabular-nums">000%</div>
@@ -355,7 +381,8 @@ section[id]{scroll-margin-top:72px}
       <a href="#especimenes" class="navlink lnav-aux" style="font:500 10px/1 var(--m);letter-spacing:.18em;color:var(--l2)">{P.navEspec}</a>
       <a href="/login" class="navlink" style="font:500 10px/1 var(--m);letter-spacing:.18em;color:var(--l2);text-decoration:none">{P.navEntrar}</a>
       <a href="/pago" class="buy lnav-buy" style="display:flex;align-items:center;justify-content:center;gap:8px;font:600 10px/1 var(--m);letter-spacing:.16em;min-height:44px;padding:0 15px;white-space:nowrap">
-        <span>{P.navCta}</span>
+        <span class="lnav-cta-full">{P.navCta}</span>
+        <span class="lnav-cta-min">{P.navCtaMin}</span>
       </a>
     </div>
   </div>
@@ -668,6 +695,17 @@ section[id]{scroll-margin-top:72px}
       <div>{P.pieHand}</div>
       <div>{P.pieMeta1}</div>
       <div>{P.pieMeta2}</div>
+      <!-- Idioma y tema viven aqui, no en la barra fija.
+           En la barra costaban 75px de alto permanente en movil: PrefToggles
+           pinta DOS controles segmentados de 44px, no caben en una fila de 390
+           de ancho, envuelven a 102px de contenido y el contenedor del grupo de
+           marca mide 56 fijos. Medido a 390: el de idioma quedaba en top -22
+           (mitad por encima del borde de la pantalla, 22 de los 44px tactiles
+           alcanzables) y el de tema en 36..80, pisando 3px la fila de abajo.
+           Una preferencia no se consulta en cada scroll; el CTA si. -->
+      <div class="lnav-lang" style="display:flex;align-items:center;flex-wrap:wrap;gap:8px">
+        <PrefToggles lang={langPref} theme={theme} labels={{ auto: L.pub.auto, dark: L.pub.oscuro, paper: L.pub.papel, langAria: L.pub.ariaIdioma, themeAria: L.pub.ariaTema }} />
+      </div>
     </div>
     <div style="font:500 10px/1.6 var(--m);letter-spacing:.14em;color:var(--l3);border-top:1px solid var(--hair2);padding-top:18px">{P.pieLegal} · <a href="/terminos" style="color:inherit">{L.pub.footer.term}</a> · <a href="/privacidad" style="color:inherit">{L.pub.footer.priv}</a></div>
   </div>

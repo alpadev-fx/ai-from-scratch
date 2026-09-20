@@ -105,8 +105,14 @@ publication frequency.
 **These tokens are not new.** They are the ones already in
 `web/src/lib/theme-css.ts`, documented here for the first time. This file does not
 invent a palette, and a redesign that proposes one is out of scope until someone
-decides to repaint all 31 pages. `scripts/check-theme-literals.mjs` fails the build on
-a hardcoded hex; that gate is the reason this section describes rather than dictates.
+decides to repaint all 31 pages.
+
+**Nothing enforces this.** There is no lint gate on `main` that fails a build over a
+hardcoded hex — `pnpm verify` runs `scripts/verify.mjs`, and no check for colour
+literals exists in it. A `check-theme-literals.mjs` lives in uncommitted work on
+another branch and was assumed here to be landed; it is not. Until it lands, the
+token discipline is convention, held up by review, which is exactly the kind of rule
+that rots quietly. Treat that as an open task, not a solved problem.
 
 **Light or dark:** Light ("paper") is the default because the product is read, often on
 a phone, often in daylight, and because the plate aesthetic is a paper aesthetic. Dark

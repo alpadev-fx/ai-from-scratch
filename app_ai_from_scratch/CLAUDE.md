@@ -106,8 +106,9 @@ Read [DESIGN.md](DESIGN.md) before any visual or UI decision. Fonts, colours,
 spacing, section order and the anti-patterns of this category live there.
 
 It **documents** the system that already exists in `web/src/lib/theme-css.ts`; it
-does not replace it. `scripts/check-theme-literals.mjs` is the gate that keeps
-the two honest, so a colour written by hand fails the build, not the review.
+does not replace it. No gate enforces that today: `pnpm verify` has no check for
+colour literals, so a hardcoded hex passes CI and only review catches it. Adding
+one is an open task.
 
 Three rules from it that are product decisions, not taste:
 

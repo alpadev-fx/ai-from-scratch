@@ -31,7 +31,12 @@ test('restore.sh never targets compose live databases', () => {
   assert.doesNotMatch(src, /docker compose/);
   assert.doesNotMatch(src, /\b(payments-db|messages-db)\b/);
   assert.match(src, /throwaway|Never the live DB/i);
+  // Over TCP on purpose: the socket answers during initdb, so a socket probe
+  // reports ready against a server that is about to be shut down. See the
+  // comment in restore.sh. Pinned here so nobody quietly moves it back.
   assert.match(src, /select 1/, 'ready means a query works, not only pg_isready');
+  assert.match(src, /psql -h 127\.0\.0\.1/, 'the readiness probe must go over TCP, not the unix socket');
+  assert.doesNotMatch(src, /psql -U postgres -d postgres -c 'select 1'/, 'a socket probe cannot tell the initdb server from the real one');
 });
 
 test('dump-url.sh without DATABASE_URL fails closed', () => {
@@ -52,7 +57,9 @@ test('a dump without the canary fails integrity, not silently pass', () => {
   try {
     let ready = false;
     for (let i = 0; i < 30; i++) {
-      const ping = sh(['docker', 'exec', id, 'psql', '-U', 'postgres', '-d', 'postgres', '-c', 'select 1']);
+      // TCP, for the reason spelled out in restore.sh: the socket answers while
+      // initdb's temporary server is still up, and then goes away.
+      const ping = sh(['docker', 'exec', '-e', 'PGPASSWORD=empty', id, 'psql', '-h', '127.0.0.1', '-U', 'postgres', '-d', 'postgres', '-c', 'select 1']);
       if (ping.status === 0) {
         ready = true;
         break;
@@ -60,14 +67,14 @@ test('a dump without the canary fails integrity, not silently pass', () => {
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000);
     }
     assert.ok(ready, 'empty postgres never became ready');
-    const sql = sh(['docker', 'exec', '-i', id, 'psql', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', '-d', 'postgres'], {
+    const sql = sh(['docker', 'exec', '-i', '-e', 'PGPASSWORD=empty', id, 'psql', '-v', 'ON_ERROR_STOP=1', '-h', '127.0.0.1', '-U', 'postgres', '-d', 'postgres'], {
       input: `CREATE TABLE users (id int, email text, paid smallint);
 CREATE TABLE entitlement_events (event_key text, active boolean);
 INSERT INTO users VALUES (1, 'other@x.test', 0);
 `,
     });
     assert.equal(sql.status, 0, sql.stderr);
-    const dumpRun = sh(['sh', '-c', `docker exec ${id} pg_dump -Fc -U postgres postgres > "${dump}"`]);
+    const dumpRun = sh(['sh', '-c', `docker exec -e PGPASSWORD=empty ${id} pg_dump -Fc -h 127.0.0.1 -U postgres postgres > "${dump}"`]);
     assert.equal(dumpRun.status, 0, dumpRun.stderr);
   } finally {
     sh(['docker', 'stop', id]);

@@ -13,7 +13,7 @@
     "check:ts": "tsgo -p tsconfig.tsgo.json",
     "check:astro": "astro check",
     "scenes:check": "node scripts/scenes-check.mjs",
-    "test": "node --experimental-strip-types --test test/attribution.test.mts test/proxy-guard.test.mts test/hsts.test.mts",
+    "test": "node --experimental-strip-types --test test/attribution.test.mts test/proxy-guard.test.mts test/registro.test.mts test/hsts.test.mts",
     "e2e": "playwright test"
   },
   "dependencies": {

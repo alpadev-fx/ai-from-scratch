@@ -12,6 +12,7 @@ import { jsonSafe } from '../lib/json-safe';
 import PrefToggles from '../components/PrefToggles.astro';
 import MetaPixel from '../components/MetaPixel.astro';
 import { TOKENS } from '../lib/theme-css';
+import { actualizada, entradas, REGISTRO_EN_PORTADA } from '../lib/registro';
 
 // La landing era español fijo: lang="es" a mano, la copia escrita a pelo y sin
 // selector de idioma — mientras su propio FAQ prometía que «se cambia de idioma
@@ -20,6 +21,16 @@ import { TOKENS } from '../lib/theme-css';
 const { lang, langPref, theme } = publicPrefs(Astro.request);
 const L = t(lang);
 const P = L.pub.land;
+// El registro: lo que ha cambiado aqui dentro, con su fecha. Vacio hoy, asi que
+// ni la cabecera fechada ni la seccion se dibujan. Un registro vacio es peor que
+// ninguno, y una cabecera que dijera "actualizado hoy" sin que nadie haya tocado
+// nada seria una mentira con formato de dato. Ver web/src/lib/registro.ts.
+const reg = entradas().slice(0, REGISTRO_EN_PORTADA);
+const regFecha = actualizada(lang === 'en' ? 'en' : 'es');
+const regTipo: Record<string, string> = {
+  leccion: P.regTipoLeccion, lab: P.regTipoLab, tutorial: P.regTipoTutorial,
+  correccion: P.regTipoCorreccion, harness: P.regTipoHarness, pdf: P.regTipoPdf,
+};
 const canonical = `${SITE}/`;
 const desc = P.desc;
 // Los dos precios grandes de la pagina eran markup literal, iguales para ES y
@@ -76,6 +87,12 @@ const DATOS = {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml" sizes="any">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<!-- La voz de display. Autoalojada a proposito: una peticion a nuestro propio
+     origen en vez de un DNS + TLS a fonts.googleapis y otro a fonts.gstatic, y
+     sigue funcionando dentro de la imagen sin red de salida. 21,3 KB, subset
+     latin, que cubre todo el espanol (verificado: los unicode-range servidos
+     incluyen U+0000-00FF). preload porque el h1 es lo primero que se lee. -->
+<link rel="preload" as="font" type="font/woff2" href="/fonts/bricolage-grotesque-800-latin.woff2" crossorigin>
 <title>{P.titulo}</title>
 <MetaPixel />
 <meta name="description" content={desc}>
@@ -97,6 +114,11 @@ const DATOS = {
 <link rel="alternate" hreflang="x-default" href={canonical}>
 <script type="application/ld+json" is:inline set:html={jsonld}></script>
 <style is:global>
+@font-face{font-family:'Bricolage Grotesque';src:url('/fonts/bricolage-grotesque-800-latin.woff2') format('woff2');
+  font-weight:800;font-style:normal;font-display:swap;
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+20AC,U+2122,U+2212,U+FEFF,U+FFFD}
+.reg-fila{grid-template-columns:1fr}
+@media(min-width:760px){.reg-fila{grid-template-columns:104px 116px 1fr}}
 *{box-sizing:border-box}
 html{scroll-behavior:smooth}
 /* --glass/--hover/--l3a: tres tintes que la landing necesitaba y TOKENS no da,
@@ -193,12 +215,48 @@ section[id]{scroll-margin-top:72px}
    contenedor da W-32, asi que una fila aguanta a partir de ~430 px. A 520 hay
    margen de sobra. Por encima de eso, forzar dos filas gastaba 74 px de nav
    fija sin motivo: medido en 820 px daba 131 px de alto. */
+/* Una sola fila de 56 en todos los anchos. Las dos filas existian para dar
+   sitio a PrefToggles dentro de la barra; ahora vive en el pie, asi que la
+   barra baja de 131px a 56 en movil y el hero recupera 75px de pantalla. */
 @media (max-width:520px){
-  .lnav-in{flex-wrap:wrap;height:auto!important;padding:0 16px 10px!important;row-gap:10px}
-  .lnav-in > div:first-child{width:100%;height:56px}
-  .lnav-in > div:last-child{width:100%;gap:14px!important}
-  .lnav-buy{flex:1;justify-content:center}
-  .hero-sec{padding-top:176px!important}
+  .lnav-in{padding:0 16px!important;gap:12px!important}
+}
+/* A 320 el CTA de la barra se salia del viewport por 2px: medido right 322
+   contra innerWidth 320, con white-space:nowrap, asi que se recortaba la Y
+   final del precio. Se recorta el aire, no el texto: el precio es la mitad del
+   argumento del boton y quitarlo obliga a leer mas abajo para saber cuanto
+   cuesta. */
+@media (max-width:360px){
+  .lnav-buy{padding:0 10px!important;letter-spacing:.12em!important}
+}
+/* La marca partia en dos lineas a 390 ("IA desde / cero") porque compartia fila
+   con ENTRAR y el CTA. Es un nombre, no un parrafo: no se parte. El que cede
+   espacio es ENTRAR, que ademas esta repetido en el pie. */
+@media (max-width:420px){
+  .lnav-marca{font-size:14px!important}
+}
+/* El CTA de la barra pierde el precio por debajo de 400.
+   Medido a 320: marca 90 + ENTRAR 47 + CTA 143 + gaps + 32 de padding no caben
+   y el boton se salia 48px. Barriendo anchos, la etiqueta completa necesita
+   386px en espanol y 388 en INGLES ("START · 39,990 COP" es mas larga que
+   "EMPEZAR · $39.990"), asi que manda el ingles.
+
+   El corte va en 400 y no en 388 a proposito: a 390 entraba por 3px, y 3px no
+   es un margen, es suerte. Si la mono no carga y el navegador pone una de
+   respaldo con metricas mas anchas, se sale. 400 deja 12px reales.
+
+   Lo que cede es el precio y no ENTRAR: href="/login" aparece UNA sola vez en
+   toda la pagina, asi que esconderlo deja la landing sin acceso a la cuenta. El
+   precio no se pierde, sigue en la tabla del hero (visible en la primera
+   pantalla a 390), en la barra inferior y en §05.
+
+   Y el corte va por clave propia, no partiendo navCta por su ' · ': un separador
+   dentro de una cadena traducida se rompe callado el dia que alguien traduzca
+   sin el. */
+.lnav-cta-min{display:none}
+@media (max-width:400px){
+  .lnav-cta-full{display:none}
+  .lnav-cta-min{display:inline}
 }
 .tokin:focus{border-color:var(--l1)!important}
 .navlink:hover{color:var(--l1)!important}
@@ -269,7 +327,7 @@ section[id]{scroll-margin-top:72px}
 </head>
 <body>
 
-<div style="--f:-apple-system,'SF Pro Display','SF Pro Text','Helvetica Neue',system-ui,sans-serif;--m:ui-monospace,'SF Mono',SFMono-Regular,Menlo,monospace;background:var(--bg);font-family:var(--f);color:var(--l1);overflow-x:hidden;position:relative">
+<div style="--d:'Bricolage Grotesque',-apple-system,'SF Pro Display',system-ui,sans-serif;--f:-apple-system,'SF Pro Display','SF Pro Text','Helvetica Neue',system-ui,sans-serif;--m:ui-monospace,'SF Mono',SFMono-Regular,Menlo,monospace;background:var(--bg);font-family:var(--f);color:var(--l1);overflow-x:hidden;position:relative">
 
 <!-- ===== LOADER ===== -->
 <div data-el="intro" style="position:fixed;inset:0;z-index:200;background:#000;display:flex;align-items:center;justify-content:center;overflow:hidden">
@@ -313,19 +371,9 @@ section[id]{scroll-margin-top:72px}
   <div class="lnav-in" style="max-width:1240px;margin:0 auto;padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;gap:20px">
     <div style="display:flex;align-items:center;gap:14px">
       <span class="lg" style="--lg:24px" role="img" aria-label={P.figMarca}>IA</span>
-      <div style="font:700 15px/1 var(--f);letter-spacing:-.01em">{P.figMarca}</div>
+      <div class="lnav-marca" style="font:700 15px/1 var(--f);letter-spacing:-.01em;white-space:nowrap">{P.figMarca}</div>
       <div class="lnav-meta" style="width:1px;height:16px;background:var(--hair)"></div>
       <div class="lnav-meta" style="font:500 10px/1 var(--m);letter-spacing:.18em;color:var(--l3)">{P.figVol}</div>
-      <!-- El selector va en el grupo de la MARCA, no en el de las acciones. Ese
-           grupo pide ya ~375px medidos (marca 142 + ENTRAR 47 + gaps + CTA 144) y
-           por debajo de 520 la nav parte en dos filas, cada una de ancho completo:
-           aqui el toggle cabe, en el otro lado desbordaba.
-           Ya no va soloIdioma: la landing ahora lee TOKENS (theme-css.ts) igual que
-           login/registro/pago, asi que el boton PAPEL deja de ser el "boton que no
-           cambia nada" que motivo soloIdioma -- ver 2026-09-07. -->
-      <div class="lnav-lang" style="display:flex;align-items:center">
-        <PrefToggles lang={langPref} theme={theme} labels={{ auto: L.pub.auto, dark: L.pub.oscuro, paper: L.pub.papel, langAria: L.pub.ariaIdioma, themeAria: L.pub.ariaTema }} />
-      </div>
     </div>
     <div style="display:flex;align-items:center;gap:22px">
       <div class="lnav-pct" data-el="pct" style="font:500 10px/1 var(--m);letter-spacing:.14em;color:var(--l3);font-variant-numeric:tabular-nums">000%</div>
@@ -333,7 +381,8 @@ section[id]{scroll-margin-top:72px}
       <a href="#especimenes" class="navlink lnav-aux" style="font:500 10px/1 var(--m);letter-spacing:.18em;color:var(--l2)">{P.navEspec}</a>
       <a href="/login" class="navlink" style="font:500 10px/1 var(--m);letter-spacing:.18em;color:var(--l2);text-decoration:none">{P.navEntrar}</a>
       <a href="/pago" class="buy lnav-buy" style="display:flex;align-items:center;justify-content:center;gap:8px;font:600 10px/1 var(--m);letter-spacing:.16em;min-height:44px;padding:0 15px;white-space:nowrap">
-        <span>{P.navCta}</span>
+        <span class="lnav-cta-full">{P.navCta}</span>
+        <span class="lnav-cta-min">{P.navCtaMin}</span>
       </a>
     </div>
   </div>
@@ -343,12 +392,17 @@ section[id]{scroll-margin-top:72px}
 <section class="hero-sec" style="position:relative;z-index:2;max-width:1240px;margin:0 auto;padding:150px 24px 0">
   <div class="hero-grid" style="border-bottom:1px solid var(--hair);padding-bottom:34px">
     <div style="display:flex;flex-direction:column;gap:26px">
+      {regFecha && (
+        <div data-anim="1" style="font:500 10px/1.6 var(--m);letter-spacing:.14em;color:var(--l3);font-variant-numeric:tabular-nums">
+          {P.regAct} {regFecha.toUpperCase()}
+        </div>
+      )}
       <div data-anim="1" style="display:flex;align-items:center;gap:14px">
         <div style="font:600 10px/1 var(--m);letter-spacing:.22em;color:var(--l1)">{P.heroEb}</div>
         <div style="flex:1;height:1px;background:var(--hair)"></div>
         <div style="font:600 10px/1 var(--m);letter-spacing:.22em;color:var(--l3)">{P.heroEsEn}</div>
       </div>
-      <h1 data-anim="1" class="hero-h1" style="margin:0;font:700 clamp(34px,6.4vw,96px)/.93 var(--f);letter-spacing:-.055em;text-wrap:balance">{P.heroH1a} <br>{P.heroH1b}</h1>
+      <h1 data-anim="1" class="hero-h1" style="margin:0;font:800 clamp(34px,6.4vw,96px)/.93 var(--d);letter-spacing:-.055em;text-wrap:balance">{P.heroH1a} <br>{P.heroH1b}</h1>
       <div data-anim="1" class="hero-split" style="border-top:1px solid var(--hair)">
         <div style="padding:20px 24px 20px 0;border-right:1px solid var(--hair)">
           <p style="margin:0;font:400 19px/1.42 var(--f);letter-spacing:-.01em;color:var(--l2);text-wrap:pretty">{P.heroSub}</p>
@@ -409,6 +463,38 @@ section[id]{scroll-margin-top:72px}
   </div>
 </section>
 
+<!-- ===== EL REGISTRO =====
+     El mecanismo entero de la pagina. Sustituye una promesa sobre el futuro por
+     un rastro verificable del pasado, que es lo unico honesto que se puede
+     ofrecer con un curso en el catalogo y sin ninguna frecuencia comprometida.
+
+     No se dibuja si no hay entradas: un registro vacio dice "aqui no pasa nada",
+     que es peor que no tener seccion. Las entradas viven en lib/registro.ts y
+     llegan por commit, nunca con fecha futura. -->
+{reg.length > 0 && (
+<section id="registro" style="position:relative;z-index:2;max-width:1240px;margin:0 auto;padding:96px 24px 0">
+  <div data-anim="1" style="display:flex;align-items:baseline;gap:14px;margin-bottom:10px">
+    <div style="font:600 10px/1 var(--m);letter-spacing:.22em;color:var(--ac)">{P.regLbl}</div>
+    <div style="flex:1;height:1px;background:var(--hair)"></div>
+  </div>
+  <h2 data-anim="1" style="margin:0;font:800 clamp(26px,3vw,40px)/1.05 var(--d);letter-spacing:-.04em">{P.regH2}</h2>
+  <p data-anim="1" style="margin:12px 0 0;font:400 17px/1.45 var(--f);color:var(--l2)">{P.regSub}</p>
+
+  <div style="margin-top:34px;border-top:1px solid var(--hair)">
+    {reg.map((e, i) => (
+      <div data-anim="1" class="reg-fila" style={`display:grid;gap:18px;align-items:baseline;padding:15px 0;border-bottom:1px solid var(--hair2)${i === 0 ? ';--reg-c:var(--ac)' : ';--reg-c:var(--l3)'}`}>
+        <span style="font:500 11px/1.6 var(--m);letter-spacing:.08em;color:var(--reg-c);font-variant-numeric:tabular-nums">{e.fecha}</span>
+        <span style="font:600 9.5px/1.4 var(--m);letter-spacing:.12em;border:1px solid var(--reg-c);color:var(--reg-c);padding:3px 7px;justify-self:start;white-space:nowrap">{regTipo[e.tipo]}</span>
+        <p style="margin:0;font:400 15.5px/1.5 var(--f);color:var(--l1)">{lang === 'en' ? e.en : e.es}</p>
+      </div>
+    ))}
+  </div>
+
+  <p data-anim="1" style="margin:24px 0 0;font:400 15px/1.55 var(--f);color:var(--l2);max-width:62ch">{P.regNota}</p>
+  <p data-anim="1" style="margin:14px 0 0;font:400 15px/1.55 var(--f);color:var(--l3);max-width:62ch">{P.sinTesti}</p>
+</section>
+)}
+
 <!-- ===== TICKER ===== -->
 <div style="position:relative;z-index:2;margin-top:0;border-bottom:1px solid var(--hair);overflow:hidden;background:var(--panel)">
   <div style="display:flex;width:max-content;animation:slide 46s linear infinite;will-change:transform">
@@ -421,7 +507,7 @@ section[id]{scroll-margin-top:72px}
 <section style="position:relative;z-index:2;max-width:1240px;margin:0 auto;padding:86px 24px 0">
   <div data-anim="1" style="display:flex;align-items:baseline;gap:18px;padding-bottom:30px">
     <div style="font:600 10px/1 var(--m);letter-spacing:.22em;color:var(--ac)">§ 01</div>
-    <div style="font:700 clamp(26px,3vw,40px)/1.05 var(--f);letter-spacing:-.035em">{P.sintH2}</div>
+    <div style="font:800 clamp(26px,3vw,40px)/1.05 var(--d);letter-spacing:-.035em">{P.sintH2}</div>
   </div>
   <div class="sintomas" style="border-top:1px solid var(--hair);border-left:1px solid var(--hair)">
     <div data-anim="1" class="card-h" style="border-right:1px solid var(--hair);border-bottom:1px solid var(--hair);padding:30px 26px;display:flex;flex-direction:column;gap:16px;min-height:290px">
@@ -450,7 +536,7 @@ section[id]{scroll-margin-top:72px}
   <div data-anim="1" style="display:flex;align-items:baseline;justify-content:space-between;gap:18px;padding-bottom:30px;flex-wrap:wrap">
     <div style="display:flex;align-items:baseline;gap:18px">
       <div style="font:600 10px/1 var(--m);letter-spacing:.22em;color:var(--ac)">§ 02</div>
-      <div style="font:700 clamp(26px,3vw,40px)/1.05 var(--f);letter-spacing:-.035em">{P.indH2}</div>
+      <div style="font:800 clamp(26px,3vw,40px)/1.05 var(--d);letter-spacing:-.035em">{P.indH2}</div>
     </div>
     <div style="font:500 10px/1 var(--m);letter-spacing:.18em;color:var(--l3)">{P.indSub}</div>
   </div>
@@ -464,7 +550,7 @@ section[id]{scroll-margin-top:72px}
 <section id="especimenes" style="position:relative;z-index:2;max-width:1240px;margin:0 auto;padding:86px 24px 0">
   <div data-anim="1" style="display:flex;align-items:baseline;gap:18px;padding-bottom:12px">
     <div style="font:600 10px/1 var(--m);letter-spacing:.22em;color:var(--ac)">§ 03</div>
-  <div style="font:700 clamp(26px,3vw,40px)/1.05 var(--f);letter-spacing:-.035em">{P.espH2}</div>
+  <div style="font:800 clamp(26px,3vw,40px)/1.05 var(--d);letter-spacing:-.035em">{P.espH2}</div>
   </div>
   <div data-anim="1" style="font:400 17px/1.5 var(--f);color:var(--l2);max-width:620px;padding-bottom:30px">{P.espSub}</div>
   <div class="especimenes" style="border-top:1px solid var(--hair);border-left:1px solid var(--hair)">
@@ -501,7 +587,7 @@ section[id]{scroll-margin-top:72px}
 <section style="position:relative;z-index:2;max-width:1240px;margin:0 auto;padding:86px 24px 0">
   <div data-anim="1" style="display:flex;align-items:baseline;gap:18px;padding-bottom:30px">
     <div style="font:600 10px/1 var(--m);letter-spacing:.22em;color:var(--ac)">§ 04</div>
-    <div style="font:700 clamp(26px,3vw,40px)/1.05 var(--f);letter-spacing:-.035em">{P.llevasH2}</div>
+    <div style="font:800 clamp(26px,3vw,40px)/1.05 var(--d);letter-spacing:-.035em">{P.llevasH2}</div>
   </div>
   <div style="border-top:1px solid var(--hair)">
     <div data-anim="1" class="card-h why-row" style="padding:24px 0;border-bottom:1px solid var(--hair2)">
@@ -540,7 +626,7 @@ section[id]{scroll-margin-top:72px}
         <div style="font:600 10px/1 var(--m);letter-spacing:.22em">{P.preSec}</div>
         <div style="flex:1;height:1px;background:rgba(0,0,0,.18)"></div>
       </div>
-      <div style="font:700 clamp(30px,3.6vw,50px)/1.02 var(--f);letter-spacing:-.045em;text-wrap:balance">{P.preH2}</div>
+      <div style="font:800 clamp(30px,3.6vw,50px)/1.02 var(--d);letter-spacing:-.045em;text-wrap:balance">{P.preH2}</div>
       <div style="font:400 17px/1.5 var(--f);color:rgba(0,0,0,.66);max-width:480px">{N.garantiaTxt}</div>
       <div style="display:flex;flex-direction:column;gap:9px;border-left:2px solid #3355FF;padding-left:14px">
         <div style="font:600 10px/1 var(--m);letter-spacing:.2em;color:rgba(0,0,0,.5)">{N.eyebrow}</div>
@@ -588,7 +674,7 @@ section[id]{scroll-margin-top:72px}
 <section style="position:relative;z-index:2;max-width:1240px;margin:0 auto;padding:86px 24px 0">
   <div data-anim="1" style="display:flex;align-items:baseline;gap:18px;padding-bottom:30px">
     <div style="font:600 10px/1 var(--m);letter-spacing:.22em;color:var(--ac)">§ 06</div>
-    <div style="font:700 clamp(26px,3vw,40px)/1.05 var(--f);letter-spacing:-.035em">{P.faqH2}</div>
+    <div style="font:800 clamp(26px,3vw,40px)/1.05 var(--d);letter-spacing:-.035em">{P.faqH2}</div>
   </div>
   <div id="faqs" style="border-top:1px solid var(--hair)"></div>
 </section>
@@ -596,7 +682,7 @@ section[id]{scroll-margin-top:72px}
 <!-- ===== FINAL CTA ===== -->
 <section style="position:relative;z-index:2;max-width:1240px;margin:0 auto;padding:100px 24px 130px">
   <div data-anim="1" style="display:flex;flex-direction:column;gap:30px;border-top:1px solid var(--hair);padding-top:40px">
-    <div style="font:700 clamp(34px,5.4vw,80px)/.96 var(--f);letter-spacing:-.05em;max-width:900px;text-wrap:balance">{P.cierreH2}</div>
+    <div style="font:800 clamp(34px,5.4vw,80px)/.96 var(--d);letter-spacing:-.05em;max-width:900px;text-wrap:balance">{P.cierreH2}</div>
     <div style="display:flex;align-items:center;gap:26px;flex-wrap:wrap">
       <a href="/pago" class="buy" style="display:flex;align-items:center;gap:12px;font:600 12px/1 var(--m);letter-spacing:.16em;padding:20px 28px">
         <span>{P.cierreCta}</span>
@@ -609,6 +695,17 @@ section[id]{scroll-margin-top:72px}
       <div>{P.pieHand}</div>
       <div>{P.pieMeta1}</div>
       <div>{P.pieMeta2}</div>
+      <!-- Idioma y tema viven aqui, no en la barra fija.
+           En la barra costaban 75px de alto permanente en movil: PrefToggles
+           pinta DOS controles segmentados de 44px, no caben en una fila de 390
+           de ancho, envuelven a 102px de contenido y el contenedor del grupo de
+           marca mide 56 fijos. Medido a 390: el de idioma quedaba en top -22
+           (mitad por encima del borde de la pantalla, 22 de los 44px tactiles
+           alcanzables) y el de tema en 36..80, pisando 3px la fila de abajo.
+           Una preferencia no se consulta en cada scroll; el CTA si. -->
+      <div class="lnav-lang" style="display:flex;align-items:center;flex-wrap:wrap;gap:8px">
+        <PrefToggles lang={langPref} theme={theme} labels={{ auto: L.pub.auto, dark: L.pub.oscuro, paper: L.pub.papel, langAria: L.pub.ariaIdioma, themeAria: L.pub.ariaTema }} />
+      </div>
     </div>
     <div style="font:500 10px/1.6 var(--m);letter-spacing:.14em;color:var(--l3);border-top:1px solid var(--hair2);padding-top:18px">{P.pieLegal} · <a href="/terminos" style="color:inherit">{L.pub.footer.term}</a> · <a href="/privacidad" style="color:inherit">{L.pub.footer.priv}</a></div>
   </div>
@@ -923,6 +1020,13 @@ function runIntro(){
 /* ---- scroll ---- */
 function initScroll(){
   if(!(window as any).gsap || !(window as any).ScrollTrigger) return;
+  // runIntro respeta prefers-reduced-motion desde siempre; esto no, y por eso
+  // quien pedia menos movimiento seguia recibiendo 26 entradas animadas y un
+  // parallax con scrub. Los elementos nacen con opacity 1 y es GSAP quien los
+  // pone a 0, asi que salir aqui los deja visibles: no se oculta nada, solo se
+  // deja de mover. La barra de progreso y la barra fija si siguen, porque son
+  // estado y no decoracion.
+  const quieto = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   gsap.registerPlugin(ScrollTrigger);
   const bar = document.querySelector('[data-el="bar"]');
   const pct = document.querySelector('[data-el="pct"]')!;
@@ -942,15 +1046,15 @@ function initScroll(){
   drive(master);
 
   gsap.utils.toArray("[data-anim]").forEach((el: any) => {
-    if(el.getBoundingClientRect().top < window.innerHeight * .94){ gsap.set(el, { y:0, opacity:1, clearProps:"transform" }); return; }
+    if(quieto || el.getBoundingClientRect().top < window.innerHeight * .94){ gsap.set(el, { y:0, opacity:1, clearProps:"transform" }); return; }
     gsap.fromTo(el, { y:16, opacity:0 }, { y:0, opacity:1, duration:.7, ease:"power3.out", scrollTrigger:{ trigger:el, start:"top 94%", once:true } });
   });
   gsap.utils.toArray("[data-row]").forEach((el: any) => {
-    if(el.getBoundingClientRect().top < window.innerHeight * .94){ gsap.set(el, { clipPath:"inset(0 0% 0 0)", opacity:1 }); return; }
+    if(quieto || el.getBoundingClientRect().top < window.innerHeight * .94){ gsap.set(el, { clipPath:"inset(0 0% 0 0)", opacity:1 }); return; }
     gsap.fromTo(el, { clipPath:"inset(0 100% 0 0)", opacity:.2 }, { clipPath:"inset(0 0% 0 0)", opacity:1, duration:.75, ease:"power2.out", scrollTrigger:{ trigger:el, start:"top 92%", once:true } });
   });
   const cover = document.querySelector('[data-el="herocard"]');
-  if(cover) gsap.fromTo(cover, { y:40 }, { y:-40, ease:"none", scrollTrigger:{ trigger:cover, start:"top bottom", end:"bottom top", scrub:.6 } });
+  if(cover && !quieto) gsap.fromTo(cover, { y:40 }, { y:-40, ease:"none", scrollTrigger:{ trigger:cover, start:"top bottom", end:"bottom top", scrub:.6 } });
   ScrollTrigger.refresh();
 }
 

@@ -99,3 +99,26 @@ Deliberate exceptions, because renaming them breaks two services at once:
 Plain spoken language, short sentences, no jargon without an instant
 translation. The AI speaks in the first person inside examples. Honest claims
 only — never an invented statistic. One concept per lesson.
+
+## Design System
+
+Read [DESIGN.md](DESIGN.md) before any visual or UI decision. Fonts, colours,
+spacing, section order and the anti-patterns of this category live there.
+
+It **documents** the system that already exists in `web/src/lib/theme-css.ts`; it
+does not replace it. No gate enforces that today: `pnpm verify` has no check for
+colour literals, so a hardcoded hex passes CI and only review catches it. Adding
+one is an open task.
+
+Three rules from it that are product decisions, not taste:
+
+- **Never a statistic, never a testimonial.** The course teaches people to
+  distrust confident-sounding numbers. Borrowed credibility refutes the thing
+  being sold.
+- **Never a promised publication frequency.** The commitment is "incluidos
+  mientras el acceso esté activo", with no cadence. Copy must not outrun it.
+- **The accent has exactly four jobs.** Links, the rule above a call to action,
+  a lab's PASS state, and the newest entry in the log. A fifth use is a bug.
+
+In QA, flag any code that contradicts DESIGN.md. Do not deviate without the
+owner saying so.

@@ -1,0 +1,425 @@
+---
+// PROTOTIPO de la landing en paneles, estilo SpaceX / Apple. Vive en /v2 a
+// proposito: la landing de / sigue en pie y se puede comparar lado a lado. Si
+// esta gana, su contenido reemplaza a index.astro y este fichero se borra.
+//
+// POR QUE ESTA FORMA. SpaceX y Apple son el mismo sistema: un panel por
+// pantalla, una idea por panel, tipografia enorme, casi nada de interfaz, y el
+// scroll como narrador. Ese sistema se sostiene sobre una imagen de producto
+// que aguanta el panel sola -- un Falcon 9, un iPhone sobre negro.
+//
+// Aqui no hay ninguna. Medido, no supuesto: la landing actual carga CERO
+// imagenes (performance.getEntriesByType("resource") filtrado a png/jpg/webp/
+// mp4 devuelve []), y en public/ solo hay logo.png y apple-touch-icon.png. La
+// "portada" que se ve en / es CSS y SVG generados.
+//
+// Asi que el heroe de cada panel es la CIFRA. Apple hace exactamente esto en
+// las paginas de chip, donde el panel es un numero gigante y un pie. Y las
+// cifras ya existen y ya estan traducidas: data/landing.ts da, por modulo, un
+// campo `k` ("100.000", "70.000.000.000", "94 -> 23 -> 4") con su `kc`. No hay
+// que inventar nada ni fotografiar nada.
+//
+// EL COPY NUEVO vive aqui abajo en COPY y no en i18n.ts a proposito: es un
+// prototipo que puede morir. Si se aprueba, se muda a i18n.ts con el resto.
+export const prerender = false;
+import { SITE } from '../lib/site';
+import { PRECIO_VISUAL } from '../lib/price';
+import { publicPrefs } from '../lib/prefs';
+import { t } from '../lib/i18n';
+import { modulos } from '../data/landing';
+import PrefToggles from '../components/PrefToggles.astro';
+import { TOKENS } from '../lib/theme-css';
+import { actualizada, entradas, REGISTRO_EN_PORTADA } from '../lib/registro';
+
+const { lang, langPref, theme } = publicPrefs(Astro.request);
+const L = t(lang);
+const es = lang !== 'en';
+const precioBig = PRECIO_VISUAL[lang] ?? PRECIO_VISUAL.es;
+const reg = entradas().slice(0, REGISTRO_EN_PORTADA);
+const regFecha = actualizada(es ? 'es' : 'en');
+const mods = modulos(lang);
+
+// Los seis paneles a pantalla completa. El resto de modulos va en la lista
+// densa del final: doce paneles de 100vh son 10.800px de scroll y nadie llega.
+// La clase de escala de cada cifra sale de su longitud, no del ojo: "1 vez"
+// son 5 caracteres y "3 palabras = 5 tokens" son 21, y a la misma escala el
+// segundo se sale de la pantalla. Los cortos ademas van en nowrap.
+const escala = (k: string): string =>
+  k.length <= 6 ? 'k-xs' : k.length <= 10 ? 'k-s' : k.length <= 15 ? 'k-m' : 'k-l';
+
+const PANELES = mods.slice(0, 6);
+const RESTO = mods.slice(6);
+
+const COPY = es
+  ? {
+      titulo: 'IA desde cero',
+      heroH: 'Entiende la IA.',
+      heroH2: 'No la memorices.',
+      heroSub: 'Doce lecciones cortas sobre cómo piensa de verdad, por qué se inventa cosas y cómo pedirle bien. Sin código. Sin fórmulas.',
+      heroCta: 'Empezar',
+      heroVer: 'Ver cómo piensa',
+      specEb: 'QUÉ HAY DENTRO',
+      specH: 'Lo que se compra, contado en números.',
+      spec: [
+        { k: '12', d: 'lecciones, en español y en inglés' },
+        { k: '36', d: 'labs que se resuelven eligiendo y ordenando, sin escribir código' },
+        { k: '9', d: 'prompts listos, con sus plantillas' },
+        { k: '40', d: 'minutos de lectura en total' },
+      ],
+      restoEb: 'EL RESTO DEL ÍNDICE',
+      regEb: 'EL CUADERNO',
+      regH: 'Lo que he cambiado aquí dentro.',
+      regSub: 'Con su fecha. Sin promesas de cuánto viene ni de cuándo.',
+      precioEb: 'PRECIO',
+      precioUnidad: 'por 30 días',
+      precioSub: 'Renovación automática opcional, la eliges tú al pagar. Devolución de 14 días, sin preguntas. La primera lección es gratis y no pide tarjeta.',
+      precioCta: 'Empezar ahora',
+      cierreH: 'La IA no se va a ir.',
+      cierreSub: 'Aprender a usarla bien cuesta menos que un domicilio.',
+      entrar: 'Entrar',
+    }
+  : {
+      titulo: 'AI from scratch',
+      heroH: 'Understand AI.',
+      heroH2: "Don't memorise it.",
+      heroSub: 'Twelve short lessons on how it actually thinks, why it makes things up, and how to ask it properly. No code. No maths.',
+      heroCta: 'Start',
+      heroVer: 'See how it thinks',
+      specEb: 'WHAT IS INSIDE',
+      specH: 'What you buy, in numbers.',
+      spec: [
+        { k: '12', d: 'lessons, in Spanish and English' },
+        { k: '36', d: 'labs solved by choosing and ordering, never by writing code' },
+        { k: '9', d: 'ready-made prompts, with their templates' },
+        { k: '40', d: 'minutes of reading in total' },
+      ],
+      restoEb: 'THE REST OF THE CONTENTS',
+      regEb: 'THE NOTEBOOK',
+      regH: 'What I have changed in here.',
+      regSub: 'With its date. No promise of how much is coming, or when.',
+      precioEb: 'PRICE',
+      precioUnidad: 'for 30 days',
+      precioSub: 'Automatic renewal is optional, you choose at checkout. 14-day refund, no questions. The first lesson is free and asks for no card.',
+      precioCta: 'Start now',
+      cierreH: 'AI is not going away.',
+      cierreSub: 'Learning to use it well costs less than a food delivery.',
+      entrar: 'Sign in',
+    };
+---
+<!doctype html>
+<html lang={lang} data-theme={theme}>
+<head>
+<style set:html={TOKENS}></style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml" sizes="any">
+<link rel="preload" as="font" type="font/woff2" href="/fonts/bricolage-grotesque-800-latin.woff2" crossorigin>
+<title>{COPY.titulo}</title>
+<meta name="description" content={COPY.heroSub}>
+<!-- Prototipo: fuera del indice hasta que reemplace a / o se borre. -->
+<meta name="robots" content="noindex,nofollow">
+<link rel="canonical" href={`${SITE}/`}>
+<style>
+@font-face{font-family:'Bricolage Grotesque';src:url('/fonts/bricolage-grotesque-800-latin.woff2') format('woff2');
+  font-weight:800;font-style:normal;font-display:swap;
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+20AC,U+2122,U+2212,U+FEFF,U+FFFD}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:#000;-webkit-font-smoothing:antialiased}
+
+/* Tokens propios del prototipo. No se leen de TOKENS porque este layout no es
+   claro-sobre-gris como /: es negro y blanco alternos, a la Apple, y el tema
+   PAPEL no puede volver blanco un panel que existe para ser negro. Los
+   selectores de tema e idioma siguen funcionando para el resto del sitio. */
+.v2{
+  --d:'Bricolage Grotesque',-apple-system,'SF Pro Display',system-ui,sans-serif;
+  --f:-apple-system,'SF Pro Display','SF Pro Text','Helvetica Neue',system-ui,sans-serif;
+  --m:ui-monospace,'SF Mono',SFMono-Regular,Menlo,monospace;
+  --ac:#2E86FF;
+  font-family:var(--f);overflow-x:hidden
+}
+
+/* EL PANEL. 100svh y no 100vh: en iOS la barra del navegador entra y sale, vh
+   se congela en la altura SIN barra y el contenido se corta por abajo. svh es
+   la altura pequena, la que siempre esta disponible. min-height y no height
+   para que un panel con mas texto del previsto crezca en vez de recortarse. */
+.pan{
+  min-height:100svh;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;text-align:center;padding:96px 24px;position:relative
+}
+.dark{background:#000;color:#fff}
+.light{background:#fafafa;color:#0b0b0b}
+.wrap{width:100%;max-width:1000px;margin:0 auto}
+
+.eb{font:500 11px/1 var(--m);letter-spacing:.24em;text-transform:uppercase;opacity:.55;margin:0 0 26px}
+
+/* La escala. clamp con vw en medio: a 320 el titular mide 40px y a 1440 mide
+   96, sin saltos de media query. */
+.h1{font:800 clamp(44px,8.4vw,104px)/0.98 var(--d);letter-spacing:-.035em;margin:0}
+.h2{font:800 clamp(30px,5.2vw,62px)/1.04 var(--d);letter-spacing:-.03em;margin:0}
+.sub{font:400 clamp(17px,2.1vw,23px)/1.5 var(--f);opacity:.62;max-width:620px;margin:26px auto 0}
+
+/* LA CIFRA es el producto. Es lo unico que hace de imagen en toda la pagina,
+   asi que se lleva la escala que en Apple se lleva la foto. */
+/* LA CIFRA NO SE PARTE. Con overflow-wrap:break-word, "70.000.000.000"
+   rompia tras el tercer grupo y dejaba "000" solo en la linea siguiente: un
+   numero partido deja de leerse como numero. Pero tampoco vale nowrap a secas,
+   porque `k` no siempre es un numero -- hay frases como "3 palabras = 5 tokens"
+   que con nowrap a 168px se salen de cualquier pantalla.
+   Asi que la escala la manda la LONGITUD del contenido, decidida en el
+   frontmatter: cuanto mas largo, mas pequeno, y en los cortos nowrap. */
+.cifra{font:800 clamp(52px,12.5vw,168px)/0.9 var(--d);letter-spacing:-.045em;margin:0}
+.cifra.k-xs{font-size:clamp(64px,14vw,180px);white-space:nowrap}
+.cifra.k-s{font-size:clamp(52px,11.4vw,148px);white-space:nowrap}
+.cifra.k-m{font-size:clamp(36px,8.2vw,104px);white-space:nowrap}
+.cifra.k-l{font-size:clamp(30px,5.4vw,68px);letter-spacing:-.03em}
+.cifra-pie{font:400 clamp(15px,1.8vw,19px)/1.5 var(--f);opacity:.6;max-width:540px;margin:22px auto 0}
+
+.acciones{display:flex;flex-wrap:wrap;gap:14px;justify-content:center;margin-top:40px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:9px;min-height:50px;padding:0 30px;
+  font:600 14px/1 var(--f);letter-spacing:.01em;text-decoration:none;border-radius:0;border:1px solid transparent;transition:opacity .18s,background .18s}
+.btn-p{background:#fff;color:#000}
+.dark .btn-p{background:#fff;color:#000}
+.light .btn-p{background:#000;color:#fff}
+.btn-p:hover{opacity:.82}
+.btn-s{background:transparent;border-color:currentColor;color:inherit}
+.btn-s:hover{background:rgba(127,127,127,.14)}
+.enl{color:var(--ac);text-decoration:none;font:500 15px/1 var(--f)}
+.enl:hover{text-decoration:underline}
+
+/* Barra fija minima. Apple: marca a la izquierda, acciones a la derecha, nada
+   mas. Los selectores de idioma y tema NO van aqui: en / costaban 131px de
+   alto en movil y cortaban su propio control (ver el commit del header). */
+.nav{position:fixed;top:0;left:0;right:0;z-index:60;height:52px;
+  background:rgba(0,0,0,.72);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  border-bottom:1px solid rgba(255,255,255,.12)}
+.nav-in{max-width:1200px;margin:0 auto;padding:0 22px;height:52px;display:flex;align-items:center;justify-content:space-between;gap:16px}
+.nav a{color:#fff;text-decoration:none}
+.nav-marca{font:700 15px/1 var(--f);letter-spacing:-.01em;white-space:nowrap}
+.nav-acc{display:flex;align-items:center;gap:8px}
+.nav-entrar{font:500 13px/1 var(--f);opacity:.72;padding:0 10px;min-height:44px;display:inline-flex;align-items:center}
+.nav-entrar:hover{opacity:1}
+.nav-cta{display:inline-flex;align-items:center;min-height:36px;padding:0 16px;background:var(--ac);color:#fff!important;font:600 13px/1 var(--f);white-space:nowrap}
+.nav-cta:hover{opacity:.88}
+
+/* La rejilla de specs. A movil una columna: cuatro cifras de 60px en una fila
+   de 320 se convierten en cuatro columnas de 72, y una cifra no se parte. */
+.specs{display:grid;grid-template-columns:repeat(4,1fr);gap:40px 24px;margin-top:56px;text-align:left}
+.spec-k{font:800 clamp(40px,5.4vw,72px)/1 var(--d);letter-spacing:-.04em}
+.spec-d{font:400 15px/1.45 var(--f);opacity:.6;margin-top:12px}
+@media(max-width:780px){.specs{grid-template-columns:1fr 1fr;gap:34px 20px}}
+@media(max-width:420px){.specs{grid-template-columns:1fr}}
+
+/* El resto del indice, denso. Apple lo llama Tech Specs: una vez contada la
+   historia, la lista completa sin retorica. */
+.lista{margin-top:48px;text-align:left;border-top:1px solid rgba(127,127,127,.24)}
+.fila{display:grid;grid-template-columns:56px 1fr;gap:20px;align-items:baseline;padding:20px 0;border-bottom:1px solid rgba(127,127,127,.24)}
+.fila-n{font:500 12px/1 var(--m);letter-spacing:.14em;opacity:.45}
+.fila-h{font:600 clamp(17px,2vw,21px)/1.3 var(--f);margin:0}
+.fila-d{font:400 15px/1.5 var(--f);opacity:.58;margin:8px 0 0}
+@media(max-width:560px){.fila{grid-template-columns:1fr;gap:6px}}
+
+.reg-fila{display:grid;grid-template-columns:110px 120px 1fr;gap:18px;align-items:baseline;padding:16px 0;border-bottom:1px solid rgba(127,127,127,.24);text-align:left}
+.reg-f{font:500 12px/1 var(--m);letter-spacing:.1em;opacity:.5}
+.reg-t{font:500 11px/1 var(--m);letter-spacing:.16em;opacity:.5;text-transform:uppercase}
+.reg-x{font:400 16px/1.5 var(--f)}
+@media(max-width:700px){.reg-fila{grid-template-columns:1fr;gap:6px}}
+
+.precio{font:800 clamp(64px,14vw,190px)/0.88 var(--d);letter-spacing:-.05em;margin:0}
+.precio-u{font:400 clamp(16px,2vw,21px)/1 var(--f);opacity:.55;margin-top:18px}
+
+.pie{background:#000;color:#fff;padding:64px 24px;border-top:1px solid rgba(255,255,255,.12)}
+.pie-in{max-width:1000px;margin:0 auto;display:flex;flex-wrap:wrap;gap:28px;justify-content:space-between;align-items:center}
+.pie-l{font:400 12px/1.7 var(--f);opacity:.5}
+.pie-l a{color:inherit}
+
+/* La flecha del hero. Se esconde en cuanto el scroll empieza: un indicador de
+   "sigue bajando" que sigue ahi a mitad de pagina es ruido. */
+.cue{position:absolute;bottom:34px;left:50%;transform:translateX(-50%);opacity:.4;transition:opacity .3s}
+
+/* La revelacion. Nace visible y el JS la oculta, para que sin JS o con el
+   bundle caido la pagina se lea entera en vez de quedarse en blanco. */
+[data-r]{will-change:opacity,transform}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  [data-r]{opacity:1!important;transform:none!important}
+  .cue{display:none}
+}
+</style>
+</head>
+<body>
+<div class="v2">
+
+<nav class="nav" aria-label={es ? 'Principal' : 'Main'}>
+  <div class="nav-in">
+    <a href="/v2" class="nav-marca">{COPY.titulo}</a>
+    <div class="nav-acc">
+      <a href="/login" class="nav-entrar">{COPY.entrar}</a>
+      <a href="/pago" class="nav-cta">{COPY.heroCta}</a>
+    </div>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="pan dark">
+  <div class="wrap">
+    <h1 class="h1" data-r>{COPY.heroH}<br>{COPY.heroH2}</h1>
+    <p class="sub" data-r>{COPY.heroSub}</p>
+    <div class="acciones" data-r>
+      <a href="/pago" class="btn btn-p">{COPY.heroCta} · {precioBig}</a>
+      <a href="#m1" class="btn btn-s">{COPY.heroVer}</a>
+    </div>
+  </div>
+  <svg class="cue" data-el="cue" width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M6 13l6 6 6-6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+</section>
+
+<!-- UN PANEL POR IDEA. La cifra es el objeto; el titular la explica. -->
+{PANELES.map((m, i) => (
+  <section class={`pan ${i % 2 === 0 ? 'light' : 'dark'}`} id={`m${i + 1}`}>
+    <div class="wrap">
+      <p class="eb" data-r>{m.eb}</p>
+      <p class={`cifra ${escala(m.k)}`} data-r>{m.k}</p>
+      <p class="cifra-pie" data-r>{m.kc}</p>
+      <h2 class="h2" style="margin-top:56px" data-r>{m.h}</h2>
+      <p class="sub" data-r>{m.d}</p>
+    </div>
+  </section>
+))}
+
+<!-- SPECS -->
+<section class="pan dark">
+  <div class="wrap">
+    <p class="eb" data-r>{COPY.specEb}</p>
+    <h2 class="h2" data-r>{COPY.specH}</h2>
+    <div class="specs">
+      {COPY.spec.map((s) => (
+        <div data-r>
+          <div class="spec-k">{s.k}</div>
+          <div class="spec-d">{s.d}</div>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>
+
+<!-- EL RESTO DEL INDICE -->
+<section class="pan light">
+  <div class="wrap">
+    <p class="eb" data-r>{COPY.restoEb}</p>
+    <div class="lista">
+      {RESTO.map((m) => (
+        <div class="fila" data-r>
+          <div class="fila-n">{m.n}</div>
+          <div>
+            <h3 class="fila-h">{m.h}</h3>
+            <p class="fila-d">{m.d}</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>
+
+<!-- EL CUADERNO. Solo existe si hay entradas: un registro vacio es peor que
+     ninguno, y una seccion que anuncia un rastro y ensena una lista vacia dice
+     justo lo contrario de lo que pretende. -->
+{reg.length > 0 && (
+<section class="pan dark">
+  <div class="wrap">
+    <p class="eb" data-r>{COPY.regEb}{regFecha ? ` · ${regFecha.toUpperCase()}` : ''}</p>
+    <h2 class="h2" data-r>{COPY.regH}</h2>
+    <p class="sub" data-r>{COPY.regSub}</p>
+    <div style="margin-top:48px;border-top:1px solid rgba(127,127,127,.24)">
+      {reg.map((e) => (
+        <div class="reg-fila" data-r>
+          <div class="reg-f">{e.fecha}</div>
+          <div class="reg-t">{e.tipo}</div>
+          <div class="reg-x">{es ? e.es : e.en}</div>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>
+)}
+
+<!-- PRECIO -->
+<section class="pan light">
+  <div class="wrap">
+    <p class="eb" data-r>{COPY.precioEb}</p>
+    <p class="precio" data-r>{precioBig}</p>
+    <p class="precio-u" data-r>{COPY.precioUnidad}</p>
+    <p class="sub" data-r>{COPY.precioSub}</p>
+    <div class="acciones" data-r>
+      <a href="/pago" class="btn btn-p">{COPY.precioCta}</a>
+    </div>
+  </div>
+</section>
+
+<!-- CIERRE -->
+<section class="pan dark">
+  <div class="wrap">
+    <h2 class="h2" data-r>{COPY.cierreH}</h2>
+    <p class="sub" data-r>{COPY.cierreSub}</p>
+    <div class="acciones" data-r>
+      <a href="/pago" class="btn btn-p">{COPY.heroCta} · {precioBig}</a>
+    </div>
+  </div>
+</section>
+
+<footer class="pie">
+  <div class="pie-in">
+    <div class="pie-l">{COPY.titulo} · <a href="/terminos">{L.pub.footer.term}</a> · <a href="/privacidad">{L.pub.footer.priv}</a></div>
+    <!-- Idioma y tema viven en el pie, no en la barra. Una preferencia no se
+         consulta en cada scroll; el boton de compra si. -->
+    <div class="lnav-lang" style="display:flex;align-items:center;flex-wrap:wrap;gap:8px">
+      <PrefToggles lang={langPref} theme={theme} labels={{ auto: L.pub.auto, dark: L.pub.oscuro, paper: L.pub.papel, langAria: L.pub.ariaIdioma, themeAria: L.pub.ariaTema }} />
+    </div>
+  </div>
+</footer>
+
+</div>
+<style is:global>
+.pie .lnav-lang .seg{display:flex;align-items:center;gap:2px;border:0}
+.pie .lnav-lang .segb{display:inline-flex;align-items:center;min-height:44px;padding:0 12px;background:none;border:0;cursor:pointer;
+  font:500 10px/1 ui-monospace,'SF Mono',SFMono-Regular,Menlo,monospace;letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.5);transition:color .15s}
+.pie .lnav-lang .segb:hover{color:rgba(255,255,255,.8)}
+.pie .lnav-lang .segb[aria-pressed="true"]{color:#fff;font-weight:600}
+.pie .lnav-lang .segb:focus-visible{outline:1px solid #fff;outline-offset:2px}
+</style>
+<script>
+  // Revelado al entrar en pantalla. Tres reglas, y las tres son cicatrices:
+  //
+  //   1. Los elementos NACEN visibles en el HTML y es este script el que los
+  //      oculta. Si el bundle no carga, la pagina se lee entera. Al reves
+  //      (nacer en opacity:0 y que el JS los encienda) un fallo de red deja
+  //      una pagina en blanco que parece rota.
+  //   2. prefers-reduced-motion apaga todo el efecto, no lo suaviza.
+  //   3. Lo que ya esta en pantalla al cargar se muestra sin animar: animar la
+  //      entrada de algo que el usuario YA esta mirando es un parpadeo.
+  const quieto = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const items = Array.from(document.querySelectorAll('[data-r]'));
+  if (!quieto && 'IntersectionObserver' in window) {
+    const pinta = (el: Element, on: boolean) => {
+      const s = (el as HTMLElement).style;
+      s.transition = 'opacity .7s cubic-bezier(.22,.61,.36,1), transform .7s cubic-bezier(.22,.61,.36,1)';
+      s.opacity = on ? '1' : '0';
+      s.transform = on ? 'none' : 'translateY(22px)';
+    };
+    const io = new IntersectionObserver((es) => {
+      for (const e of es) if (e.isIntersecting) { pinta(e.target, true); io.unobserve(e.target); }
+    }, { rootMargin: '0px 0px -8% 0px' });
+    for (const el of items) {
+      if (el.getBoundingClientRect().top < window.innerHeight * 0.92) continue;
+      pinta(el, false);
+      io.observe(el);
+    }
+  }
+  const cue = document.querySelector('[data-el="cue"]') as HTMLElement | null;
+  if (cue) {
+    const ocultar = () => { cue.style.opacity = window.scrollY > 60 ? '0' : '.4'; };
+    ocultar();
+    window.addEventListener('scroll', ocultar, { passive: true });
+  }
+</script>
+</body>
+</html>

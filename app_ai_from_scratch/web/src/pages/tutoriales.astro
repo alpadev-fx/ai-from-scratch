@@ -1,0 +1,97 @@
+---
+// Biblioteca de tutoriales. Contenido de pago.
+//
+// EL MURO SE APLICA AQUÍ, EN EL SERVIDOR. Esta página se renderiza en el
+// servidor (prerender = false), así que a quien no ha pagado no se le manda el
+// cuerpo de ningún tutorial: se le manda la vitrina. No es un `display:none`
+// que cualquiera abre con el inspector.
+//
+// `gate()` NO es un muro de pago: solo mira sesión y rol (lib/session.ts:68-76).
+// Y `satisface(role, ['student'])` tampoco sirve para detectar «no ha pagado»,
+// porque root satisface ['student'] (App.astro:44-46). La comprobación tiene
+// que ser exacta, y es la misma que ya usa el layout para el aviso de acceso.
+export const prerender = false;
+import App from '../layouts/App.astro';
+import { gate } from '../lib/session';
+import { t, resolveLang } from '../lib/i18n';
+import { icon } from '../lib/icons';
+import { tutoriales, enIdioma } from '../data/tutoriales-mock';
+
+const { user, redirect } = await gate(Astro.request);
+if (redirect) return Astro.redirect(redirect);
+
+const lang = resolveLang(user!.lang, Astro.request);
+const L = t(lang);
+const T = L.tutoriales;
+const C = L.curso;
+
+const cerrado = user!.role === 'student' && user!.paid !== true;
+const lista = tutoriales().map((x) => enIdioma(x, lang));
+
+const NIVEL: Record<string, string> = { facil: C.nFacil, medio: C.nMedio, dificil: C.nDuro };
+const COLOR: Record<string, string> = { facil: 'var(--ok)', medio: 'var(--or)', dificil: 'var(--rd)' };
+---
+<App user={user!} title={T.titulo} crumb={T.crumb} active={L.nav.tutoriales}>
+  <span slot="topbar" class="lbl" style="display:flex;align-items:center;gap:8px">
+    <Fragment set:html={icon(cerrado ? 'lock' : 'play', 14, 'var(--l3)')} />{T.eb}
+  </span>
+
+  <div class="app-pad" style="display:flex;flex-direction:column;gap:24px;max-width:900px">
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <p class="eb">{T.eb}</p>
+      <h1 class="h1">{T.titulo}</h1>
+      <p class="p" style="max-width:620px">{T.pitch}</p>
+    </div>
+
+    {cerrado ? (
+      <div class="card" style="border-left:2px solid var(--ac);display:flex;flex-direction:column;gap:10px">
+        <p class="eb">{T.cerradoEb}</p>
+        <div class="h2">{T.cerradoTitulo}</div>
+        <p class="s" style="color:var(--l2);max-width:560px">{T.cerradoB}</p>
+        <a class="btn" href="/pago" style="align-self:flex-start;margin-top:6px">{T.cerradoCta}</a>
+      </div>
+    ) : (
+      <div class="card" style="border-color:var(--hair);border-left:2px solid var(--or);display:flex;gap:12px;align-items:flex-start">
+        <Fragment set:html={icon('info', 18, 'var(--or)')} />
+        <div>
+          <p class="eb">{T.mockEb}</p>
+          <div class="h3" style="margin-top:2px">{T.mockTitulo}</div>
+          <p class="s" style="color:var(--l2);margin-top:4px">{T.mockB}</p>
+        </div>
+      </div>
+    )}
+
+    <div class="tut-rejilla">
+      {lista.map((x) => (
+        <article class="card tut-card">
+          <div class="tut-alto">
+            <p class="lbl">{x.etiqueta}</p>
+            <div class="h3" style="min-width:0">{x.titulo}</div>
+            <p class="s" style="color:var(--l2);min-width:0">{x.resumen}</p>
+          </div>
+          <div class="tut-pie">
+            <span class="s" style={`color:${COLOR[x.nivel] ?? 'var(--l3)'}`}>{NIVEL[x.nivel] ?? x.nivel}</span>
+            <span class="s" style="color:var(--l3)">{x.min} {T.min} {T.lectura}</span>
+            {cerrado
+              ? <span class="s tut-cerrado"><Fragment set:html={icon('lock', 13, 'var(--l3)')} /></span>
+              : <a class="btn ghost tut-abrir" href={`/tutoriales/${x.slug}`}>{T.abrir}</a>}
+          </div>
+        </article>
+      ))}
+    </div>
+
+    {lista.length === 0 && <p class="s" style="color:var(--l3)">{T.vacio}</p>}
+  </div>
+</App>
+
+<style>
+  /* auto-fit + minmax y no un número de columnas: a 390px queda una sola
+     columna sin media query, y `min-width:0` en las celdas evita que un título
+     largo infle la rejilla en vez de partirse (App.astro:385-389). */
+  .tut-rejilla { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 14px; }
+  .tut-card { display: flex; flex-direction: column; gap: 14px; justify-content: space-between; min-width: 0; }
+  .tut-alto { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .tut-pie { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .tut-abrir { height: 30px; font-size: 10px; margin-left: auto; text-decoration: none; }
+  .tut-cerrado { margin-left: auto; display: inline-flex; align-items: center; }
+</style>

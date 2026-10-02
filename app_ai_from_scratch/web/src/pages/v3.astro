@@ -14,7 +14,7 @@ import { modulos, candidatos, preguntas } from '../data/landing';
 import { jsonSafe } from '../lib/json-safe';
 import PrefToggles from '../components/PrefToggles.astro';
 import { TOKENS } from '../lib/theme-css';
-import { tokenize, candRowsHTML } from '../aegis/specimens';
+import { tokenize, candRowsHTML, ctxOf } from '../aegis/specimens';
 import { guard, withoutCity } from '../aegis/copy-guard';
 import V3CSS from '../aegis/v3.css?raw';
 
@@ -40,8 +40,13 @@ mods.forEach((m) => { guard(`modulo ${m.n}`, m.h + m.d + m.k + m.kc); });
 [P.heroH1a, P.heroH1b, P.heroSub, P.heroCta, P.heroMicro, P.sintH2, P.heroPitch, P.preWhy1, P.preWhy2, V.preWhy3V, P.preWhy4, P.l1D, P.l2D, P.l3D, P.l4H, V.vivoV,
   P.l5H, P.l5D, P.vivoLbl, P.preH2, P.preNota, P.pre1, P.pre2, P.pre3, P.preGar, P.preTerm, P.cierreH2, P.cierreSub, P.pieMeta2, N.garantiaTxt, N.moneda, N.pagoTxt,
 ].forEach((x, i) => guard(`copy[${i}]`, x));
-const sentence = P.aEjemplo;                 // «Cartagena es hermosa» — el ejemplo del especimen
+const sentence = P.aEjemplo;                 // «Cartagena es hermosa» — el ejemplo del especimen A (lección 05)
 const toks = tokenize(sentence);
+// Los candidatos (Max, Luna…) son respuestas al contexto del especimen B, no a «Cartagena es hermosa»:
+// el capítulo los muestra SOLO después de esa frase, que es el primer enunciado de P.bD (sin texto nuevo).
+const ctx = ctxOf(P.bD);                     // «Le pediste un nombre para tu perro.»
+const ctxWords = ctx.split(/\s+/).filter(Boolean);
+guard('delta context', ctx);
 const sym = [
   { lbl: P.s1Lbl, lec: P.s1Lec, h: P.s1H, d: P.s1D, c: P.s1C },
   { lbl: P.s2Lbl, lec: P.s2Lec, h: P.s2H, d: P.s2D, c: P.s2C },
@@ -166,10 +171,14 @@ if(rm){d.classList.add('rm')}else if(gl){d.classList.add('fx');var s=false;try{s
     <div class="sent" aria-hidden="true">{sentence}</div>
     <div class="chips" aria-label={sentence}>
       {toks.map((tk) => (<div class="tk"><b>{tk}</b></div>))}
+    </div>
+    <div class="chips ctx" aria-hidden="true">
+      {ctxWords.map((w) => (<div class="tk cw"><b>{w}</b></div>))}
       <div class="tk ans"><b>{cands[0].name}</b></div>
     </div>
     <aside class="pcard" aria-label={V.cand}>
       <div class="hd"><span>{steps[1].h}</span><b><i class="dot"></i><em>{V.ilus}</em></b></div>
+      <p class="pctx">{ctx}</p>
       <div class="ph">{V.cand}</div>
       <div set:html={candRowsHTML(cands, 0.3)}></div>
       <div class="dial"><span>{V.tabTemp}</span><div class="trk"><i></i></div><b class="dialv">0.30</b></div>

@@ -15,6 +15,14 @@ export function tokenize(s: string): string[] {
   return out.slice(0, 26);
 }
 
+/** The published context of specimen B: the first sentence of its description («Le pediste un nombre para tu
+ *  perro.» / «You asked it to name your dog.»). The candidates are answers to THIS context, so the Δ chapter
+ *  shows them after it and never after the specimen-A sentence. No new string: it is a cut of `bD`. */
+export function ctxOf(s: string): string {
+  const t = (s || '').trim(), i = t.indexOf('. ');
+  return i > 0 ? t.slice(0, i + 1) : t;
+}
+
 /** Probabilities (0..1) of every candidate at temperature T (slider/100). */
 export function softmax(c: Candidate[], T: number): number[] {
   const ex = c.map((x) => Math.exp(x.logit / Math.max(0.08, T)));

@@ -102,12 +102,15 @@ html:not([data-theme="paper"]) .plate{box-shadow:0 0 70px rgba(10,132,255,.14);b
 /* Δ static */
 #cL .stage{display:flex;flex-direction:column;gap:32px}
 .chips{display:flex;flex-wrap:wrap;gap:10px}
+/* The context row (specimen B words + the sampled token) only exists in engine mode; the static page shows the context inside the card, never next to the Cartagena tokens. */
+.chips.ctx{display:none}
 .sent{display:none}
 .tk{display:flex;align-items:center;justify-content:center;padding:14px 18px;border:1px solid var(--hair);font:400 clamp(20px,2.4vw,28px)/1 var(--m);white-space:nowrap;background:var(--panel)}
 .tk.ans{border-color:var(--ac);color:var(--ac)}
 .tk b{font-weight:400}
 .pcard{background:var(--panel);border:1px solid var(--hair);padding:16px 18px;max-width:420px}
 .pcard .ph{font:500 10px/1.35 var(--m);letter-spacing:.16em;color:var(--l3);margin:6px 0 8px}
+.pcard .pctx{margin:12px 0 2px;font:400 15px/1.4 var(--m);color:var(--l1)}
 .crow{display:grid;grid-template-columns:110px minmax(0,1fr) 52px;gap:12px;align-items:center;padding:7px 0;border-bottom:1px solid var(--hair2)}
 .cn{font:500 15px/1.2 var(--f);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cb{height:6px;background:var(--fill);position:relative;overflow:hidden}.cb i{display:block;height:100%;transition:width .18s ease-out}
@@ -261,6 +264,7 @@ html.fx .tk.h{border-color:var(--l1)}
 html.fx .tk.f{border-color:var(--ac);box-shadow:0 0 26px color-mix(in srgb,var(--ac) 40%,transparent)}
 html.fx .tk.ans{color:var(--ac);border-color:var(--ac)}
 html.fx .tk.nw{background:color-mix(in srgb,var(--ac) 16%,transparent);box-shadow:0 0 34px color-mix(in srgb,var(--ac) 45%,transparent)}
+html.fx .pcard .pctx{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}   /* the engine draws the context as chips; screen readers keep the line */
 html.fx .pcard{position:absolute;z-index:5;right:var(--gut);top:calc(var(--hdr) + 18svh);width:clamp(250px,20vw,290px);max-width:none;background:var(--glass);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);opacity:0;visibility:hidden}
 html.fx .dial{display:flex;opacity:0}
 html.fx .steps-wrap{position:absolute;left:var(--gut);right:var(--gut);bottom:0;z-index:5;padding-bottom:14px;opacity:0}

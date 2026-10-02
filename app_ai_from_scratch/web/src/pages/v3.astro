@@ -30,7 +30,7 @@ import PrefToggles from '../components/PrefToggles.astro';
 import V3Cta from '../components/V3Cta.astro';
 import { TOKENS } from '../lib/theme-css';
 import { tokenize, candRowsHTML, ctxOf, ctxChips } from '../aegis/specimens';
-import { guard, guarded, withoutCity } from '../aegis/copy-guard';
+import { guard, guarded, withoutCity, assertPriced } from '../aegis/copy-guard';
 import V3CSS from '../aegis/v3.css?raw';
 
 const { lang, langPref, theme } = publicPrefs(Astro.request);
@@ -38,8 +38,13 @@ const L = t(lang);
 const PUB = guarded(L.pub, 'pub');            // a string is checked at the moment this page reads it, so no list can fall behind the markup
 const P = PUB.land;
 const V = PUB.v3;
-const precioBig = PRECIO_VISUAL[lang] ?? PRECIO_VISUAL.es;
-const fill = (s: string) => s.split('{precio}').join(precioBig);   // prices come from PRECIO_VISUAL, never a literal
+const precioBig = PRECIO_VISUAL[lang];
+if (!precioBig) throw new Error(`[v3 copy] no published price for the language "${lang}"`);   // never the other language's notation: «$39.990» in English reads as dollars
+const fill = (s: string) => s.split('{precio}').join(precioBig);   // prices of the v3 strings come from PRECIO_VISUAL through {precio}, never a literal
+// The two prod buttons that name the price carry it as a literal («PAGAR $39.990 · 30 DÍAS», i18n.ts), which this stage does not edit. They are shown only
+// while that literal IS the published price: the page throws otherwise (and v3-copy-check fails on any other price in the rendered page).
+assertPriced('pub.land.preCta', P.preCta, precioBig);
+assertPriced('pub.land.cierreCta', P.cierreCta, precioBig);
 const { mercado } = mercadoDe(Astro.request);
 const N = narrativaDe(mercado, lang);
 

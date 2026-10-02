@@ -19,7 +19,7 @@ import { STR } from '../src/lib/i18n.ts';
 import { PRECIO_VISUAL, PRECIO_TEXTO } from '../src/lib/price.ts';
 import { preguntas, modulos, candidatos } from '../src/data/landing.ts';
 import { ctxOf, tokenize } from '../src/aegis/specimens.ts';
-import { SANCTIONED, guard, violations } from '../src/aegis/copy-guard.ts';
+import { SANCTIONED, guard, violations, assertPriced } from '../src/aegis/copy-guard.ts';
 
 const BASE = process.env.BASE ?? 'http://127.0.0.1:4321';
 // The narrative changes with the visitor's market, so every market is fetched: a city that only shows for one market is the
@@ -33,6 +33,14 @@ const LEGACY = ['especimenes', 'indice', 'ventajas', 'quien', 'vivo', 'precio', 
 const CTA_CHAPTERS = ['c03', 'c07', 'c10', 'c11'];       // CTA rows with the price label + the guarantee line; c14 has its in-card button; c16 closes
 const ALLOWED_NUM = new Set(['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '14', '16', '23', '24', '30', '31', '36', '40', '94', '100', '100.000', '100,000',
   '39.990', '39,990', '70.000.000.000', '70,000,000,000', '18,615', '0.30', '0', '000', '1.1', '18', '20', '70', '83', ...Array.from({ length: 16 }, (_, i) => String(i + 1).padStart(2, '0'))]);
+
+// A currency amount is a number touching a currency mark, on either side («$39.990», «39.990 COP», «COP 39.990», «US$10», «10 dólares»). The page may print
+// exactly one: the published price (PRECIO_VISUAL, or its «N COP» form).
+const AMOUNT = /(?:US\$|\$|\b(?:COP|USD|MXN|EUR)\b|€)\s?\d(?:[\d.,]*\d)?|\d(?:[\d.,]*\d)?\s?(?:\b(?:COP|USD|MXN|EUR)\b|€|\b(?:pesos|d[oó]lares?|dollars?)\b)/g;
+// Prices and currencies the product has sold in before, in any notation and with or without a currency mark. scripts/check-price.mjs keeps the same list for the
+// SOURCE (web/src, api/src); this gate reads what the page actually SHIPS. Add a row here and there when the price moves; never remove one.
+const RETIRED = [[/\b35[.,]000\b(?![.,]\d)/, '35.000'], [/\b35000\b/, '35000'], [/\b39[.,]900\b/, '39.900'], [/\b39900\b/, '39900'], [/\b38[.,]899\b/, '38.899'], [/\b38899\b/, '38899'],
+  [/\b99[.,]999\b/, '99.999'], [/\b175[.,]000\b/, '175.000'], [/\b9\.99\b/, '9.99'], [/\bUSD\b/, 'USD']];
 
 // ---------- reading the rendered page ----------
 const decode = (x) => x.replace(/&nbsp;/g, ' ').replace(/&#x([0-9a-f]+);/gi, (_m, h) => String.fromCodePoint(parseInt(h, 16)))
@@ -165,9 +173,12 @@ function judge(html, lang) {
   else if (!copyOf(ch.c08.html).match(SANCTIONED)) f.push('rules: the sanctioned «testimonios» sentence is not in chapter 08');
   if (/\{precio\}|undefined|\[object Object\]|\bNaN\b/.test(corpus)) f.push('rules: a placeholder or an undefined value leaked into the copy');
 
-  // prices: every currency amount on the page is the published price, in the language's notation, and never a literal of ours
+  // prices: every currency amount on the page is the published price, in the language's notation, and never a literal of ours; and no price the product
+  // has sold at before is on the page at all, whatever its notation and whether or not a currency mark touches it (the readable text, the text-bearing
+  // attributes and the JSON the page ships)
   const okPrice = new Set([big, `${PRECIO_TEXTO[lang]} COP`]);
-  for (const m of new Set(corpus.match(/\$\s?\d[\d.,]*\d|\d[\d.,]*\d\s?COP/g) ?? [])) if (!okPrice.has(m)) f.push(`price: "${m}" is not the published price (${[...okPrice].join(' / ')})`);
+  for (const m of new Set(corpus.match(AMOUNT) ?? [])) if (!okPrice.has(m)) f.push(`price: "${m}" is not the published price (${[...okPrice].join(' / ')})`);
+  for (const [re, name] of RETIRED) { const hit = re.exec(corpus); if (hit) f.push(`price: the page names the retired price ${name} ("${corpus.slice(Math.max(0, hit.index - 25), hit.index + hit[0].length + 25)}")`); }
   if (!ch.c14.html.includes(`<b data-odo>${big}</b>`)) f.push(`price: chapter 14's odometer figure is not ${big}`);
 
   // CTAs: the hero pair (paid /pago, then free /registro), every other paid one /pago with the outcome and the price in its label, no stray routes
@@ -256,7 +267,7 @@ const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, 
 const swap = (h, a, b) => h.replace(`id="${a}"`, 'id="__"').replace(`id="${b}"`, `id="${a}"`).replace('id="__"', `id="${b}"`);
 function mutants(html, lang) {
   const V = STR[lang].pub.v3, P = STR[lang].pub.land, big = PRECIO_VISUAL[lang], kc01 = modulos(lang)[0].kc;
-  const sanct = esc(V.s5H.match(SANCTIONED)[0]), s3 = esc(V.s3H);
+  const sanct = esc(V.s5H.match(SANCTIONED)[0]), s3 = esc(V.s3H), stale = lang === 'es' ? '$35.000' : '35,000 COP';
   const inChapter = (id, fn) => { const c = chaptersOf(html)[id]; return html.slice(0, c.at) + fn(c.html) + html.slice(c.at + c.html.length); };
   return [
     // [what, mutated page, regex the failures must match (or null = must stay clean of `rules:`)]
@@ -289,6 +300,11 @@ function mutants(html, lang) {
     ['the price reasons out of order', inChapter('c14', (c) => c.replace(`<p>${esc(P.preWhy1)}</p><p>${esc(P.preWhy2)}</p>`, `<p>${esc(P.preWhy2)}</p><p>${esc(P.preWhy1)}</p>`)), /structure: the price reasons/],
     ['a price that is not the published one', inChapter('c10', (c) => c.replace(big, lang === 'es' ? '$40.000' : '40,000 COP')), /price:/],
     ['a dollar sign in English', lang === 'en' ? poison(html, '$39,990') : poison(html, '$99.999'), /price:/],
+    ['a retired price as a bare number (35.000)', poison(html, 'costaba 35.000'), /price: the page names the retired price 35\.000/],
+    ['a retired price in the other notation (39,900)', poison(html, '39,900'), /price: the page names the retired price 39\.900/],
+    ['a retired price in the JSON the page ships (38899)', html.replace(/(<script[^>]*application\/json[^>]*>)\{/, '$1{"x":"38899",'), /price: the page names the retired price 38899/],
+    ['the published price in a notation of its own (COP 39.990)', poison(html, `COP ${PRECIO_TEXTO[lang]}`), /price: "COP [\d.,]+" is not the published price/],
+    ['the hero paid label carrying a retired price', inChapter('c01', (c) => c.replace(`<span>${P.preCta}</span>`, `<span>${P.preCta.replace(big, stale)}</span>`)), /price: /],
     ['a paid CTA that is not /pago', inChapter('c07', (c) => c.replace('href="/pago" class="buy big"', 'href="/suscribirme" class="buy big"')), /cta: #c07/],
     ['a paid CTA that does not name the price', inChapter('c10', (c) => c.replace(esc(P.preCta), 'COMPRAR')), /cta: #c10/],
     ['the free hero CTA going to /pago', inChapter('c01', (c) => c.replace('href="/registro"', 'href="/pago"')), /cta: the hero/],
@@ -334,9 +350,17 @@ function selfTest(html, lang) {
   if (!throwing(kc01)) fail('guard() accepts lesson 01\'s caption without the named exemption');
   if (throwing(kc01, { allow: [kc01] })) fail('guard() throws on lesson 01\'s caption even with the named exemption');
   if (throwing(STR[lang].pub.v3.s5H)) fail('guard() throws on the sanctioned testimonial sentence');
+  // the page throws on a paid label whose literal price is not the published one, and only then
+  const Pl = STR[lang].pub.land, bigP = PRECIO_VISUAL[lang], other = PRECIO_VISUAL[lang === 'es' ? 'en' : 'es'];
+  const priced = (label) => { try { assertPriced('self-test', label, bigP); return false; } catch { return true; } };
+  if (priced(Pl.preCta) || priced(Pl.cierreCta)) fail('assertPriced throws on a paid label that carries the published price');
+  for (const [what, label] of [['a retired price', Pl.preCta.replace(bigP, lang === 'es' ? '$35.000' : '35,000 COP')], ['no price at all', Pl.cierreCta.replace(bigP, '').trim()], ["the other language's notation", Pl.preCta.replace(bigP, other)]])
+    if (!priced(label)) fail(`assertPriced accepts a paid label with ${what} ("${label}")`);
   // the page still reads everything through the guard
   const src = readFileSync(new URL('../src/pages/v3.astro', import.meta.url), 'utf8');
   if (!/guarded\(L\.pub,\s*'pub'\)/.test(src) || !/from '\.\.\/aegis\/copy-guard'/.test(src) || (src.match(/\bguard\(/g) ?? []).length < 4) fail('v3.astro no longer reads its strings through guarded() / guard()');
+  if (!/assertPriced\('pub\.land\.preCta', P\.preCta, precioBig\)/.test(src) || !/assertPriced\('pub\.land\.cierreCta', P\.cierreCta, precioBig\)/.test(src)) fail('v3.astro no longer checks its two paid labels against the published price');
+  if (/PRECIO_VISUAL\[lang\]\s*\?\?/.test(src)) fail("v3.astro falls back to another language's price notation");
   return bad;
 }
 // A gate that cannot fail proves nothing: each way the Δ defect can come back must be caught by deltaRule.

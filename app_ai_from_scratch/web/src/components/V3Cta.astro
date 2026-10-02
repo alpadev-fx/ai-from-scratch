@@ -1,8 +1,10 @@
 ---
 // One CTA row of /v3 (after chapters 03, 07, 10, 11 and 14, and the closing). The label is a PROD string that names the
-// price (pub.land.preCta, pub.land.cierreCta: the price in them comes from PRECIO_VISUAL, never from this file) and the route
-// is prod's: /pago. The mono line under it is the guarantee line prod already prints (heroGar). The page passes both through its
-// copy guard.
+// price (pub.land.preCta, pub.land.cierreCta). Those strings carry the price as a LITERAL («PAGAR $39.990 · 30 DÍAS» in i18n.ts); they do not
+// read PRECIO_VISUAL and this file never writes a price. What keeps the literal honest is checked elsewhere: v3.astro throws (assertPriced) when
+// either label does not contain PRECIO_VISUAL[lang], and v3-copy-check fails on any retired price or any amount that is not PRECIO_VISUAL in the
+// rendered page. The route is prod's: /pago. The mono line under it is the guarantee line prod already prints (heroGar). The page passes both
+// through its copy guard.
 interface Props { label: string; micro?: string; href?: string }
 const { label, micro, href = '/pago' } = Astro.props;
 ---

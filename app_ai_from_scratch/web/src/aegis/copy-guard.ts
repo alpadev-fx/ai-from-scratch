@@ -64,5 +64,13 @@ export function guarded<T extends object>(o: T, path: string): T {
   });
 }
 
+/** The two prod buttons that name the price (pub.land.preCta «PAGAR $39.990 · 30 DÍAS», pub.land.cierreCta «EMPEZAR POR $39.990») carry it as a LITERAL in
+ *  i18n.ts, not as a placeholder, and this stage does not edit prod strings. A literal goes stale the day the price moves, so the page shows such a
+ *  label only while it contains the published price (PRECIO_VISUAL[lang]) and THROWS otherwise. web/scripts/v3-copy-check.mjs proves that this
+ *  function can throw and then checks every price on the rendered page the same way. */
+export function assertPriced(key: string, label: string, price: string): void {
+  if (!price || !label.includes(price)) throw new Error(`[v3 copy] ${key}: "${label}" does not carry the published price "${price}"`);
+}
+
 /** The narrative lines carry ", en Medellín" / ", in Medellín" for the Colombian market; v3 renders them without the city. */
 export const withoutCity = (s: string) => s.replace(/,\s*(en|in) Medell[ií]n/, '');

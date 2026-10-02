@@ -5,10 +5,13 @@
 // STAGE 2A: the Hormozi sales argument on the AEGIS chapters. 17 chapters, in this order (the order IS the argument):
 //   00 ignition · 01 hero · 02 te ha pasado · 03 qué cambia · 04 por dentro (Δ) · 05 cifras · 06 lo que no necesitas ·
 //   07 el tiempo · 08 prueba · 09 temario · 10 la oferta · 11 garantía · 12 quién · 13 para quién · 14 precio · 15 FAQ · 16 cierre
-// The engine chapters (00 ignition, 01 hero sequence, 04 Δ) are untouched apart from their words. Every other chapter is
+// The engine chapters (00 ignition, 01 hero sequence, 04 Δ) are the engine's. Every other chapter is
 // STATIC here, with AEGIS tokens (HUD label, plates, hairlines, mono eyebrows) and data-fx / data-* hooks that stage 2B animates.
 // ALL the copy is in the server HTML: the engine (src/aegis/*) only animates it, so ?rm=1, ?nogl=1 and a real no-WebGL
 // browser read every chapter in full.
+// NOTHING IN THE ENGINE GATES WHAT THE VISITOR READS. The hero copy is painted from the first frame; the ignition is a 1.0 s CSS timeline
+// that the head script ends (animationend, 1.2 s at the latest, or click / key / wheel / touch); the engine attaches later and never hides
+// the copy again; if an import hangs, the head script's watchdog turns the page into the static page after 15 s.
 //
 // COPY RULES, enforced by code and not by hope. Everything this page reads from `pub` passes through `guarded()`, which
 // THROWS the moment a banned string is read (city, plural courses, the Hormozi §0.4 list, monthly wording, «veinte segundos»,
@@ -101,28 +104,60 @@ const seal = V.s8Sello.repeat(2);
 <meta name="description" content={P.desc}>
 <link rel="preload" as="image" href="/v3/poster/n1.webp">
 <script is:inline>
-/* Modo antes de pintar: movimiento reducido o ?rm=1, y WebGL2. Sin ninguno de los dos, la página estática es la página. */
+/* Mode before the first paint: reduced motion or ?rm=1, and WebGL2. With neither, the static page is the page.
+   Everything below is plain code with no module, no gsap and no three, so none of them can hold it up:
+   · the hero copy is server-rendered and visible from the first frame (nothing waits for the engine);
+   · the ignition (first visit of the session, engine mode only, never under reduced motion) is a CSS timeline of 1.0 s (v3.css). It ENDS here:
+     when that animation ends, at 1.2 s from the first frame at the latest, or on any click, key, wheel or touch. Ending = the overlay goes,
+     the scroll lock goes, and the session remembers it;
+   · watchdog: if the engine modules have not attached after 15 s (a hung import never throws, so the catch in main.ts never runs),
+     the page becomes the static page. Console-visible, never silent. */
 (function(){var d=document.documentElement,q=location.search,rm=/[?&]rm=1/.test(q)||(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches),gl=false;
 try{gl=!!document.createElement('canvas').getContext('webgl2')}catch(e){}
 if(/[?&]nogl=1/.test(q))gl=false;
-if(rm){d.classList.add('rm')}else if(gl){d.classList.add('fx');var s=false;try{s=sessionStorage.getItem('v3_ign')==='1'}catch(e){}if(!s)d.classList.add('ign-on')}else{d.classList.add('nogl')}})();
+if(rm){d.classList.add('rm');return}
+if(!gl){d.classList.add('nogl');return}
+d.classList.add('fx');
+var seen=false;try{seen=sessionStorage.getItem('v3_ign')==='1'}catch(e){}
+if(!seen){
+  d.classList.add('ign-on');
+  var over=false,timer=0,ev=['click','keydown','wheel','touchstart'];
+  var end=function(e){
+    if(e&&e.type==='animationend'&&e.animationName!=='ign-life')return;
+    if(over)return;over=true;clearTimeout(timer);
+    for(var i=0;i<ev.length;i++)removeEventListener(ev[i],end,true);
+    removeEventListener('animationend',end,true);
+    d.classList.remove('ign-on');
+    try{sessionStorage.setItem('v3_ign','1')}catch(x){}
+  };
+  for(var i=0;i<ev.length;i++)addEventListener(ev[i],end,{capture:true,passive:true});
+  addEventListener('animationend',end,true);
+  var arm=function(){if(!timer&&!over)timer=setTimeout(end,1200)};
+  requestAnimationFrame(arm);setTimeout(arm,250);
+}
+setTimeout(function(){
+  if(d.classList.contains('ready')||!d.classList.contains('fx'))return;
+  try{console.warn('[v3] engine did not attach in 15 s: showing the static page')}catch(x){}
+  d.classList.remove('fx','gl-on','foot-on','ign-on');d.classList.add('nogl');
+},15000);
+})();
 </script>
 <style is:global set:html={V3CSS}></style>
 </head>
 <body>
 <a class="skip" href="#c01">{P.saltar}</a>
 
-<!-- ===== 00 · IGNICIÓN (solo con motor; el HTML estático no la necesita) ===== -->
+<!-- ===== 00 · IGNICIÓN (solo con motor y solo la primera visita de la sesión; el HTML estático no la necesita). 1.0 s de CSS puro (v3.css), sin módulos:
+     la termina el script de la cabecera (fin de la animación, 1.2 s como tope, o clic / tecla / rueda / toque). Sin contador de carga: ya no hay una carga real a la que atarlo. ===== -->
 <div id="ign" aria-hidden="true">
   <div class="ibg"></div>
   <div class="pt"></div>
   <div class="iln"></div>
   <div class="lock">
-    <svg viewBox="0 0 200 200" width="100%" height="100%"><rect class="isq" x="22" y="22" width="156" height="156" fill="none" stroke="currentColor" stroke-width="5"></rect><text class="iia" x="100" y="128" text-anchor="middle" font-size="84" font-weight="700" fill="currentColor">IA</text></svg>
+    <svg viewBox="0 0 200 200" width="100%" height="100%"><rect class="isq" x="22" y="22" width="156" height="156" pathLength="1" fill="none" stroke="currentColor" stroke-width="5"></rect><text class="iia" x="100" y="128" text-anchor="middle" font-size="84" font-weight="700" fill="currentColor">IA</text></svg>
     <div class="glint"></div>
   </div>
-  <div class="ilog" data-text={V.ignLog}></div>
-  <div class="pct">000</div>
+  <div class="ilog" data-text={V.ignLog}>{V.ignLog}</div>
   <button class="iskip" type="button">{P.saltar} →</button>
 </div>
 

@@ -31,8 +31,8 @@ export interface Runtime {
   gl: import('./engine').GL | null;
   after: Array<(dt: number) => void>;
   log: Log | null;
-  /** 0..1 reveal of the first headline once the ignition ends. */
-  intro: number;
+  /** True once the first two frames of 01's footage are decoded: from then GL draws 01's plate (until then the page shows the poster). */
+  foot: boolean;
 }
 export interface Log { set(key: string, lines: string[], n: number): void; clear(): void }
 
@@ -40,5 +40,5 @@ export const A: Runtime = {
   lang: 'es', rm: false, fx: false, W: 1280, H: 800, mobile: false, dpr: 1,
   chapters: [], byId: {}, active: null, shot: null, lenis: null,
   st: { y: 0, v: 0, t: 0, mouse: { x: 0, y: 0, has: false } },
-  copy: null, paper: () => false, gl: null, after: [], log: null, intro: 0,
+  copy: null, paper: () => false, gl: null, after: [], log: null, foot: false,
 };

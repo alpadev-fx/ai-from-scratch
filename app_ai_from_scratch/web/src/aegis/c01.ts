@@ -66,8 +66,8 @@ export function initC01() {
     const toScreen = (b: Box): Box => [plate[0] + b[0] * plate[2], plate[1] + b[1] * plate[3], plate[0] + b[2] * plate[2], plate[1] + b[3] * plate[3]];
     bNum.set(inN1 ? toScreen(boxAt(tClip)) : null, seg(p, 0.10, 0.17) * (1 - seg(p, 0.36, 0.40)), t);
     bSig.set(toScreen(SIG), seg(p, 0.70, 0.78) * (1 - out), t);
-    // headline writes itself after the ignition; leaves at the end
-    head.set(Math.max(seg(p, 0, 0.1), A.intro), out);
+    // the headline is server-rendered and already on screen (nothing hides it, before or after the engine attaches); it only leaves at the end
+    head.set(1, out);
     const give = A.mobile ? seg(p, 0.06, 0.13) : seg(p, 0.46, 0.56);
     ($('.copy', st) as HTMLElement).style.opacity = (1 - (A.mobile ? 1 : 0.78) * give * (1 - out)).toFixed(3);
     copy.style.transform = `translate3d(0,${((0.5 - p) * 60 - out * 30).toFixed(1)}px,0)`;
@@ -78,7 +78,7 @@ export function initC01() {
       if (p > 0.7) A.log.set('c01b', [D.s1Lec + ' · ' + D.s1C, D.logFirma], p > 0.8 ? 2 : 1);
       else { const n = p > 0.28 ? 3 : p > 0.2 ? 2 : p > 0.12 ? 1 : 0; if (n) A.log.set('c01', [D.cifra, D.fuente, D.ilus], n); else A.log.clear(); }
     }
-    A.gl && A.gl.set('c01', {
+    A.gl && A.foot && A.gl.set('c01', {                 // no layer until the footage is decoded: the poster stays, and GL never draws a black plate
       kind: 'foot', seq, f: fi, plate, fill: A.mobile ? 0 : 1,
       focus: (0.25 + 0.75 * eio(seg(p, 0, 0.12))) * (1 - 0.7 * joinB) * (1 - 0.4 * seg(p, 0.93, 1)),
       exp: 0.78 + 0.22 * seg(p, 0, 0.1),

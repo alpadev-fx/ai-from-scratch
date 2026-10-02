@@ -46,19 +46,33 @@ html.gl-on #log{display:block;position:fixed;left:var(--gut);bottom:24px;z-index
 html[data-ch="cL"] #log{opacity:0}
 html:not([data-ch="c01"]) #log{opacity:0}
 
-/* ---------- ignition ---------- */
-html.ign-on #ign{display:grid;position:fixed;inset:0;z-index:100;place-items:center;overflow:hidden;color:var(--l1)}
+/* ---------- ignition (chapter 00) ----------
+   Pure CSS, 1.0 s, no module and no gsap: nothing it waits for can be late or hang. The head script in v3.astro ENDS it (the animationend of
+   ign-life, 1.2 s from the first frame at the latest, or any click / key / wheel / touch), which also lifts the scroll lock below.
+   dot -> line -> the IA square draws -> IA -> glint -> the camera pushes through the square. Every part is transparent by 1.0 s, so a late
+   timer cannot leave a covering overlay behind (the fade runs on the compositor). The hero copy is under it, already painted. */
+html.ign-on #ign{display:grid;position:fixed;inset:0;z-index:100;place-items:center;overflow:hidden;color:var(--l1);animation:ign-life 1s linear both}
 html.ign-on,html.ign-on body{overflow:hidden}
-#ign.gone{display:none!important}
-#ign .ibg{position:absolute;inset:0;background:var(--bg)}
-#ign .pt{position:absolute;left:50%;top:50%;width:6px;height:6px;margin:-3px 0 0 -3px;background:var(--l1);border-radius:50%;box-shadow:0 0 18px var(--l3)}
-#ign .iln{position:absolute;left:50%;top:50%;width:6px;height:2px;margin:-1px 0 0 -3px;background:var(--l1);transform:scaleX(0);opacity:0}
-#ign .lock{position:relative;width:min(300px,56vw);aspect-ratio:1;transform-origin:50% 50%;will-change:transform}
-#ign .glint{position:absolute;inset:11%;pointer-events:none;opacity:0;background:linear-gradient(105deg,transparent 40%,var(--ac) 50%,transparent 60%);background-size:300% 100%;background-position:100% 0;mix-blend-mode:normal;opacity:.0}
-#ign .ilog{position:absolute;left:var(--gut);bottom:44px;font:400 11px/1.9 var(--m);letter-spacing:.16em;color:var(--l2);min-height:1em}
-#ign .pct{position:absolute;right:var(--gut);bottom:44px;font:400 11px/1 var(--m);letter-spacing:.2em;color:var(--l2);font-variant-numeric:tabular-nums}
-#ign .iskip{position:absolute;right:var(--gut);top:calc(var(--hdr) + 18px);background:none;border:0;color:var(--l2);font:600 11px/1 var(--m);letter-spacing:.2em;cursor:pointer;min-height:44px;padding:0 8px}
+#ign .ibg{position:absolute;inset:0;background:var(--bg);animation:ign-bg 1s linear both}
+#ign .pt{position:absolute;left:50%;top:50%;width:6px;height:6px;margin:-3px 0 0 -3px;background:var(--l1);border-radius:50%;box-shadow:0 0 18px var(--l3);animation:ign-pt 1s linear both}
+#ign .iln{position:absolute;left:50%;top:50%;width:360px;height:2px;margin:-1px 0 0 -180px;background:var(--l1);opacity:0;animation:ign-ln 1s linear both}
+#ign .lock{position:relative;width:min(300px,56vw);aspect-ratio:1;transform-origin:50% 50%;will-change:transform;animation:ign-lock 1s linear both}
+#ign .isq{stroke-dasharray:1;stroke-dashoffset:1;opacity:0;animation:ign-sq 1s linear both}
+#ign .iia{opacity:0;animation:ign-ia 1s linear both}
+#ign .glint{position:absolute;inset:11%;pointer-events:none;opacity:0;background:linear-gradient(105deg,transparent 40%,var(--ac) 50%,transparent 60%);background-size:300% 100%;background-position:100% 0;animation:ign-gl 1s linear both}
+#ign .ilog{position:absolute;left:var(--gut);right:var(--gut);bottom:44px;font:400 11px/1.9 var(--m);letter-spacing:.16em;color:var(--l2);min-height:1em;animation:ign-log 1s linear both}
+#ign .iskip{position:absolute;right:var(--gut);top:calc(var(--hdr) + 18px);background:none;border:0;color:var(--l2);font:600 11px/1 var(--m);letter-spacing:.2em;cursor:pointer;min-height:44px;padding:0 8px;animation:ign-skip 1s linear both}
 #ign .iskip:hover{color:var(--l1)}
+@keyframes ign-life{0%,88%{opacity:1;pointer-events:auto}100%{opacity:0;pointer-events:none}}
+@keyframes ign-bg{0%,76%{opacity:1;animation-timing-function:ease-in}100%{opacity:0}}
+@keyframes ign-pt{0%,14%{transform:scale(1,1);opacity:1;animation-timing-function:cubic-bezier(.7,0,.84,0)}34%{transform:scale(60,.5);opacity:1}35%,100%{transform:scale(60,.5);opacity:0}}
+@keyframes ign-ln{0%,33%{opacity:0;transform:scaleY(1)}34%{opacity:1;transform:scaleY(1);animation-timing-function:cubic-bezier(.45,0,.55,1)}52%,100%{opacity:0;transform:scaleY(40)}}
+@keyframes ign-sq{0%,33%{opacity:0;stroke-dashoffset:1}34%{opacity:1;stroke-dashoffset:1;animation-timing-function:cubic-bezier(.65,0,.35,1)}66%,100%{opacity:1;stroke-dashoffset:0}}
+@keyframes ign-ia{0%,52%{opacity:0;transform:translateY(6px);animation-timing-function:cubic-bezier(.2,.7,.3,1)}72%,100%{opacity:1;transform:translateY(0)}}
+@keyframes ign-gl{0%,58%{opacity:0;background-position:100% 0}59%{opacity:1;background-position:100% 0;animation-timing-function:cubic-bezier(.65,0,.35,1)}82%{opacity:1;background-position:0 0}83%,100%{opacity:0;background-position:0 0}}
+@keyframes ign-lock{0%,70%{transform:scale(1);animation-timing-function:cubic-bezier(.7,0,.84,0)}100%{transform:scale(46)}}
+@keyframes ign-log{0%{clip-path:inset(0 100% 0 0);animation-timing-function:steps(24,end)}50%,72%{clip-path:inset(0 0 0 0);opacity:1}84%,100%{clip-path:inset(0 0 0 0);opacity:0}}
+@keyframes ign-skip{0%,72%{opacity:1}84%,100%{opacity:0}}
 
 /* ---------- chapters: STATIC FIRST (what reduced-motion / no-WebGL / no-JS sees) ---------- */
 .ch{position:relative;border-bottom:1px solid var(--hair2)}
@@ -214,16 +228,22 @@ html.fx .chr{display:inline-block;will-change:transform,opacity,filter}
 html.fx .label{color:var(--l1)}
 html.fx .label i{display:block;flex:none;width:8px;height:8px;background:var(--ac)}
 html.fx .sub{text-shadow:0 0 18px var(--bg),0 0 4px var(--bg)}
-html.fx:not(.ready) .stage .copy .head,html.fx:not(.ready) .stage .copy .sub,html.fx:not(.ready) .stage .cta{opacity:0}
-/* before the engine is up, 01 shows its blurred poster full-bleed (instant paint) */
+/* The hero copy (eyebrow, h1, bold line, sub, CTA) is painted from the FIRST frame: nothing hides it until the engine is up, and the engine
+   never hides it again (it only moves and fades it with the scroll). Until the engine has taken over, the copy stands where the engine
+   will put it at scroll 0 (the 30px the parallax starts from, the column width of the plate layout), so attaching moves nothing. */
+html.fx #c01 .copy{transform:translate3d(0,30px,0)}
+html.fx #c01 .stage{--copyW:max(260px,min(38vw,calc(60vw - 24.1875vh - 80px)))}
+@media (max-width:1100px),(max-aspect-ratio:4/5){html.fx #c01 .stage{--copyW:260px}}
+/* until the engine has the first frames of 01, the page shows its blurred poster full-bleed (instant paint); html.foot-on = GL is drawing
+   the plate, and the poster fades out over it */
 html.fx .pstat{position:absolute;inset:0;display:block;margin:0;grid-column:auto;grid-row:auto}
 html.fx .pstat .poster{display:block;width:100%;height:100%;object-fit:cover;filter:blur(14px) contrast(1.1);transform:scale(1.1);opacity:.55}
 html.fx .pstat .plate{display:none}
-html.gl-on .pstat{display:none}
+html.foot-on .pstat{opacity:0;visibility:hidden;transition:opacity .8s ease,visibility 0s linear .8s}
 html.fx .scrim{display:block;position:absolute;inset:0;pointer-events:none;z-index:3;background:linear-gradient(90deg,color-mix(in srgb,var(--bg) 94%,transparent) 0,color-mix(in srgb,var(--bg) 80%,transparent) 24%,transparent 43%)}
 html.gl-on #cL .scrim{display:none}
-html.fx .pframe{display:block;position:absolute;left:0;top:0;z-index:3;pointer-events:none;border:1px solid var(--hair);opacity:0;transform-origin:0 0}
-html.gl-on .pframe{opacity:1}
+html.fx .pframe{display:block;position:absolute;left:0;top:0;z-index:3;pointer-events:none;border:1px solid var(--hair);opacity:0;transform-origin:0 0;transition:opacity .8s ease}
+html.foot-on .pframe{opacity:1}
 html.fx .pframe::before,html.fx .pframe::after{content:'';position:absolute;width:18px;height:18px;border:0 solid var(--l1)}
 html.fx .pframe::before{left:-1px;top:-1px;border-left-width:2px;border-top-width:2px}
 html.fx .pframe::after{right:-1px;bottom:-1px;border-right-width:2px;border-bottom-width:2px}
@@ -244,7 +264,7 @@ html.fx .card .sweep{display:block;position:absolute;left:-40%;top:0;bottom:0;wi
 .bk .fillg{width:1px;height:1px;background:linear-gradient(180deg,color-mix(in srgb,var(--ac) 14%,transparent),transparent 70%)}
 .bk .scan{width:1px;height:1px;background:linear-gradient(90deg,transparent,var(--c),transparent);opacity:.7}
 .bk .ldr{width:1px;height:26px;background:var(--c);opacity:.8}
-html.fx:not(.gl-on) .bk,html.fx:not(.gl-on) .sbk{display:none}
+html.fx:not(.foot-on) .bk,html.fx:not(.gl-on) .sbk{display:none}
 html.gl-on .sbk{display:none}
 /* Δ engine */
 html.fx #cL .copy{top:calc(var(--hdr) + 12svh)}

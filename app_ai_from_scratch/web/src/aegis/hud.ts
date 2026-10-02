@@ -16,7 +16,7 @@ const heads: Array<{ redo(): void }> = [];
 export function headline(copy: HTMLElement) {
   const h = $('.head', copy), lab = $('.label', copy), rule = $('.rule', copy), sub = $('.sub', copy), cta = $('.cta', copy);
   const labSpan = lab ? $('span', lab) : null;
-  let chars: HTMLElement[] = [], sp: SplitText | null = null, dirty = true, decoded = false;
+  let chars: HTMLElement[] = [], sp: SplitText | null = null, dirty = true, decoded = false, seen = false;
   const canSplit = !!(h && !A.rm);
   const o = {
     split() {
@@ -28,8 +28,12 @@ export function headline(copy: HTMLElement) {
     },
     redo() { dirty = true; },
     set(p: number, pOut = 0) {
-      if (dirty) o.split();
       const ant = clamp(Math.abs(A.st.v) / 2600) * 0.12, q = clamp(p + ant), qo = clamp(pOut);
+      // A headline that is fully in and not leaving is the server-rendered text the visitor is already reading (the hero's is, from the
+      // first frame): leave its markup alone, no SplitText and no label scramble over visible text. It is split when it has to animate
+      // (coming in, or leaving).
+      if (!seen) { seen = true; if (q >= 0.999 && qo === 0) decoded = true; }
+      if (dirty && (q < 0.999 || qo > 0)) o.split();
       const paper = A.paper();
       if (lab) {
         lab.style.opacity = (seg(q, 0, 0.2) * (1 - seg(qo, 0, 0.5))).toFixed(3);

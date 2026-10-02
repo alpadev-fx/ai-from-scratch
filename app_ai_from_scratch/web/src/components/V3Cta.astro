@@ -1,7 +1,8 @@
 ---
 // One CTA row of /v3 (after chapters 03, 07, 10, 11 and 14, and the closing). The label is a PROD string that names the
-// price (preCta «PAGAR $39.990 · 30 DÍAS», cierreCta «EMPEZAR POR $39.990») and the route is prod's: /pago. The mono line
-// under it is the guarantee line prod already prints (heroGar). The page passes both through its copy guard.
+// price (pub.land.preCta, pub.land.cierreCta: the price in them comes from PRECIO_VISUAL, never from this file) and the route
+// is prod's: /pago. The mono line under it is the guarantee line prod already prints (heroGar). The page passes both through its
+// copy guard.
 interface Props { label: string; micro?: string; href?: string }
 const { label, micro, href = '/pago' } = Astro.props;
 ---

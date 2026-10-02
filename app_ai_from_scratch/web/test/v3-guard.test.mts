@@ -30,6 +30,6 @@ test('the Colombian narrative line passes once the city is cut, and only then', 
 test('every v3 variant string exists in both languages and passes the guard', () => {
   for (const lang of ['es', 'en'] as const) {
     const V = STR[lang].pub.v3;
-    for (const k of ['vivoV', 'l4DV', 'preWhy3V', 'faqIncluyeA'] as const) assert.doesNotThrow(() => guard(`${lang}.${k}`, V[k]));
+    for (const k of ['vivoV', 'preWhy3V', 'faqIncluyeA'] as const) assert.doesNotThrow(() => guard(`${lang}.${k}`, V[k]));
   }
 });

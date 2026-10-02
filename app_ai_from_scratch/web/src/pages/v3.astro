@@ -380,13 +380,15 @@ setTimeout(function(){
   </div>
 </section>
 
-<!-- ===== 10 · LA OFERTA (Hormozi s7: seven items, item 6 = «lo que publique después» + the published vivoV) + CTA. Stage 2B: docking onto the spine. ===== -->
+<!-- ===== 10 · LA OFERTA (Hormozi s7: seven items, item 6 = «lo que publique después» + the published vivoV) + CTA. Stage 2B: docking onto the spine.
+     Each item is a title and a description in two elements of their own, never one sentence joined by a dash: the descriptions are lower-case
+     continuations in Hormozi's copy, but item 6's is the published vivoV, a full sentence with a capital. ===== -->
 <section id="c10" class="sec cx" aria-labelledby="c10h" data-fx="dock">
   <div class="sh"><div class="sn">■ {label('10', V.ch10)}</div><div class="sx">{cnt('10')}</div></div>
   <h2 id="c10h" class="hx wide">{fill(V.s7H)}</h2>
   <ol class="stack" data-dock data-total={offer.length}>
     {offer.map((it, i) => (
-      <li data-dock-item><span class="no">{String(i + 1).padStart(2, '0')}</span><p><b>{it.t}</b> — {it.d}</p></li>
+      <li data-dock-item><span class="no">{String(i + 1).padStart(2, '0')}</span><div class="it"><p class="t">{it.t}</p><p class="d">{it.d}</p></div></li>
     ))}
   </ol>
   <V3Cta label={P.preCta} micro={P.heroGar} />

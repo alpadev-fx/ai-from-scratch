@@ -530,8 +530,9 @@ html.fx .figs-sec{min-height:100svh}
 .stack::before{content:'';position:absolute;left:27px;top:0;bottom:0;width:1px;background:var(--hair)}
 .stack li{display:grid;grid-template-columns:54px minmax(0,1fr);gap:0 20px;align-items:start;padding:24px 0;border-bottom:1px solid var(--hair2)}
 .stack .no{position:relative;z-index:1;width:54px;padding:5px 0;background:var(--bg);text-align:center;font:700 13px/1 var(--m);letter-spacing:.06em;color:var(--ac)}
-.stack p{max-width:68ch;font:400 clamp(16px,1.5vw,19px)/1.5 var(--f);color:var(--l2)}
-.stack b{font-weight:700;color:var(--l1)}
+.stack .it{display:flex;flex-direction:column;gap:6px;min-width:0}
+.stack .t{max-width:68ch;font:700 clamp(17px,1.6vw,21px)/1.3 var(--f);letter-spacing:-.02em;color:var(--l1)}
+.stack .d{max-width:68ch;font:400 clamp(15px,1.4vw,18px)/1.5 var(--f);color:var(--l2)}
 
 /* 11 · garantía: the seal. The ring of text turns in stage 2B; the 14 stays */
 .gar{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,.8fr);gap:40px 72px;align-items:center}

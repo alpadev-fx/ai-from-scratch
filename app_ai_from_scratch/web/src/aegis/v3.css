@@ -108,7 +108,7 @@ html:not([data-theme="paper"]) .plate{box-shadow:0 0 70px rgba(10,132,255,.14);b
 .sbk .plt{position:absolute;left:0;top:calc(100% + 8px)}
 .plt{display:flex;flex-direction:column;gap:4px;padding:8px 10px;background:var(--pl);border:1px solid var(--hair);font:500 10px/1.2 var(--m);letter-spacing:.14em;white-space:nowrap;color:var(--l1)}
 .plt em{font-style:normal;color:var(--ac);border:1px solid var(--ac);padding:3px 5px;align-self:flex-start;letter-spacing:.18em}
-.scrim,.pframe,.cue,.lend{display:none}
+.scrim,.pframe,.cue{display:none}
 .card{grid-column:1;background:var(--panel);border:1px solid var(--hair);padding:16px 18px 6px;max-width:460px}
 .card .hd,.pcard .hd{display:flex;justify-content:space-between;align-items:center;gap:16px;padding-bottom:12px;margin-bottom:4px;border-bottom:1px solid var(--hair)}
 .hd span{font:500 11px/1.3 var(--m);letter-spacing:.2em;text-transform:uppercase;color:var(--l2)}
@@ -295,9 +295,6 @@ html.fx .steps u i{position:absolute;inset:0;background:var(--l1);transform-orig
 html.fx .steps .h{font-size:16px}html.fx .steps .d{font-size:13px;max-width:34ch}
 html.fx .steps li:not(.on) .d{visibility:hidden}   /* keeps the row height constant, so switching tab never moves the block (CLS 0) */
 html.fx .steps li{transition:none}
-html.fx .lend{display:block;position:absolute;left:var(--gut);right:var(--gut);top:36svh;z-index:5;text-align:center}
-html.fx .lend .head{max-width:none;margin:0 auto;font-size:clamp(30px,4vw,64px)}
-html.fx #cL[data-stage] .lend{pointer-events:none}
 html[data-ch="cL"] .cue{display:none}
 @media (max-width:1100px),(max-aspect-ratio:4/5){
   html.fx .copy{top:calc(var(--hdr) + 54px);width:auto;right:var(--gut)}
@@ -323,7 +320,6 @@ html[data-ch="cL"] .cue{display:none}
   html.fx .steps .h,html.fx .steps .d{display:none!important}
   html.fx .steps li.on .h{display:block!important;grid-row:1;grid-column:1/-1;font-size:14px;padding-bottom:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   html.fx .tk,html.fx .sent{font-size:14.5px}
-  html.fx .lend{top:30svh}
   html.fx #log{left:0;right:0;bottom:0;min-width:0;box-sizing:border-box;height:104px;padding:30px var(--gut) 0;color:var(--l1);text-shadow:none;background:linear-gradient(0deg,color-mix(in srgb,var(--bg) 92%,transparent) 0,color-mix(in srgb,var(--bg) 78%,transparent) 62%,transparent 100%)}
   html.fx #log:empty{background:none}
 }

@@ -16,12 +16,16 @@ import type { GL } from './engine';
 import { $, $$, clamp, eio, eo, lerp, rng, seg, ss } from './util';
 
 const SP = [0.1, 0.32, 0.56, 0.78, 0.94];          // stage boundaries (progress)
+// The timeline below was authored over a 6.4-screen chapter and ends at p = 0.96, where the panel and the card have faded. The chapter no longer
+// closes on a line after that («Dos especímenes para tocar» now points at specimens that live in chapter 08), so v3.astro gives it 6.2 screens
+// (--len) and its progress is scaled to run to END of the timeline: every beat keeps the scroll it had, and no empty scroll is left at the end.
+const AUTHORED = 6.4, GIVEN = 6.2, END = (GIVEN - 1) / (AUTHORED - 1);
 
 export function initLLM(gl: GL) {
   const ch = register({ id: 'cL', rmP: 0.97 }); if (!ch) return null;
   const THREE = gl.THREE, R = gl.R, st = ch.stage, D = A.copy;
-  const copy = $('.copy', st)!, endCopy = $('.lend', st)!, chipsA = $('.chips:not(.ctx)', st)!, chipsB = $('.chips.ctx', st)!, panel = $('.steps-wrap', st)!, pCard = $('.pcard', st)!;
-  const head = headline(copy), endHead = headline(endCopy);
+  const copy = $('.copy', st)!, chipsA = $('.chips:not(.ctx)', st)!, chipsB = $('.chips.ctx', st)!, panel = $('.steps-wrap', st)!, pCard = $('.pcard', st)!;
+  const head = headline(copy);
   void _c;
   const sentence: string = D.sentence, toks = tokenize(sentence);
   if (toks.length !== 5) console.warn('[v3] expected 5 tokens, got', toks.length);
@@ -181,14 +185,14 @@ export function initLLM(gl: GL) {
 
   ch.resize = () => { lastW = 0; };
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { lastW = 0; });      // the chips' widths and the copy's height are those of the loaded fonts
-  ch.frame = (p, dt, t) => {
+  ch.frame = (pRaw, dt, t) => {
+    const p = pRaw * END;
     theme();
     if (lastW !== A.W || lastH !== A.H) { lastW = A.W; lastH = A.H; measure(); }
     uTime.value = t;
     const mob = A.mobile, s = S(), paper = A.paper();
     // ----- copy + panels
     head.set(seg(p, 0, 0.07), seg(p, 0.1, 0.15));
-    endHead.set(seg(p, 0.945, 0.99));
     panel.style.opacity = (seg(p, 0.08, 0.13) * (1 - seg(p, 0.93, 0.96))).toFixed(3);
     steps.forEach((li, i) => { const a = SP[i], b = SP[i + 1], on = p >= a && p < b, done = p >= b; li.classList.toggle('on', on); li.classList.toggle('done', done); const u = $('u i', li) as HTMLElement; u.style.transform = `scaleX(${seg(p, a, b).toFixed(3)})`; });
     // ----- the two rows of chips: A = Cartagena tokens (they split off the sentence at p .10), B = the dog context + the sampled token

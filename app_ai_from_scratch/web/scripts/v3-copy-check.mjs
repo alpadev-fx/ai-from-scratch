@@ -74,7 +74,7 @@ function required(lang) {
       ['earlier', V.s1Earlier], ['gap', V.s1Gap], ['shout', V.s1Cierre], ['you', V.chatTu], ['ai', V.chatIa]],
     c03: [['label', lab('03', V.ch03)], ['h2', P.llevasH2], ['l1', P.l1H], ['l1', P.l1D], ['l2', P.l2H], ['l2', P.l2D], ['l3', P.l3H], ['l3', P.l3D], ...cta],
     cL: [['label', lab('04', V.ch04)], ['h2', V.adentroH], ['sub', P.aD], ['context', ctx], ['candidates', V.cand], ['dial', V.tabTemp],
-      ...['05', '06', '08', '09'].flatMap((n) => [[`step ${n} lesson`, `${V.lec} ${n}`], [`step ${n} h`, mod(n).h], [`step ${n} d`, mod(n).d]]), ['closing line', P.espH2]],
+      ...['05', '06', '08', '09'].flatMap((n) => [[`step ${n} lesson`, `${V.lec} ${n}`], [`step ${n} h`, mod(n).h], [`step ${n} d`, mod(n).d]])],
     c05: [['label', lab('05', V.ch05)], ...mods.slice(0, 6).flatMap((m) => [[`fig ${m.n} eyebrow`, m.eb], [`fig ${m.n} number`, m.k], [`fig ${m.n} caption`, m.kc], [`fig ${m.n} h`, m.h], [`fig ${m.n} d`, m.d]])],
     c06: [['label', lab('06', V.s3Eb)], ...V.s3Palabras.map((w) => ['struck word', w]), ['h2', V.s3H]],
     c07: [['label', lab('07', V.ch07)], ['h2', V.s4H], ['lede', V.s4Sub], ...V.specs.flatMap((s) => [['figure', String(s.k)], ['figure caption', s.d]]), ...cta],
@@ -229,6 +229,13 @@ function judge(html, lang) {
     ['skipping on wheel', /'wheel'/], ['skipping on touch', /'touchstart'/], ['the 15 s watchdog', /\},15000\)/]]) if (!re.test(bootJs)) f.push(`boot: the head script lost ${what}`);
   if (/class="pct"/.test(ch.ign.html)) f.push('boot: the ignition shows a loading counter that is not bound to anything real');
 
+  // chapter 04 ends with its last tab: no closing line that points at specimens now living in chapter 08, and a scroll length the engine's
+  // timeline is scaled for (llm.ts: GIVEN). A mismatch would change the pacing of every beat without any error.
+  if (textOf(html).includes(norm(P.espH2))) f.push(`structure: chapter 04 closes on «${norm(P.espH2)}» again (the specimens live in chapter 08)`);
+  if (/class="lend\b/.test(ch.cL.html)) f.push('structure: chapter 04 has a .lend closing block again');
+  const len = ch.cL.html.match(/id="cL" style="--len:([\d.]+)"/), given = +(readFileSync(new URL('../src/aegis/llm.ts', import.meta.url), 'utf8').match(/GIVEN = ([\d.]+)/)?.[1] ?? NaN);
+  if (!len || +len[1] !== given) f.push(`structure: chapter 04 is ${len ? len[1] : '(no --len)'} screens but llm.ts scales its timeline for ${given}`);
+
   for (const m of deltaRule(html, lang)) f.push(`delta: ${m}`);
   return f;
 }
@@ -290,6 +297,8 @@ function mutants(html, lang) {
     ['the ignition that cannot be skipped by wheel', html.replace("'wheel'", "'wheelx'"), /boot: the head script lost skipping on wheel/],
     ['the head script without the watchdog', html.replace('},15000);', '},15000000);'), /boot: the head script lost the 15 s watchdog/],
     ['a fake loading counter back in the ignition', html.replace('<button class="iskip"', '<div class="pct">000</div><button class="iskip"'), /boot: the ignition shows a loading counter/],
+    ['the stale closing line back in chapter 04', inChapter('cL', (c) => c.replace('</section>', `<div class="lend copy2"><h3 class="head">${esc(P.espH2)}</h3></div></section>`)), /structure: chapter 04 closes on/],
+    ['chapter 04 with a length the engine is not scaled for', html.replace('id="cL" style="--len:6.2"', 'id="cL" style="--len:6.4"'), /structure: chapter 04 is 6.4 screens/],
     ['no noindex', html.replace(/<meta name="robots"[^>]*>/, ''), /meta: no noindex/],
     ['a Meta Pixel', html.replace('</head>', '<script>fbq("init")</script></head>'), /meta: Meta Pixel/],
   ];

@@ -1,46 +1,104 @@
-// Copy gate for /v3 (owner's rules, each one a real past failure).
-//   BASE=http://127.0.0.1:4321 node web/scripts/v3-copy-check.mjs
-// Fetches the SERVER-RENDERED page in both languages and fails (exit 1) on any
-// forbidden phrase, AND on any required selling copy that is missing (a section
-// silently dropped is the same failure as a forbidden word kept). Numbers outside the course's allowed set are listed as NOTE
-// (some are HUD figures that carry ILUSTRATIVO, some are live copy awaiting the
-// owner's call). If the page cannot be fetched the gate FAILS, never skips.
-const BASE = process.env.BASE ?? 'http://127.0.0.1:4321';
-const FORBIDDEN = [
-  /Kardashev/i, /singularidad|singularity/i, /Ω/, /OpenAI|Anthropic|labs grandes|big labs/i,
-  /testimonio|testimonial/i, /cuenta regresiva|countdown/i, /EBOOK|VOL\. ?1|PORTADA|\bCOVER\b/,
-  /Medell/i, /\bcursos\b|\bcourses\b/i, /estudiantes|students/i,
-];
-const ALLOWED_NUM = new Set(['12', '36', '39.990', '39,990', '30', '100.000', '100,000', '94', '23', '4', '70.000.000.000',
-  '3', '5', '31', '100', '120.000', '120,000', '99', '18,615', '01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '07', '0.30']);
+// Copy gate for /v3, stage 2A: the Hormozi sales argument on the 17 AEGIS chapters. The owner's rules, each one a real past failure.
+//   BASE=http://127.0.0.1:4321 node --experimental-strip-types web/scripts/v3-copy-check.mjs
+// It fetches the SERVER-RENDERED page in both languages and for six markets (the Colombian narrative is the one that carries a
+// city) and fails (exit 1) on:
+//   · the 17 chapter ids missing, duplicated or out of order, or one of the 7 retired ids back;
+//   · any key string of a chapter missing FROM ITS OWN chapter (a chapter silently emptied is the same failure as a forbidden
+//     word kept), in ES and in EN;
+//   · any hard copy rule of src/aegis/copy-guard.ts (the SAME table the page's guard() throws on) in the visible text, the
+//     attributes or the JSON the page ships: cities (except inside the tokenizer example), plural courses, the Hormozi §0.4 list,
+//     monthly wording, «veinte segundos», the cat prompt (except the published lesson-01 caption), a testimonial;
+//   · the one sanctioned «testimonios» sentence not appearing exactly once, a currency amount that is not the published price,
+//     a paid CTA that is not /pago or the free hero CTA that is not /registro, the offer not being seven items, preWhy2 shown
+//     twice, a missing noindex, a Meta Pixel, and the Δ chapter's token rules (next-token candidates only after specimen B's
+//     own context, which is cut by the specimen tokenizer, never by spaces).
+// Before it judges the real pages it proves, on MUTATED copies of the page, that every one of these rules CAN fail (and that the
+// two exemptions stay narrow). If the page cannot be fetched or a self-test cannot fail, the gate FAILS: it never skips.
+import { readFileSync } from 'node:fs';
 import { STR } from '../src/lib/i18n.ts';
+import { PRECIO_VISUAL, PRECIO_TEXTO } from '../src/lib/price.ts';
 import { preguntas, modulos, candidatos } from '../src/data/landing.ts';
 import { ctxOf, tokenize } from '../src/aegis/specimens.ts';
-const decode = (x) => x.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#0*39;/g, "'").replace(/&#x27;/g, "'");
+import { SANCTIONED, guard, violations } from '../src/aegis/copy-guard.ts';
+
+const BASE = process.env.BASE ?? 'http://127.0.0.1:4321';
+// The narrative changes with the visitor's market, so every market is fetched: a city that only shows for one market is the
+// failure this gate exists for.
+const MARKETS = [null, 'CO', 'US', 'MX', 'ES', 'JP'];
+const LANGS = ['es', 'en'];
+// 00 ignition (the overlay) · 01 hero · 02 te ha pasado · 03 qué cambia · 04 por dentro (Δ, id cL) · 05 cifras · 06 lo que no
+// necesitas · 07 el tiempo · 08 prueba · 09 temario · 10 la oferta · 11 garantía · 12 quién · 13 para quién · 14 precio · 15 FAQ · 16 cierre
+const CHAPTERS = ['ign', 'c01', 'c02', 'c03', 'cL', 'c05', 'c06', 'c07', 'c08', 'c09', 'c10', 'c11', 'c12', 'c13', 'c14', 'c15', 'c16'];
+const LEGACY = ['especimenes', 'indice', 'ventajas', 'quien', 'vivo', 'precio', 'faq'];
+const CTA_CHAPTERS = ['c03', 'c07', 'c10', 'c11'];       // CTA rows with the price label + the guarantee line; c14 has its in-card button; c16 closes
+const ALLOWED_NUM = new Set(['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '14', '16', '23', '24', '30', '31', '36', '40', '94', '100', '100.000', '100,000',
+  '39.990', '39,990', '70.000.000.000', '70,000,000,000', '18,615', '0.30', '0', '000', '1.1', '18', '20', '70', '83', ...Array.from({ length: 16 }, (_, i) => String(i + 1).padStart(2, '0'))]);
+
+// ---------- reading the rendered page ----------
+const decode = (x) => x.replace(/&nbsp;/g, ' ').replace(/&#x([0-9a-f]+);/gi, (_m, h) => String.fromCodePoint(parseInt(h, 16)))
+  .replace(/&#(\d+);/g, (_m, d) => String.fromCodePoint(+d)).replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
 const norm = (x) => decode(x).replace(/\s+/g, ' ').trim();
-// The owner's three asks: the advantages, the tutorials / who and how, and that the course keeps growing.
-const required = (lang) => {
-  const P = STR[lang].pub.land, V = STR[lang].pub.v3;
-  const mod = (n) => modulos(lang).find((m) => m.n === n);
-  return [
-    ['01 headline', `${P.heroH1a} ${P.heroH1b}`], ['01 sub', P.heroSub], ['01 cta', P.heroCta], ['01 micro', P.heroMicro],
-    ['01 symptom 1', P.s1H], ['01 symptom 2', P.s2H], ['01 symptom 3', P.s3H], ['01 hud', V.cifra], ['01 hud', V.fuente], ['01 hud', V.ilus],
-    ['delta headline', V.deltaH], ['delta sub', P.aD], ['delta context', ctxOf(P.bD)], ['delta lesson 05', mod('05').h], ['delta lesson 06', mod('06').h], ['delta lesson 08', mod('08').h], ['delta lesson 09', mod('09').h],
-    ['02 title', P.sintH2], ['02 body', P.heroPitch],
-    ['especimenes h2', P.espH2], ['indice h2', P.indH2], ['ventajas h2', P.llevasH2],
-    ['ventajas', P.l1H], ['ventajas', P.l1D], ['ventajas', P.l2H], ['ventajas', P.l2D], ['ventajas', P.l3H], ['ventajas', P.l3D],
-    ['quien fintech', P.preWhy2], ['quien harness h', P.l5H], ['quien harness d', P.l5D],
-    ['curso vivo label', P.vivoLbl], ['curso vivo h', P.l4H], ['curso vivo body', V.vivoV],
-    ['precio h2', P.preH2], ['precio nota', P.preNota], ['precio cta', P.preCta], ['precio garantia', P.preGar], ['precio terminos', P.preTerm],
-    ['precio include 1', P.pre1], ['precio include 2', P.pre2], ['precio include 3', P.pre3],
-    ['precio why 1', P.preWhy1], ['precio why 3', V.preWhy3V], ['precio why 4', P.preWhy4],
-    ['faq h2', P.faqH2], ['cierre h2', P.cierreH2], ['cierre sub', P.cierreSub], ['cierre cta', P.cierreCta],
-    ...preguntas(lang).flatMap((f, i) => [[`faq ${i + 1} q`, f.q], [`faq ${i + 1} a`, i === 3 ? V.faqIncluyeA : f.a]]),
-  ];
-};
-// Δ context rule. The candidates (Max, Luna…) answer specimen B's context («Le pediste un nombre para tu perro.»); they must
-// never sit next to the Cartagena tokens, not even in the server-rendered markup the no-JS / reduced-motion / no-WebGL
-// visitor gets. The string is a cut of bD (ctxOf), so there is no new copy; this reads the STRUCTURE of the Δ chapter.
+const stripCode = (h) => h.replace(/<!--[\s\S]*?-->/g, ' ').replace(/<style[\s\S]*?<\/style>/g, ' ').replace(/<script(?![^>]*application\/json)[\s\S]*?<\/script>/g, ' ');
+const textOf = (h) => norm(stripCode(h).replace(/<script[\s\S]*?<\/script>/g, ' ').replace(/<[^>]+>/g, ' '));
+const attrsOf = (h) => [...stripCode(h).matchAll(/\s(?:alt|aria-label|title|placeholder|content|value|data-text|label)="([^"]*)"/g)].map((m) => norm(m[1]));
+function jsonStrings(h) {
+  const out = [], walk = (v) => { if (typeof v === 'string') out.push(norm(v)); else if (v && typeof v === 'object') Object.values(v).forEach(walk); };
+  for (const m of h.matchAll(/<script[^>]*application\/json[^>]*>([\s\S]*?)<\/script>/g)) walk(JSON.parse(m[1]));
+  return out;
+}
+/** Everything a visitor (or a crawler) can read: the visible text, the text-bearing attributes and the JSON the page ships. */
+const copyOf = (h) => [textOf(h), ...attrsOf(h), ...jsonStrings(h)].join(' ¦ ');
+
+/** The page cut at the chapter ids. Returns `{ id: { n, at, html } }`; `n` is how many elements carry the id. */
+function chaptersOf(h) {
+  const found = CHAPTERS.map((id) => { const all = [...h.matchAll(new RegExp(`<(?:section|div)\\b[^>]*\\bid="${id}"`, 'g'))]; return { id, n: all.length, at: all[0]?.index ?? -1 }; });
+  const end = h.indexOf('</main>') >= 0 ? h.indexOf('</main>') : h.length;
+  const out = {};
+  found.forEach((c, i) => { const next = found.slice(i + 1).find((x) => x.at >= 0); out[c.id] = { ...c, html: c.at < 0 ? '' : h.slice(c.at, next ? next.at : end) }; });
+  return out;
+}
+
+// ---------- what each chapter must say, from the SAME strings the page reads ----------
+function required(lang) {
+  const P = STR[lang].pub.land, V = STR[lang].pub.v3, big = PRECIO_VISUAL[lang];
+  const fill = (s) => s.split('{precio}').join(big);
+  const mods = modulos(lang), mod = (n) => mods.find((m) => m.n === n);
+  const ctx = ctxOf(P.bD), lab = (n, s) => `${n} — ${s}`;
+  const cta = [['cta label', P.preCta], ['cta guarantee line', P.heroGar]];
+  return {
+    ign: [['ignition log', V.ignLog]],
+    c01: [['label', lab('01', V.heroEb)], ['h1', V.heroH], ['h2 line', V.heroH2], ['sub', V.heroSub], ['free cta', P.heroCta], ['trust line', V.heroConfianza],
+      ['hud', V.cifra], ['hud', V.fuente], ['hud', V.ilus], ['card title', V.sintomas],
+      ...[1, 2, 3].flatMap((i) => [[`symptom ${i} lesson`, P[`s${i}Lec`]], [`symptom ${i}`, P[`s${i}H`]], [`symptom ${i} cause`, P[`s${i}C`]]])],
+    c02: [['label', lab('02', V.s1Eb)], ['h2', V.s1H], ...V.s1Beats.flatMap((b, i) => [[`beat ${i + 1} you`, b.tu], [`beat ${i + 1} ai`, b.ia], [`beat ${i + 1} tag`, b.tag]]),
+      ['earlier', V.s1Earlier], ['gap', V.s1Gap], ['shout', V.s1Cierre], ['you', V.chatTu], ['ai', V.chatIa]],
+    c03: [['label', lab('03', V.ch03)], ['h2', P.llevasH2], ['l1', P.l1H], ['l1', P.l1D], ['l2', P.l2H], ['l2', P.l2D], ['l3', P.l3H], ['l3', P.l3D], ...cta],
+    cL: [['label', lab('04', V.ch04)], ['h2', V.adentroH], ['sub', P.aD], ['context', ctx], ['candidates', V.cand], ['dial', V.tabTemp],
+      ...['05', '06', '08', '09'].flatMap((n) => [[`step ${n} lesson`, `${V.lec} ${n}`], [`step ${n} h`, mod(n).h], [`step ${n} d`, mod(n).d]]), ['closing line', P.espH2]],
+    c05: [['label', lab('05', V.ch05)], ...mods.slice(0, 6).flatMap((m) => [[`fig ${m.n} eyebrow`, m.eb], [`fig ${m.n} number`, m.k], [`fig ${m.n} caption`, m.kc], [`fig ${m.n} h`, m.h], [`fig ${m.n} d`, m.d]])],
+    c06: [['label', lab('06', V.s3Eb)], ...V.s3Palabras.map((w) => ['struck word', w]), ['h2', V.s3H]],
+    c07: [['label', lab('07', V.ch07)], ['h2', V.s4H], ['lede', V.s4Sub], ...V.specs.flatMap((s) => [['figure', String(s.k)], ['figure caption', s.d]]), ...cta],
+    c08: [['label', lab('08', V.ch08)], ['h2', V.s5H], ['sub', V.s5Sub], ['specimen B', V.s5Eb], ['interactive', P.espInter], ['prompt', ctx], ['candidates', V.cand],
+      ['temperature', P.bTemp], ['safe', P.bSeguro], ['predictable', P.bPredecible], ['risky', P.bArriesga], ['button', V.s5Boton],
+      ['specimen A', P.aLbl], ['specimen A h', P.aH], ['specimen A d', P.aD], ['specimen A example', P.aEjemplo], ['tokens', P.aTokens], ['words', P.aPalabras], ['letters', P.aLetras]],
+    c09: [['label', lab('09', V.ch09)], ['h2', P.indH2], ['sub', P.indSub], ...mods.flatMap((m) => [[`lesson ${m.n} eyebrow`, m.eb], [`lesson ${m.n} h`, m.h], [`lesson ${m.n} d`, m.d], [`lesson ${m.n} number`, m.k], [`lesson ${m.n} caption`, m.kc]])],
+    c10: [['label', lab('10', V.ch10)], ['h2', fill(V.s7H)], ...V.s7Items.flatMap((it, i) => [[`item ${i + 1}`, it.t], [`item ${i + 1} d`, fill(it.d)]]),
+      ['item 6', V.s7Next], ['item 6 d', V.vivoV], ['item 7', V.s7Gar.t], ['item 7 d', fill(V.s7Gar.d)], ...cta],
+    c11: [['label', lab('11', V.ch11)], ['h2', V.s8H], ['body', fill(V.s8Body)], ['seal text', V.s8Sello], ['seal core', '14'], ...cta],
+    c12: [['label', lab('12', V.instrEb)], ['h2', V.instrH], ['body', V.instrBody], ['emphasis', V.instrEnfasis], ['close', V.instrCierre]],
+    c13: [['label', lab('13', V.ch13)], ['yes h', V.s10TituloSi], ...V.s10Si.map((x) => ['yes', x]), ['no h', V.s10TituloNo], ...V.s10No.map((x) => ['no', x])],
+    c14: [['label', lab('14', V.ch14)], ['h2', P.preH2], ['price', big], ['unit', P.preUnidad], ['note', P.preNota], ['cta', P.preCta], ['why h', P.preWhyH],
+      ['why 1', P.preWhy1], ['why 2', P.preWhy2], ['why 3', V.preWhy3V], ['why 4', P.preWhy4], ['guarantee', P.preGar], ['terms', P.preTerm],
+      ['includes', P.incluye], ['inc 1', P.pre1], ['inc 2', P.pre2], ['inc 3', P.pre3]],
+    c15: [['label', lab('15', V.ch15)], ['h2', P.faqH2], ...preguntas(lang).flatMap((f, i) => [[`faq ${i + 1} q`, f.q], [`faq ${i + 1} a`, i === 3 ? V.faqIncluyeA : f.a]])],
+    c16: [['label', lab('16', V.ch16)], ...V.s14Pasos.map((s, i) => [`step ${i + 1}`, s]), ['h2', V.cierreH], ['cta', P.cierreCta], ['foot', P.pieHand], ['foot', P.pieMeta2]],
+  };
+}
+
+// ---------- Δ context rule (unchanged by stage 2A) ----------
+// The candidates (Max, Luna…) answer specimen B's context («Le pediste un nombre para tu perro.»); they must never sit next to
+// the Cartagena tokens, not even in the server-rendered markup the no-JS / reduced-motion / no-WebGL visitor gets. The string is
+// a cut of bD (ctxOf), so there is no new copy; this reads the STRUCTURE of the Δ chapter.
 function deltaRule(html, lang) {
   const out = [], ctx = ctxOf(STR[lang].pub.land.bD), names = candidatos(lang).map((c) => c.name);
   const sec = (html.match(/<section class="ch" id="cL"[\s\S]*?<\/section>/) ?? [''])[0];
@@ -66,10 +124,174 @@ function deltaRule(html, lang) {
   if (!pc || norm(pc[1]) !== norm(ctx)) out.push(`the card context line is "${pc ? norm(pc[1]) : '(missing)'}", expected "${ctx}"`);
   return out;
 }
-// A gate that cannot fail proves nothing: each way the defect can come back must be caught by deltaRule.
+
+// ---------- the judge ----------
+/** Every way the rendered page can be wrong, as `category: message` strings. Empty = the page is right. */
+function judge(html, lang) {
+  const f = [], P = STR[lang].pub.land, V = STR[lang].pub.v3, big = PRECIO_VISUAL[lang];
+  const kc01 = norm(modulos(lang)[0].kc);          // lesson 01's published caption is the only text that may say «gatos» / "cat"
+
+  // meta
+  if (!/<meta name="robots" content="noindex/.test(html)) f.push('meta: no noindex');
+  if (/connect\.facebook\.net|fbq\(|facebook\.com\/tr/.test(html)) f.push('meta: Meta Pixel present');
+  if ((html.match(/<h1\b/g) ?? []).length !== 1) f.push(`meta: ${(html.match(/<h1\b/g) ?? []).length} <h1> on the page, expected 1`);
+  let corpus;
+  try { corpus = copyOf(html); } catch (e) { return [...f, `meta: the page ships JSON that does not parse (${e.message})`]; }
+
+  // chapters: all 17 ids, once each, in order; none of the retired ones; 16 <section>
+  const ch = chaptersOf(html);
+  for (const id of CHAPTERS) if (ch[id].n !== 1) f.push(`chapters: #${id} appears ${ch[id].n} times, expected 1`);
+  const order = CHAPTERS.filter((id) => ch[id].at >= 0).map((id) => ch[id].at);
+  if (order.some((at, i) => i && at < order[i - 1])) f.push(`chapters: out of order, expected ${CHAPTERS.join(' > ')}`);
+  for (const id of LEGACY) if (new RegExp(`\\bid="${id}"`).test(html)) f.push(`chapters: retired id #${id} is back`);
+  if ((html.match(/<section\b/g) ?? []).length !== 16) f.push(`chapters: ${(html.match(/<section\b/g) ?? []).length} <section> elements, expected 16`);
+
+  // key strings, each one inside ITS chapter
+  const need = required(lang);
+  for (const id of CHAPTERS) {
+    const slice = ch[id].html; if (!slice) continue;
+    const have = copyOf(slice);
+    for (const [what, str] of need[id]) {
+      if (typeof str !== 'string' || !str) { f.push(`copy: #${id} requires "${what}" but that string does not exist in i18n (${typeof str})`); continue; }   // fail closed on a gate that cannot know what to look for
+      if (!have.includes(norm(str))) f.push(`copy: #${id} is missing "${what}": "${norm(str).slice(0, 70)}"`);
+    }
+  }
+
+  // hard copy rules over everything readable (the rule table is the page's own)
+  const allow = [kc01];
+  for (const [rule, hit] of violations(corpus, allow)) f.push(`rules: ${rule} ("${hit}")`);
+  const sanctioned = (corpus.match(SANCTIONED) ?? []).length;
+  if (sanctioned !== 1) f.push(`rules: the sanctioned «testimonios» sentence appears ${sanctioned} times, expected exactly 1`);
+  else if (!copyOf(ch.c08.html).match(SANCTIONED)) f.push('rules: the sanctioned «testimonios» sentence is not in chapter 08');
+  if (/\{precio\}|undefined|\[object Object\]|\bNaN\b/.test(corpus)) f.push('rules: a placeholder or an undefined value leaked into the copy');
+
+  // prices: every currency amount on the page is the published price, in the language's notation, and never a literal of ours
+  const okPrice = new Set([big, `${PRECIO_TEXTO[lang]} COP`]);
+  for (const m of new Set(corpus.match(/\$\s?\d[\d.,]*\d|\d[\d.,]*\d\s?COP/g) ?? [])) if (!okPrice.has(m)) f.push(`price: "${m}" is not the published price (${[...okPrice].join(' / ')})`);
+  if (!ch.c14.html.includes(`<b data-odo>${big}</b>`)) f.push(`price: chapter 14's odometer figure is not ${big}`);
+
+  // CTAs: free in the hero (/registro), every paid one /pago with the outcome and the price in its label, no stray routes
+  if (!ch.c01.html.includes(`<a href="/registro" class="buy big"><span>${P.heroCta}</span>`)) f.push('cta: the hero CTA is not the free /registro button with the published label');
+  if (/href="\/pago"/.test(ch.c01.html)) f.push('cta: the hero (free) chapter links to /pago');
+  const rows = [...html.matchAll(/<div class="ctarow" data-cta[^>]*>([\s\S]*?)<\/div>/g)];
+  const rowOf = (id) => rows.filter((r) => ch[id].at >= 0 && r.index >= ch[id].at && r.index < ch[id].at + ch[id].html.length);
+  for (const id of CTA_CHAPTERS) {
+    const r = rowOf(id);
+    if (r.length !== 1) { f.push(`cta: #${id} has ${r.length} CTA rows, expected 1`); continue; }
+    const m = r[0][1].trim().match(/^<a href="([^"]*)" class="buy big"><span>([^<]*)<\/span>[\s\S]*<\/a>\s*<p>([^<]*)<\/p>$/);
+    if (!m) { f.push(`cta: #${id} CTA row has an unexpected shape`); continue; }
+    if (m[1] !== '/pago') f.push(`cta: #${id} CTA goes to ${m[1]}, expected /pago`);
+    if (norm(m[2]) !== norm(P.preCta)) f.push(`cta: #${id} CTA label is "${norm(m[2])}", expected "${norm(P.preCta)}"`);
+    if (norm(m[3]) !== norm(P.heroGar)) f.push(`cta: #${id} CTA guarantee line is "${norm(m[3])}", expected "${norm(P.heroGar)}"`);
+  }
+  const close = rowOf('c16');
+  if (close.length !== 1) f.push(`cta: #c16 has ${close.length} CTA rows, expected 1`);
+  else {
+    const m = close[0][1].trim().match(/^<a href="([^"]*)" class="buy big"><span>([^<]*)<\/span>/);
+    if (!m || m[1] !== '/pago' || norm(m[2]) !== norm(P.cierreCta)) f.push(`cta: #c16 closing CTA is not /pago with "${norm(P.cierreCta)}"`);
+  }
+  if (!ch.c14.html.includes(`<a href="/pago" class="buy big" data-cta><span>${P.preCta}</span>`)) f.push('cta: chapter 14 has no in-card /pago button with the published label');
+  if ((html.match(/\bdata-cta\b/g) ?? []).length !== 6) f.push(`cta: ${(html.match(/\bdata-cta\b/g) ?? []).length} CTAs marked data-cta, expected 6 (after 03, 07, 10, 11, 14 and the closing)`);
+  for (const label of [P.preCta, P.cierreCta]) if (!label.includes(big)) f.push(`cta: label "${label}" does not name the price ${big}`);
+  for (const m of html.matchAll(/href="(\/[^"]*)"/g)) if (/suscri|mensual|subscri|monthly/i.test(m[1])) f.push(`cta: link to ${m[1]}`);
+
+  // the offer is seven items, in order: the five Hormozi ones, «lo que publique después» (+ the published vivoV), the guarantee
+  const items = [...ch.c10.html.matchAll(/<li data-dock-item><span class="no">(\d\d)<\/span><p><b>([\s\S]*?)<\/b> — ([\s\S]*?)<\/p><\/li>/g)];
+  if (items.length !== 7 || items.some((m, i) => +m[1] !== i + 1)) f.push(`offer: ${items.length} numbered items, expected 7 in order`);
+  else if (norm(items[5][2]) !== norm(V.s7Next) || norm(items[5][3]) !== norm(V.vivoV)) f.push('offer: item 6 is not «lo que publique después» with the published vivoV');
+
+  // chapter 02 keeps the N3 hook; chapter 14 shows the four prod reasons in prod order, and preWhy2 only there
+  if (!/data-seq="n3"/.test(ch.c02.html)) f.push('structure: chapter 02 lost the N3 hook (data-seq="n3")');
+  const dup = textOf(html).split(norm(P.preWhy2)).length - 1;
+  if (dup !== 1) f.push(`structure: preWhy2 appears ${dup} times, expected 1 (chapter 14 only)`);
+  const t14 = textOf(ch.c14.html), pos = [P.preWhy1, P.preWhy2, V.preWhy3V, P.preWhy4].map((s) => t14.indexOf(norm(s)));
+  if (pos.some((p, i) => p < 0 || (i && p < pos[i - 1]))) f.push('structure: the price reasons are not preWhy1, preWhy2, preWhy3V, preWhy4 in that order');
+  if ((ch.c14.html.match(/<div class="pp">([\s\S]*?)<small>/)?.[1].match(/<p>/g) ?? []).length !== 3) f.push('structure: chapter 14 does not show the three trust lines of the market narrative');
+  if ((ch.c14.html.match(/<div class="chipsrow">([\s\S]*?)<\/div>/)?.[1].match(/<span>/g) ?? []).length < 1) f.push('structure: chapter 14 shows no payment methods');
+  if ((ch.c15.html.match(/<details>/g) ?? []).length !== 8) f.push('structure: the FAQ is not 8 questions');
+
+  for (const m of deltaRule(html, lang)) f.push(`delta: ${m}`);
+  return f;
+}
+
+// ---------- self-tests: every rule must be able to fail, and the exemptions must stay narrow ----------
+const poison = (h, s) => h.replace('</main>', `<p>${s}</p></main>`);
+// Astro escapes text nodes (the apostrophe of «It's for you if» is &#39;), so a mutation that searches the markup must search the escaped string.
+const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+const swap = (h, a, b) => h.replace(`id="${a}"`, 'id="__"').replace(`id="${b}"`, `id="${a}"`).replace('id="__"', `id="${b}"`);
+function mutants(html, lang) {
+  const V = STR[lang].pub.v3, P = STR[lang].pub.land, big = PRECIO_VISUAL[lang], kc01 = modulos(lang)[0].kc;
+  const sanct = esc(V.s5H.match(SANCTIONED)[0]), s3 = esc(V.s3H);
+  const inChapter = (id, fn) => { const c = chaptersOf(html)[id]; return html.slice(0, c.at) + fn(c.html) + html.slice(c.at + c.html.length); };
+  return [
+    // [what, mutated page, regex the failures must match (or null = must stay clean of `rules:`)]
+    ['a city outside the tokenizer example', poison(html, 'Hecho en Medellín'), /rules: city/],
+    ['another city', poison(html, 'Desde Miami'), /rules: city/],
+    ['the tokenizer example is exempt', poison(html, 'Cartagena es hermosa Cartagena is beautiful'), null],
+    ['a near miss of the tokenizer example is a city', poison(html, 'Cartagena es bonita'), /rules: city/],
+    ['plural courses', poison(html, 'cursos courses'), /rules: plural courses/],
+    ['the old cover wording', poison(html, 'EBOOK · VOL. 1'), /rules: old cover/],
+    ['a §0.4 word (singularidad)', poison(html, 'la singularidad singularity'), /rules: hormozi/],
+    ['a §0.4 word (pago único)', poison(html, 'pago único'), /rules: hormozi/],
+    ['monthly wording (/mes)', poison(html, `${big}/mes ${big}/month`), /rules: monthly wording/],
+    ['monthly wording (Suscribirme)', poison(html, 'Suscribirme Subscribe Dos formas de entrar'), /rules: monthly wording/],
+    ['monthly wording (a month)', poison(html, 'only 39,990 a month'), /rules: monthly wording/],
+    ['«veinte segundos»', poison(html, 'en veinte segundos twenty seconds'), /rules: unpublished claim/],
+    ['the cat prompt', poison(html, 'Mi gato se llama Max. My cat is called Max.'), /rules: cat/],
+    ['lesson 01 caption stays exempt', poison(html, kc01), null],
+    ['a testimonial outside its sentence', poison(html, 'Lo que dicen los testimonios y testimonials'), /rules: testimonial/],
+    ['the sanctioned sentence twice', poison(html, sanct), /sanctioned «testimonios» sentence appears 2/],
+    ['the sanctioned sentence gone', html.replace(sanct, 'x').replace(V.s5H.match(SANCTIONED)[0], 'x'), /sanctioned «testimonios» sentence appears 0|copy: #c08/],
+    ['a leaked placeholder', poison(html, '{precio}'), /leaked/],
+    ['a chapter id gone', html.replace('id="c07"', 'id="c07x"'), /chapters: #c07/],
+    ['two chapters out of order', swap(html, 'c05', 'c06'), /chapters: out of order/],
+    ['a retired id back', poison(html, '<section id="precio"></section>'), /chapters: retired id #precio/],
+    ['a chapter emptied of its key string', inChapter('c06', (c) => c.split(s3).join('x')), /copy: #c06/],
+    ['the Δ chapter without its h2', inChapter('cL', (c) => c.split(esc(V.adentroH)).join('x')), /copy: #cL/],
+    ['a key string on the page but not in its chapter', poison(inChapter('c13', (c) => c.split(esc(V.s10TituloSi)).join('x')), V.s10TituloSi), /copy: #c13/],
+    ['the N3 hook gone', html.replace('data-seq="n3"', 'data-x="n3"'), /structure: chapter 02 lost the N3 hook/],
+    ['preWhy2 shown twice', poison(html, esc(P.preWhy2)), /structure: preWhy2 appears 2/],
+    ['the price reasons out of order', inChapter('c14', (c) => c.replace(`<p>${esc(P.preWhy1)}</p><p>${esc(P.preWhy2)}</p>`, `<p>${esc(P.preWhy2)}</p><p>${esc(P.preWhy1)}</p>`)), /structure: the price reasons/],
+    ['a price that is not the published one', inChapter('c10', (c) => c.replace(big, lang === 'es' ? '$40.000' : '40,000 COP')), /price:/],
+    ['a dollar sign in English', lang === 'en' ? poison(html, '$39,990') : poison(html, '$99.999'), /price:/],
+    ['a paid CTA that is not /pago', inChapter('c07', (c) => c.replace('href="/pago" class="buy big"', 'href="/suscribirme" class="buy big"')), /cta: #c07/],
+    ['a paid CTA that does not name the price', inChapter('c10', (c) => c.replace(esc(P.preCta), 'COMPRAR')), /cta: #c10/],
+    ['the free hero CTA going to /pago', inChapter('c01', (c) => c.replace('href="/registro"', 'href="/pago"')), /cta: the hero/],
+    ['a CTA row gone', html.replace('<div class="ctarow" data-cta', '<div class="ctarow" data-x'), /cta:/],
+    ['the offer short of an item', inChapter('c10', (c) => c.replace(/<li data-dock-item>(?![\s\S]*<li data-dock-item>)[\s\S]*?<\/li>/, '')), /offer:/],
+    ['the offer item 6 swapped', inChapter('c10', (c) => c.replace(esc(V.s7Next), 'Bonus')), /offer:|copy: #c10/],
+    ['a retired price notation (pago único)', poison(html, 'Pago único de $39.990'), /rules: hormozi/],
+    ['no noindex', html.replace(/<meta name="robots"[^>]*>/, ''), /meta: no noindex/],
+    ['a Meta Pixel', html.replace('</head>', '<script>fbq("init")</script></head>'), /meta: Meta Pixel/],
+  ];
+}
+function selfTest(html, lang) {
+  let bad = 0;
+  const fail = (m) => { console.error(`FAIL self-test (${lang}): ${m}`); bad++; };
+  if (judge(html, lang).length) return 0;                            // the real page is judged by the loop below, with its own messages
+  for (const [what, page, expect] of mutants(html, lang)) {
+    if (page === html) { fail(`the mutation "${what}" changed nothing`); continue; }
+    const got = judge(page, lang);
+    if (expect === null) { if (got.some((g) => g.startsWith('rules:'))) fail(`"${what}" must stay clean but the gate says: ${got.filter((g) => g.startsWith('rules:')).join(' | ')}`); }
+    else if (!got.some((g) => expect.test(g))) fail(`the gate does not catch "${what}" (wanted ${expect}, got ${got.length ? got.join(' | ') : 'nothing'})`);
+  }
+  // the page's guard() throws on the same table, and only on what is banned
+  const kc01 = modulos(lang)[0].kc, throwing = (s, o) => { try { guard('self-test', s, o); return false; } catch { return true; } };
+  for (const [what, s] of [['city', 'Medellín'], ['courses', 'cursos'], ['cover', 'EBOOK'], ['§0.4', 'singularidad'], ['monthly', '/mes'], ['claim', 'veinte segundos'], ['cat', 'un gato'], ['testimonial', 'testimonios']])
+    if (!throwing(s)) fail(`guard() does not throw on ${what} ("${s}")`);
+  if (throwing('Cartagena es hermosa') || throwing('Cartagena is beautiful')) fail('guard() throws on the tokenizer example');
+  if (!throwing(kc01)) fail('guard() accepts lesson 01\'s caption without the named exemption');
+  if (throwing(kc01, { allow: [kc01] })) fail('guard() throws on lesson 01\'s caption even with the named exemption');
+  if (throwing(STR[lang].pub.v3.s5H)) fail('guard() throws on the sanctioned testimonial sentence');
+  // the page still reads everything through the guard
+  const src = readFileSync(new URL('../src/pages/v3.astro', import.meta.url), 'utf8');
+  if (!/guarded\(L\.pub,\s*'pub'\)/.test(src) || !/from '\.\.\/aegis\/copy-guard'/.test(src) || (src.match(/\bguard\(/g) ?? []).length < 4) fail('v3.astro no longer reads its strings through guarded() / guard()');
+  return bad;
+}
+// A gate that cannot fail proves nothing: each way the Δ defect can come back must be caught by deltaRule.
 function deltaSelfTest(html, lang) {
   const ctx = ctxOf(STR[lang].pub.land.bD), splits = tokenize(ctx).join(' ') !== ctx;
-  const mutants = {
+  const mut = {
     'candidate chip back in the Cartagena row': html.replace('<div class="chips ctx"', '<div class="tk ans"><b>Max</b></div><div class="chips ctx"'),
     'card context line removed': html.replace(/<p class="pctx">[\s\S]*?<\/p>/, ''),
     'candidate name typed into row A': html.replace('<div class="tk"><b>Carta</b></div>', '<div class="tk"><b>Max</b></div>'),
@@ -78,42 +300,34 @@ function deltaSelfTest(html, lang) {
   };
   let bad = 0;
   if (deltaRule(html, lang).length) return 0;                      // the real page is judged by the loop below
-  for (const [what, m] of Object.entries(mutants)) if (m === html || !deltaRule(m, lang).length) { console.error(`FAIL self-test: deltaRule does not catch "${what}"`); bad++; }
+  for (const [what, m] of Object.entries(mut)) if (m === html || !deltaRule(m, lang).length) { console.error(`FAIL self-test: deltaRule does not catch "${what}"`); bad++; }
   return bad;
 }
-let fail = 0, selfTested = false;
-// The narrative changes with the visitor's market (the Colombian one carries a city), so every
-// market is fetched: a city that only shows for one market is the failure this gate exists for.
-const MARKETS = [null, 'CO', 'US', 'MX', 'ES', 'JP'];
-for (const lang of ['es', 'en']) for (const cc of MARKETS) {
+
+// ---------- run ----------
+const pages = new Map();
+for (const lang of LANGS) for (const cc of MARKETS) {
   const tag = `${lang}/${cc ?? 'none'}`;
-  let html;
   try {
     const r = await fetch(`${BASE}/v3`, { headers: { cookie: `pref_lang=${lang}`, ...(cc ? { 'cf-ipcountry': cc } : {}) } });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    html = await r.text();
+    pages.set(tag, await r.text());
   } catch (e) { console.error(`FAIL ${tag}: cannot fetch ${BASE}/v3 (${e.message})`); process.exit(1); }
-  if (!/<meta name="robots" content="noindex/.test(html)) { console.error(`FAIL ${tag}: no noindex`); fail++; }
-  if (/connect\.facebook\.net|fbq\(|facebook\.com\/tr/.test(html)) { console.error(`FAIL ${tag}: Meta Pixel present`); fail++; }
-  const text = html.replace(/<script[\s\S]*?<\/script>/g, ' ').replace(/<style[\s\S]*?<\/style>/g, ' ').replace(/<[^>]+>/g, ' ').replace(/&[a-z#0-9]+;/g, ' ');
-  // the one sentence the owner mandated contains a city; it is the tokenizer example, not a place claim
-  const t2 = text.replace(/Cartagena (es hermosa|is beautiful)/g, '');
-  if (/Cartagena/i.test(t2)) { console.error(`FAIL ${tag}: city "Cartagena" outside the tokenizer example`); fail++; }
-  for (const re of FORBIDDEN) { const m = t2.match(re); if (m) { console.error(`FAIL ${tag}: forbidden /${re.source}/ -> "${m[0]}"`); fail++; } }
-  for (const id of ['c01', 'c02', 'cL', 'especimenes', 'indice', 'ventajas', 'quien', 'vivo', 'precio', 'faq'])
-    if (!html.includes(`id="${id}"`)) { console.error(`FAIL ${tag}: section #${id} missing from the rendered page`); fail++; }
-  for (const msg of deltaRule(html, lang)) { console.error(`FAIL ${tag}: Δ ${msg}`); fail++; }
-  if (!selfTested) { selfTested = true; fail += deltaSelfTest(html, lang); }
-  const body = norm(text);
-  for (const [what, str] of required(lang)) if (!body.includes(norm(str))) { console.error(`FAIL ${tag}: required copy missing (${what}): "${str.slice(0, 70)}"`); fail++; }
-  // the preWhy2 fintech line must not be shown twice (bio plate only)
-  const dup = body.split(norm(STR[lang].pub.land.preWhy2)).length - 1;
-  if (dup !== 1) { console.error(`FAIL ${tag}: preWhy2 appears ${dup} times, expected 1`); fail++; }
+}
+let fail = 0, mutantCount = 0;
+for (const lang of LANGS) {
+  const html = pages.get(`${lang}/none`);
+  fail += selfTest(html, lang) + deltaSelfTest(html, lang);
+  mutantCount += mutants(html, lang).length;
+}
+for (const lang of LANGS) for (const cc of MARKETS) {
+  const tag = `${lang}/${cc ?? 'none'}`, html = pages.get(tag);
+  for (const msg of judge(html, lang)) { console.error(`FAIL ${tag}: ${msg}`); fail++; }
   if (cc === null) {
-    const nums = [...new Set((t2.match(/\d[\d.,]*\d|\d/g) ?? []).map((n) => n.replace(/[.,]$/, '')))].filter((n) => !ALLOWED_NUM.has(n));
+    const nums = [...new Set((textOf(html).replace(/Cartagena (es hermosa|is beautiful)/g, '').match(/\d[\d.,]*\d|\d/g) ?? []).map((n) => n.replace(/[.,]$/, '')))].filter((n) => !ALLOWED_NUM.has(n));
     console.log(`${lang}: NOTE numbers outside the allowed set: ${nums.join(' ') || '(none)'}`);
   }
 }
-console.log(`v3-copy-check: ${2 * MARKETS.length} renders checked (2 languages x ${MARKETS.length} markets)`);
+console.log(`v3-copy-check: ${pages.size} renders checked (${LANGS.length} languages x ${MARKETS.length} markets), ${CHAPTERS.length} chapters, ${mutantCount} mutated pages proved the rules can fail`);
 if (fail) { console.error(`v3-copy-check: ${fail} failure(s)`); process.exit(1); }
 console.log('v3-copy-check: ok');

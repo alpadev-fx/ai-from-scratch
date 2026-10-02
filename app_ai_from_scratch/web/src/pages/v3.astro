@@ -178,7 +178,10 @@ setTimeout(function(){
 <div id="log" aria-hidden="true"></div>
 
 <main>
-<!-- ===== 01 · HERO (Hormozi: heroEb, heroH, heroH2, heroSub, free CTA to /registro, heroConfianza). Engine chapter: the markup the engine reads is unchanged. ===== -->
+<!-- ===== 01 · HERO (Hormozi: heroEb, heroH, heroH2, heroSub, the CTA PAIR, heroConfianza under both). Hormozi's pair is a PRIMARY paid button and a
+     SECONDARY free one; adapted to prod: the primary is prod's preCta -> /pago (one 30-day product, renewal off by default, so no ?renovar=1),
+     the secondary is the free heroCta -> /registro. The trust line (guarantee, cancel) sits under both, next to the paid button it is about.
+     Engine chapter: the engine reads .copy, .head, .rule, .sub and .cta (the whole block, both buttons and the line). ===== -->
 <section class="ch" id="c01" style="--len:5.6" aria-labelledby="c01h">
   <div class="stage">
     <figure class="pstat" aria-hidden="true">
@@ -196,7 +199,10 @@ setTimeout(function(){
       <div class="rule"></div>
       <div class="sub"><p class="h2l">{V.heroH2}</p><p>{V.heroSub}</p></div>
       <div class="cta">
-        <a href="/registro" class="buy big"><span>{P.heroCta}</span><svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h11M11 5.5l4.5 4.5L11 14.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path></svg></a>
+        <div class="ctas">
+          <a href="/pago" class="buy big" data-cta><span>{P.preCta}</span><svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h11M11 5.5l4.5 4.5L11 14.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path></svg></a>
+          <a href="/registro" class="buy big alt" data-cta><span>{P.heroCta}</span><svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h11M11 5.5l4.5 4.5L11 14.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path></svg></a>
+        </div>
         <p class="micro">{V.heroConfianza}</p>
       </div>
     </div>

@@ -84,6 +84,13 @@ html.ign-on,html.ign-on body{overflow:hidden}
 .rule{margin-top:24px;width:120px;height:1px;background:var(--hair);transform-origin:0 0}
 .sub{margin-top:20px;font:400 clamp(17px,1.5vw,21px)/1.45 var(--f);color:var(--l2);max-width:40ch}
 .cta{margin-top:26px;display:flex;flex-direction:column;gap:12px;align-items:flex-start}
+/* the hero pair (Hormozi's PRIMARY + SECONDARY): the paid button first and solid, the free one under it and outlined, the trust line under both.
+   One column as wide as the wider label, so the two buttons are the same size; both carry a 1px border so they are the same height too. */
+.ctas{display:grid;gap:10px;justify-items:stretch;width:max-content;max-width:100%}
+.ctas .buy{border:1px solid var(--btn-bg)}
+.ctas .buy:hover{border-color:var(--ac)}
+.ctas .buy.alt{background:transparent;color:var(--l1);border-color:var(--l2)}
+.ctas .buy.alt:hover{background:var(--ac);color:var(--on-ac,#fff);border-color:var(--ac)}
 .micro{font:400 14px/1.45 var(--f);color:var(--l2);max-width:52ch}
 .sub .h2l{margin-bottom:12px;font-weight:600;color:var(--l1)}
 #c01 .stage{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);gap:36px 44px;align-items:start}
@@ -301,7 +308,7 @@ html[data-ch="cL"] .cue{display:none}
   html.fx .copy{isolation:isolate}
   html.fx #c01 .copy::before{content:'';position:absolute;z-index:-1;inset:-52px calc(-1 * var(--gut)) -34px;background:linear-gradient(180deg,transparent 0,color-mix(in srgb,var(--bg) 90%,transparent) 40px,color-mix(in srgb,var(--bg) 90%,transparent) calc(100% - 44px),transparent 100%)}
   html.fx .micro,html.fx .sub{color:color-mix(in srgb,var(--l1) 84%,transparent)}
-  html.fx .cue{bottom:70px}
+  html.fx .cue{bottom:calc(18px + env(safe-area-inset-bottom,0px))}      /* the hero stack now carries two buttons: the cue goes to the very bottom, below the trust line (the HUD log that stood there is empty while the cue shows) */
   html.fx .pcard{left:var(--gut);right:var(--gut);width:auto;top:auto;bottom:128px;padding:10px 14px}
   html.fx .pcard .crow{padding:3px 0;grid-template-columns:92px minmax(0,1fr) 44px}
   html.fx .pcard .ph{display:none}
@@ -323,8 +330,8 @@ html[data-ch="cL"] .cue{display:none}
 @media (prefers-reduced-motion:reduce){html.fx *{animation:none!important}}
 /* very small phones (320): the nowrap buttons may wrap instead of being clipped by the stage */
 @media (max-width:359px){.buy{white-space:normal;text-align:center;line-height:1.35;padding:10px 14px;max-width:100%}}
-/* short phones: the hero copy needs the room the scroll cue would take */
-@media (max-width:900px) and (max-height:720px){html.fx .cue{display:none}}
+/* short phones: the hero copy needs the room the scroll cue would take (the stack carries two buttons now, so «short» reaches 820px of height) */
+@media (max-width:900px) and (max-height:820px){html.fx .cue{display:none}}
 /* The hero stack (eyebrow, three-line headline, bold line, sub, CTA, trust line) now ends where the scroll cue used to stand on wide
    windows that are not tall (1536x864, 1920x900): on desktop the cue lives in the right gutter, where nothing else is. On a 320px phone
    the stack is taller than the room under it, so there is no cue there. */
@@ -348,6 +355,12 @@ html[data-ch="cL"] .cue{display:none}
   html.fx #c01 .sub{margin-top:8px;font-size:14px;line-height:1.35}
   html.fx #c01 .cta{margin-top:12px}
   html.fx #c01 .micro{font-size:12px}
+}
+/* The hero stack now carries the pair of buttons (two buttons, not one). Between 820 and 940px of height the copy rises from its tall-window spot (14svh)
+   to the laptop spot (6svh) in proportion, so the second button and the trust line under it stay inside the pinned stage on 1440x844, 1920x864 and 1920x900
+   with no jump at 820 or at 940. */
+@media (min-width:1101px) and (min-height:821px) and (max-height:939px){
+  html.fx #c01 .copy{top:calc(var(--hdr) + 6svh + (100svh - 820px) * .627)}
 }
 @media (min-width:1101px) and (max-height:820px){   /* laptop windows: everything scales with the height that is there */
   html.fx #c01 .copy{top:calc(var(--hdr) + 6svh)}
@@ -406,6 +419,12 @@ html[data-ch="cL"] .cue{display:none}
   html.fx #c01 .buy.big{padding:7px 14px}
 }
 @media (min-width:641px) and (max-width:790px) and (max-height:345px){html.fx #c01 .copy{top:calc(var(--hdr) + 40px)}}
+/* short landscape: the two buttons of the pair sit side by side (the stack has no room for a second 44px row), in smaller type so both labels fit
+   from 568px of width; the 44px touch target stays */
+@media (max-width:1100px) and (max-height:480px){
+  html.fx #c01 .ctas{grid-auto-flow:column;width:auto;gap:8px}
+  html.fx #c01 .ctas .buy.big{font-size:10.5px;letter-spacing:.12em;padding:0 14px;gap:8px}
+}
 /* chapter 01's eyebrow is scrambled in by the engine and its final text («01 — IA DESDE CERO · 12 LECCIONES · ES/EN») takes two lines on a
    phone: it reserves both from the first frame, with the dot on the first line, so the headline under it never moves (CLS 0) */
 @media (max-width:460px){
@@ -413,11 +432,15 @@ html[data-ch="cL"] .cue{display:none}
   html.fx #c01 .label i{margin-top:.34em}
 }
 /* at 320 the header wraps to three rows (155px), taller than the 100px the rest of the page assumes for phones */
-@media (max-width:359px){:root{--hdr:154px}}
+@media (max-width:359px){:root{--hdr:154px}
+  html.fx #c01 .ctas .buy.big{font-size:10.5px;letter-spacing:.1em;padding:0 10px;gap:8px}}      /* both labels fit on one line in 288px */
+@media (max-width:359px) and (max-height:700px){html.fx #c01 .rule{display:none}}
 @media (max-width:359px) and (max-height:640px){
   html.fx #c01 .copy{top:calc(var(--hdr) - 8px)}
   html.fx #c01 .head{font-size:25px}
   html.fx #c01 .sub{font-size:13.5px}
+  html.fx #c01 .cta{margin-top:10px;gap:6px}
+  html.fx #c01 .ctas{gap:8px}
 }
 
 

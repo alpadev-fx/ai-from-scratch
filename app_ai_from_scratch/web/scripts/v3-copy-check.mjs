@@ -9,7 +9,7 @@
 //     attributes or the JSON the page ships: cities (except inside the tokenizer example), plural courses, the Hormozi §0.4 list,
 //     monthly wording, «veinte segundos», the cat prompt (except the published lesson-01 caption), a testimonial;
 //   · the one sanctioned «testimonios» sentence not appearing exactly once, a currency amount that is not the published price,
-//     a paid CTA that is not /pago or the free hero CTA that is not /registro, the offer not being seven items, preWhy2 shown
+//     a paid CTA that is not /pago, a hero pair that is not paid /pago then free /registro with the trust line under both, the offer not being seven items, preWhy2 shown
 //     twice, a missing noindex, a Meta Pixel, and the Δ chapter's token rules (next-token candidates only after specimen B's
 //     own context, which is cut by the specimen tokenizer, never by spaces).
 // Before it judges the real pages it proves, on MUTATED copies of the page, that every one of these rules CAN fail (and that the
@@ -67,7 +67,7 @@ function required(lang) {
   const cta = [['cta label', P.preCta], ['cta guarantee line', P.heroGar]];
   return {
     ign: [['ignition log', V.ignLog]],
-    c01: [['label', lab('01', V.heroEb)], ['h1', V.heroH], ['h2 line', V.heroH2], ['sub', V.heroSub], ['free cta', P.heroCta], ['trust line', V.heroConfianza],
+    c01: [['label', lab('01', V.heroEb)], ['h1', V.heroH], ['h2 line', V.heroH2], ['sub', V.heroSub], ['paid cta', P.preCta], ['free cta', P.heroCta], ['trust line', V.heroConfianza],
       ['hud', V.cifra], ['hud', V.fuente], ['hud', V.ilus], ['card title', V.sintomas],
       ...[1, 2, 3].flatMap((i) => [[`symptom ${i} lesson`, P[`s${i}Lec`]], [`symptom ${i}`, P[`s${i}H`]], [`symptom ${i} cause`, P[`s${i}C`]]])],
     c02: [['label', lab('02', V.s1Eb)], ['h2', V.s1H], ...V.s1Beats.flatMap((b, i) => [[`beat ${i + 1} you`, b.tu], [`beat ${i + 1} ai`, b.ia], [`beat ${i + 1} tag`, b.tag]]),
@@ -170,9 +170,17 @@ function judge(html, lang) {
   for (const m of new Set(corpus.match(/\$\s?\d[\d.,]*\d|\d[\d.,]*\d\s?COP/g) ?? [])) if (!okPrice.has(m)) f.push(`price: "${m}" is not the published price (${[...okPrice].join(' / ')})`);
   if (!ch.c14.html.includes(`<b data-odo>${big}</b>`)) f.push(`price: chapter 14's odometer figure is not ${big}`);
 
-  // CTAs: free in the hero (/registro), every paid one /pago with the outcome and the price in its label, no stray routes
-  if (!ch.c01.html.includes(`<a href="/registro" class="buy big"><span>${P.heroCta}</span>`)) f.push('cta: the hero CTA is not the free /registro button with the published label');
-  if (/href="\/pago"/.test(ch.c01.html)) f.push('cta: the hero (free) chapter links to /pago');
+  // CTAs: the hero pair (paid /pago, then free /registro), every other paid one /pago with the outcome and the price in its label, no stray routes
+  // the hero is Hormozi's pair, adapted to prod: the PAID button first (prod preCta -> /pago; no ?renovar, renewal is off by default), the FREE one
+  // second (prod heroCta -> /registro), the trust line under both
+  const hp = `<a href="/pago" class="buy big" data-cta><span>${P.preCta}</span>`, hf = `<a href="/registro" class="buy big alt" data-cta><span>${P.heroCta}</span>`;
+  const iP = ch.c01.html.indexOf(hp), iF = ch.c01.html.indexOf(hf), iT = ch.c01.html.indexOf('<p class="micro">');
+  if (iP < 0) f.push('cta: the hero has no primary paid /pago button with the published label (prod preCta)');
+  if (iF < 0) f.push('cta: the hero has no secondary free /registro button with the published label (prod heroCta)');
+  if (iP >= 0 && iF >= 0 && iF < iP) f.push('cta: the hero shows the free button before the paid one');
+  if (iF >= 0 && (iT < 0 || iT < iF)) f.push('cta: the hero trust line is not under both buttons');
+  if ((ch.c01.html.match(/href="\/pago/g) ?? []).length !== 1 || (ch.c01.html.match(/href="\/registro/g) ?? []).length !== 1) f.push('cta: the hero must link /pago once and /registro once');
+  if (/href="[^"]*renovar/.test(html)) f.push('cta: a link carries ?renovar (renewal is off by default)');
   const rows = [...html.matchAll(/<div class="ctarow" data-cta[^>]*>([\s\S]*?)<\/div>/g)];
   const rowOf = (id) => rows.filter((r) => ch[id].at >= 0 && r.index >= ch[id].at && r.index < ch[id].at + ch[id].html.length);
   for (const id of CTA_CHAPTERS) {
@@ -191,7 +199,7 @@ function judge(html, lang) {
     if (!m || m[1] !== '/pago' || norm(m[2]) !== norm(P.cierreCta)) f.push(`cta: #c16 closing CTA is not /pago with "${norm(P.cierreCta)}"`);
   }
   if (!ch.c14.html.includes(`<a href="/pago" class="buy big" data-cta><span>${P.preCta}</span>`)) f.push('cta: chapter 14 has no in-card /pago button with the published label');
-  if ((html.match(/\bdata-cta\b/g) ?? []).length !== 6) f.push(`cta: ${(html.match(/\bdata-cta\b/g) ?? []).length} CTAs marked data-cta, expected 6 (after 03, 07, 10, 11, 14 and the closing)`);
+  if ((html.match(/\bdata-cta\b/g) ?? []).length !== 8) f.push(`cta: ${(html.match(/\bdata-cta\b/g) ?? []).length} CTAs marked data-cta, expected 8 (the hero pair, after 03, 07, 10, 11, 14 and the closing)`);
   for (const label of [P.preCta, P.cierreCta]) if (!label.includes(big)) f.push(`cta: label "${label}" does not name the price ${big}`);
   for (const m of html.matchAll(/href="(\/[^"]*)"/g)) if (/suscri|mensual|subscri|monthly/i.test(m[1])) f.push(`cta: link to ${m[1]}`);
 
@@ -268,6 +276,10 @@ function mutants(html, lang) {
     ['a paid CTA that is not /pago', inChapter('c07', (c) => c.replace('href="/pago" class="buy big"', 'href="/suscribirme" class="buy big"')), /cta: #c07/],
     ['a paid CTA that does not name the price', inChapter('c10', (c) => c.replace(esc(P.preCta), 'COMPRAR')), /cta: #c10/],
     ['the free hero CTA going to /pago', inChapter('c01', (c) => c.replace('href="/registro"', 'href="/pago"')), /cta: the hero/],
+    ['the paid hero CTA gone', inChapter('c01', (c) => c.replace(/<a href="\/pago" class="buy big" data-cta>[\s\S]*?<\/a>/, '')), /cta: the hero has no primary/],
+    ['the hero pair swapped (free first)', inChapter('c01', (c) => { const m = c.match(/(<a href="\/pago" class="buy big" data-cta>[\s\S]*?<\/a>)(\s*)(<a href="\/registro" class="buy big alt" data-cta>[\s\S]*?<\/a>)/); return c.replace(m[0], m[3] + m[2] + m[1]); }), /cta: the hero shows the free button before the paid one/],
+    ['the hero paid CTA with ?renovar=1', inChapter('c01', (c) => c.replace('href="/pago"', 'href="/pago?renovar=1"')), /cta: a link carries \?renovar/],
+    ['the hero trust line above the buttons', inChapter('c01', (c) => { const t = c.match(/<p class="micro">[\s\S]*?<\/p>/)[0]; return c.replace(t, '').replace('<div class="ctas">', t + '<div class="ctas">'); }), /cta: the hero trust line is not under both buttons/],
     ['a CTA row gone', html.replace('<div class="ctarow" data-cta', '<div class="ctarow" data-x'), /cta:/],
     ['the offer short of an item', inChapter('c10', (c) => c.replace(/<li data-dock-item>(?![\s\S]*<li data-dock-item>)[\s\S]*?<\/li>/, '')), /offer:/],
     ['the offer item 6 swapped', inChapter('c10', (c) => c.replace(esc(V.s7Next), 'Bonus')), /offer:|copy: #c10/],

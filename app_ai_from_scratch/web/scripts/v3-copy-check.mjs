@@ -10,8 +10,8 @@
 //     monthly wording, «veinte segundos», the cat prompt (except the published lesson-01 caption), a testimonial;
 //   · the one sanctioned «testimonios» sentence not appearing exactly once, a currency amount that is not the published price,
 //     a paid CTA that is not /pago, a hero pair that is not paid /pago then free /registro with the trust line under both, the offer not being seven items, preWhy2 shown
-//     twice, a missing noindex, a Meta Pixel, and the Δ chapter's token rules (next-token candidates only after specimen B's
-//     own context, which is cut by the specimen tokenizer, never by spaces).
+//     twice, chapter 05 telling a lesson's title or description again (chapter 09's), a missing noindex, a Meta Pixel, and the Δ chapter's token rules
+//     (next-token candidates only after specimen B's own context, which is cut by the specimen tokenizer, never by spaces).
 // Before it judges the real pages it proves, on MUTATED copies of the page, that every one of these rules CAN fail (and that the
 // two exemptions stay narrow). If the page cannot be fetched or a self-test cannot fail, the gate FAILS: it never skips.
 import { readFileSync } from 'node:fs';
@@ -75,7 +75,7 @@ function required(lang) {
     c03: [['label', lab('03', V.ch03)], ['h2', P.llevasH2], ['l1', P.l1H], ['l1', P.l1D], ['l2', P.l2H], ['l2', P.l2D], ['l3', P.l3H], ['l3', P.l3D], ...cta],
     cL: [['label', lab('04', V.ch04)], ['h2', V.adentroH], ['sub', P.aD], ['context', ctx], ['candidates', V.cand], ['dial', V.tabTemp],
       ...['05', '06', '08', '09'].flatMap((n) => [[`step ${n} lesson`, `${V.lec} ${n}`], [`step ${n} h`, mod(n).h], [`step ${n} d`, mod(n).d]])],
-    c05: [['label', lab('05', V.ch05)], ...mods.slice(0, 6).flatMap((m) => [[`fig ${m.n} eyebrow`, m.eb], [`fig ${m.n} number`, m.k], [`fig ${m.n} caption`, m.kc], [`fig ${m.n} h`, m.h], [`fig ${m.n} d`, m.d]])],
+    c05: [['label', lab('05', V.ch05)], ...mods.slice(0, 6).flatMap((m) => [[`fig ${m.n} eyebrow`, m.eb], [`fig ${m.n} number`, m.k], [`fig ${m.n} caption`, m.kc]])],
     c06: [['label', lab('06', V.s3Eb)], ...V.s3Palabras.map((w) => ['struck word', w]), ['h2', V.s3H]],
     c07: [['label', lab('07', V.ch07)], ['h2', V.s4H], ['lede', V.s4Sub], ...V.specs.flatMap((s) => [['figure', String(s.k)], ['figure caption', s.d]]), ...cta],
     c08: [['label', lab('08', V.ch08)], ['h2', V.s5H], ['sub', V.s5Sub], ['specimen B', V.s5Eb], ['interactive', P.espInter], ['prompt', ctx], ['candidates', V.cand],
@@ -209,6 +209,14 @@ function judge(html, lang) {
   else if (norm(items[5][2]) !== norm(V.s7Next) || norm(items[5][3]) !== norm(V.vivoV)) f.push('offer: item 6 is not «lo que publique después» with the published vivoV');
   else if (items.some((m) => /^\s*[—–-]/.test(m[3]) || /[—–]\s*$/.test(m[2]))) f.push('offer: a title and its description are joined by a dash again');
 
+  // chapter 05 is the six figures and what they measure: eyebrow, number, caption, lesson number. Each lesson's title and description are chapter 09's,
+  // said once (a second telling only lengthened the page), and the HUD label is the chapter's heading.
+  const cards = [...ch.c05.html.matchAll(/<article class="fig" data-fig>\s*<p class="ie">[^<]*<\/p>\s*<p class="big [^"]*" data-cifra>[^<]*<\/p>\s*<p class="cap">[^<]*<\/p>\s*<span class="no">\d\d<\/span>\s*<\/article>/g)];
+  if (cards.length !== 6) f.push(`structure: chapter 05 has ${cards.length} cards made of eyebrow + number + caption + lesson number, expected 6`);
+  const t05 = copyOf(ch.c05.html);
+  for (const m of modulos(lang).slice(0, 6)) for (const [what, s] of [['title', m.h], ['description', m.d]]) if (t05.includes(norm(s))) f.push(`structure: chapter 05 repeats lesson ${m.n}'s ${what} (chapter 09 says it)`);
+  if (!/<h2 class="sn" id="c05n">/.test(ch.c05.html)) f.push('structure: chapter 05\'s HUD label is not its h2 (id c05n)');
+
   // chapter 02 keeps the N3 hook; chapter 14 shows the four prod reasons in prod order, and preWhy2 only there
   if (!/data-seq="n3"/.test(ch.c02.html)) f.push('structure: chapter 02 lost the N3 hook (data-seq="n3")');
   const dup = textOf(html).split(norm(P.preWhy2)).length - 1;
@@ -292,6 +300,9 @@ function mutants(html, lang) {
     ['the offer short of an item', inChapter('c10', (c) => c.replace(/<li data-dock-item>(?![\s\S]*<li data-dock-item>)[\s\S]*?<\/li>/, '')), /offer:/],
     ['an offer item joined by a dash again', inChapter('c10', (c) => c.replace('</p><p class="d">', ' — ')), /offer:/],
     ['the offer item 6 swapped', inChapter('c10', (c) => c.replace(esc(V.s7Next), 'Bonus')), /offer:|copy: #c10/],
+    ['a chapter 05 card with its lesson title and description back', inChapter('c05', (c) => c.replace('<span class="no">01</span>', `<h3>${esc(modulos(lang)[0].h)}</h3><p class="fd">${esc(modulos(lang)[0].d)}</p><span class="no">01</span>`)), /structure: chapter 05 (repeats lesson 01's title|has 5 cards)/],
+    ['a chapter 05 caption that quotes lesson 02\'s title', inChapter('c05', (c) => c.replace('<p class="cap">', `<p class="cap">${esc(modulos(lang)[1].h)} `)), /structure: chapter 05 repeats lesson 02's title/],
+    ['the chapter 05 label back to a plain div', inChapter('c05', (c) => c.replace(/<h2 class="sn" id="c05n">([\s\S]*?)<\/h2>/, '<div class="sn" id="c05n">$1</div>')), /structure: chapter 05's HUD label is not its h2/],
     ['a retired price notation (pago único)', poison(html, 'Pago único de $39.990'), /rules: hormozi/],
     ['a CSS rule that hides the hero copy until ready', html.replace('</head>', '<style>html.fx:not(.ready) .stage .copy .head{opacity:0}</style></head>'), /boot: a CSS rule hides copy/],
     ['the hero h1 server-rendered hidden', html.replace('<h1 class="head"', '<h1 style="opacity:0" class="head"'), /boot: the hero copy is server-rendered hidden/],

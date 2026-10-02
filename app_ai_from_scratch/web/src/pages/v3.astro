@@ -287,17 +287,17 @@ setTimeout(function(){
   </div>
 </section>
 
-<!-- ===== 05 · CIFRAS (the first six figures of the curriculum). Static grid; stage 2B turns data-track into the horizontal track with parallax. ===== -->
+<!-- ===== 05 · CIFRAS (the first six figures of the curriculum). Static grid; stage 2B turns data-track into the horizontal track with parallax.
+     A card is the figure and what it measures (eyebrow, number, caption, lesson number) and nothing else: each lesson's title and description are
+     chapter 09's, and saying them twice on the way down only made the page longer. The HUD label is this chapter's heading (h2). ===== -->
 <section id="c05" class="sec cx figs-sec" aria-labelledby="c05n" data-fx="track">
-  <div class="sh"><div class="sn" id="c05n">■ {label('05', V.ch05)}</div><div class="sx">{cnt('05')}</div></div>
+  <div class="sh"><h2 class="sn" id="c05n">■ {label('05', V.ch05)}</h2><div class="sx">{cnt('05')}</div></div>
   <div class="figs" data-track>
     {mods.slice(0, 6).map((m) => (
       <article class="fig" data-fig>
         <p class="ie">{m.eb}</p>
         <p class={`big ${escala(m.k)}`} data-cifra>{m.k}</p>
         <p class="cap">{m.kc}</p>
-        <h3>{m.h}</h3>
-        <p class="fd">{m.d}</p>
         <span class="no">{m.n}</span>
       </article>
     ))}

@@ -490,10 +490,7 @@ html[data-ch="cL"] .cue{display:none}
 .fig .k-xs{font-size:min(30cqw,92px)}.fig .k-s{font-size:min(17cqw,66px)}.fig .k-m{font-size:min(11.5cqw,46px)}
 .fig .k-l{font-size:min(9.4cqw,36px);line-height:1;white-space:normal}
 .fig .cap{font:400 14px/1.5 var(--f);color:var(--l2)}
-.fig h3{margin-top:auto;padding-top:20px;border-top:1px solid var(--hair2);font:700 21px/1.15 var(--f);letter-spacing:-.03em}
-.fig .fd{margin-top:-6px;font:400 15px/1.5 var(--f);color:var(--l2)}
 .figs-sec{padding-bottom:0}
-html.fx .figs-sec{min-height:100svh}
 
 /* 06 · lo que no necesitas: the six words struck out, then the line */
 .nots{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-top:1px solid var(--hair);border-left:1px solid var(--hair)}

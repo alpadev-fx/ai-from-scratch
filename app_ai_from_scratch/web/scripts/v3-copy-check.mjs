@@ -15,7 +15,7 @@ const ALLOWED_NUM = new Set(['12', '36', '39.990', '39,990', '30', '100.000', '1
   '3', '5', '31', '100', '120.000', '120,000', '99', '18,615', '01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '07', '0.30']);
 import { STR } from '../src/lib/i18n.ts';
 import { preguntas, modulos, candidatos } from '../src/data/landing.ts';
-import { ctxOf } from '../src/aegis/specimens.ts';
+import { ctxOf, tokenize } from '../src/aegis/specimens.ts';
 const decode = (x) => x.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#0*39;/g, "'").replace(/&#x27;/g, "'");
 const norm = (x) => decode(x).replace(/\s+/g, ' ').trim();
 // The owner's three asks: the advantages, the tutorials / who and how, and that the course keeps growing.
@@ -52,8 +52,13 @@ function deltaRule(html, lang) {
   if (/class="[^"]*\bans\b[^"]*"/.test(rowA)) out.push('a candidate chip (.ans) is inside the Cartagena row');
   const textA = norm(rowA.replace(/<[^>]+>/g, ' '));
   for (const n of names) if (textA.includes(n)) out.push(`candidate name "${n}" is in the Cartagena row`);
-  const words = [...rowB.matchAll(/<div class="tk cw"><b>([^<]*)<\/b><\/div>/g)].map((m) => decode(m[1]));
-  if (words.join(' ') !== ctx) out.push(`context row reads "${words.join(' ')}", expected "${ctx}"`);
+  // the context row is cut by the SAME tokenizer as the Cartagena row (lesson 05: «no ve palabras, ve trozos»), never by spaces
+  const chips = [...rowB.matchAll(/<div class="tk cw" data-w="(\d+)"><b>([^<]*)<\/b><\/div>/g)].map((m) => ({ w: +m[1], t: decode(m[2]) }));
+  const want = tokenize(ctx), got = chips.map((c) => c.t);
+  if (got.length !== want.length || got.some((t, i) => t !== want[i])) out.push(`context row chips are [${got.join(' | ')}], expected tokenize(ctx) = [${want.join(' | ')}]`);
+  if (((rowB.match(/class="tk cw"/g) ?? []).length) !== chips.length) out.push('a context chip has no data-w word index');
+  const regroup = []; for (const c of chips) regroup[c.w] = (regroup[c.w] ?? '') + c.t;
+  if (norm(regroup.join(' ')) !== norm(ctx)) out.push(`the context chips regroup into "${regroup.join(' ')}", expected "${ctx}"`);
   const ans = (html.match(/class="tk ans"/g) ?? []).length;
   if (ans !== 1) out.push(`${ans} candidate chips on the page, expected exactly 1 (after the context row)`);
   else if (html.indexOf('class="tk ans"') < html.indexOf('<div class="chips ctx"')) out.push('the candidate chip comes before the context row');
@@ -61,12 +66,15 @@ function deltaRule(html, lang) {
   if (!pc || norm(pc[1]) !== norm(ctx)) out.push(`the card context line is "${pc ? norm(pc[1]) : '(missing)'}", expected "${ctx}"`);
   return out;
 }
-// A gate that cannot fail proves nothing: the three ways the defect can come back must each be caught by deltaRule.
+// A gate that cannot fail proves nothing: each way the defect can come back must be caught by deltaRule.
 function deltaSelfTest(html, lang) {
+  const ctx = ctxOf(STR[lang].pub.land.bD), splits = tokenize(ctx).join(' ') !== ctx;
   const mutants = {
     'candidate chip back in the Cartagena row': html.replace('<div class="chips ctx"', '<div class="tk ans"><b>Max</b></div><div class="chips ctx"'),
     'card context line removed': html.replace(/<p class="pctx">[\s\S]*?<\/p>/, ''),
     'candidate name typed into row A': html.replace('<div class="tk"><b>Carta</b></div>', '<div class="tk"><b>Max</b></div>'),
+    'a context piece dropped': html.replace(/<div class="tk cw" data-w="\d+"><b>[^<]*<\/b><\/div>/, ''),
+    ...(splits ? { 'context row cut into whole words (not by the tokenizer)': html.replace(/(<div class="chips ctx"[^>]*>)[\s\S]*?(<div class="tk ans">)/, (_m, a, c) => a + ctx.split(/\s+/).map((w, i) => `<div class="tk cw" data-w="${i}"><b>${w}</b></div>`).join('') + c) } : {}),
   };
   let bad = 0;
   if (deltaRule(html, lang).length) return 0;                      // the real page is judged by the loop below

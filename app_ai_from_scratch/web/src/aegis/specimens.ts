@@ -23,6 +23,17 @@ export function ctxOf(s: string): string {
   return i > 0 ? t.slice(0, i + 1) : t;
 }
 
+/** The Δ context row. It is cut with the SAME tokenizer as specimen A and the interactive tokenizer, so lesson 05's
+ *  «ve trozos» holds for the dog sentence too: `t` is exactly `tokenize(s)`. `w` is the index of the whitespace-separated
+ *  word each piece came from (attention treats the pieces of one word as one unit); concatenating the pieces of every
+ *  word and joining the words with a space gives the sentence back. */
+export function ctxChips(s: string): Array<{ t: string; w: number }> {
+  const words = (s || '').trim().split(/\s+/).filter(Boolean), out: Array<{ t: string; w: number }> = [];
+  let w = 0, acc = '';
+  for (const t of tokenize(s)) { out.push({ t, w }); acc += t; if (acc === words[w]) { w++; acc = ''; } }
+  return out;
+}
+
 /** Probabilities (0..1) of every candidate at temperature T (slider/100). */
 export function softmax(c: Candidate[], T: number): number[] {
   const ex = c.map((x) => Math.exp(x.logit / Math.max(0.08, T)));

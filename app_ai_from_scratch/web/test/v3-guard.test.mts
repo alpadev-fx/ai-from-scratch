@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { guard, withoutCity } from '../src/aegis/copy-guard.ts';
 import { STR } from '../src/lib/i18n.ts';
-import { ctxOf, softmax, tokenize } from '../src/aegis/specimens.ts';
+import { ctxChips, ctxOf, softmax, tokenize } from '../src/aegis/specimens.ts';
 import { candidatos } from '../src/data/landing.ts';
 
 test('guard throws on a city, on plural courses, and lets the tokenizer sentence through', () => {
@@ -72,4 +72,28 @@ test('the dial\'s fixed draw only ever lands on a published candidate, and tempe
     assert.ok(hi >= lo && cands[hi]);                                      // hot: same draw, further down the list
     for (let T = 0.3; T <= 1.6001; T += 0.05) assert.ok(pick(T) >= 0 && pick(T) < cands.length);
   }
+});
+
+// Lesson 05 («No ve palabras ni letras: ve trozos») cuts «Cartagena es hermosa» into Carta | gena | es | hermo | sa. The dog
+// context that follows is the same kind of input, so it is cut by the SAME tokenizer, never by spaces.
+test('the context row is the specimen tokenizer\'s output, and regroups into the sentence', () => {
+  for (const lang of ['es', 'en'] as const) {
+    const c = ctxOf(STR[lang].pub.land.bD), chips = ctxChips(c);
+    assert.deepEqual(chips.map((x) => x.t), tokenize(c));                              // exactly what the interactive tokenizer prints
+    const words: string[] = []; chips.forEach((x) => { words[x.w] = (words[x.w] ?? '') + x.t; });
+    assert.equal(words.join(' '), c.replace(/\s+/g, ' ').trim());                      // pieces of a word joined, words with one space
+    assert.deepEqual([...new Set(chips.map((x) => x.w))], words.map((_, i) => i));      // word indexes run 0..n-1 with no gap
+  }
+  // pinned on purpose: a change to the tokenizer must be a conscious decision for this page
+  assert.deepEqual(tokenize(ctxOf(STR.es.pub.land.bD)), ['Le', 'pedis', 'te', 'un', 'nombr', 'e', 'para', 'tu', 'perro', '.']);
+  assert.deepEqual(tokenize(ctxOf(STR.en.pub.land.bD)), ['You', 'asked', 'it', 'to', 'name', 'your', 'dog.']);   // EN words are all <= 5 chars: one piece each
+  const es = ctxOf(STR.es.pub.land.bD);
+  assert.ok(ctxChips(es).length > es.split(/\s+/).length);                             // the ES context shows words broken into pieces
+});
+
+test('ctxChips groups pieces by word and follows tokenize at the edges', () => {
+  assert.deepEqual(ctxChips(''), []);
+  assert.deepEqual(ctxChips('Hola mundo'), [{ t: 'Hola', w: 0 }, { t: 'mundo', w: 1 }]);
+  assert.deepEqual(ctxChips('abcdefghij k'), [{ t: 'abcde', w: 0 }, { t: 'fghi', w: 0 }, { t: 'j', w: 0 }, { t: 'k', w: 1 }]);
+  assert.equal(ctxChips('x '.repeat(40)).length, tokenize('x '.repeat(40)).length);        // the same 26-piece cap
 });

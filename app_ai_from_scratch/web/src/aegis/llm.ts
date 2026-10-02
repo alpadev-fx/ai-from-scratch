@@ -2,7 +2,7 @@
 // "Cartagena es hermosa" splits into the five tokens the real tokenizer prints
 // (imported from specimens.ts, the same function the specimen uses) and they become
 // vectors (lesson 05). From the next-token step on (lessons 06, 08, 09) the context
-// is specimen B's own, the dog: layers carry those words, the candidates (ILUSTRATIVO)
+// is specimen B's own, the dog, cut by the SAME tokenizer (Le | pedis | te | un | nombr | e ...): layers carry those pieces, the candidates (ILUSTRATIVO)
 // answer THAT context, attention looks BACK only across it, the loop appends the
 // sampled token to it and temperature then reshuffles the pick. A candidate name is
 // never shown next to the Cartagena tokens: they are two rows that never overlap.
@@ -28,8 +28,12 @@ export function initLLM(gl: GL) {
   const NQ = toks.length;                              // row A: the Cartagena tokens (lesson 05)
   const elA = $$('.tk', chipsA).slice(0, NQ), elB = $$('.tk', chipsB), sentEl = $('.sent', st) as HTMLElement;
   if (elB.length < 3) console.warn('[v3] context row has', elB.length, 'chips');
-  const NB = Math.max(1, elB.length - 1), NT = NB + 1;  // row B: NB context words, then the sampled next token
-  const logA = toks.join(' · '), logB = elB.slice(0, NB).map((e) => e.textContent || '').join(' · ');   // each row's words, for the HUD log
+  const NB = Math.max(1, elB.length - 1), NT = NB + 1;  // row B: NB context pieces (tokens), then the sampled next token
+  // word each piece came from (data-w, written by the page from the same tokenizer); the sampled token starts the next word
+  const wd = elB.map((c, i) => (c.dataset.w != null ? +c.dataset.w : i)); wd[NB] = wd[NB - 1] + 1;
+  const lastOf = (w: number) => { for (let i = NB; i >= 0; i--) if (wd[i] === w) return i; return -1; };
+  const nW = wd[NB];                                    // number of words in the context = index of the new word
+  const logA = toks.join(' · '), logB = elB.slice(0, NB).map((e) => e.textContent || '').join(' · ');   // each row's tokens, for the HUD log
   const cands = D.candidatos as Array<{ name: string; logit: number }>;
   const candRows = $$('.crow', pCard);
   const dial = $('.dial', pCard) as HTMLElement | null, dialV = $('.dialv', pCard);
@@ -41,8 +45,10 @@ export function initLLM(gl: GL) {
   const rndA = rng(91);
   const ATT: number[][] = Array.from({ length: NT }, (_, i) => Array.from({ length: NT }, (_, j) => (j >= i ? 0 : Math.exp(-(i - j) * 0.45) * (0.35 + rndA()))));
   const boost = (i: number, j: number, v: number) => { if (ATT[i] && j >= 0 && j < i) ATT[i][j] += v; };
+  const wboost = (a: number, b: number, v: number) => { const i = lastOf(a), j = lastOf(b); if (i >= 0 && j >= 0) boost(i, j, v); };   // between WORDS, from the last piece of each
+  for (let i = 1; i < NB; i++) if (wd[i] === wd[i - 1]) boost(i, i - 1, 2);                           // the pieces of one word lean on the piece before
   // the verb leans on its subject, the dog on its owner word and on the name it was asked for, the new token on the request
-  boost(1, 0, 1.6); boost(3, 2, 0.8); boost(NB - 1, NB - 2, 2.2); boost(NB - 1, 3, 1.0); boost(NB, 1, 1.4); boost(NB, 3, 1.2); boost(NB, NB - 1, 0.8);
+  wboost(1, 0, 1.6); wboost(3, 2, 0.8); wboost(nW - 1, nW - 2, 2.2); wboost(nW - 1, 3, 1.0); wboost(nW, 1, 1.4); wboost(nW, 3, 1.2); wboost(nW, nW - 1, 0.8);
   ATT.forEach(r => { const s = r.reduce((a, b) => a + b, 0) || 1; r.forEach((v, j) => { r[j] = v / s; }); });
 
   // ---------- scene ----------
@@ -127,8 +133,8 @@ export function initLLM(gl: GL) {
    *  A row wider than the free width stays ONE line and shrinks (chip scale `k`, down to KMIN) so its attention arcs and
    *  its layers read along one baseline; only a row that would need less than KMIN wraps, into evenly filled lines. */
   const KMIN = 0.62;
-  function rowLayout(count: number, widths: number[], rowPos: Array<{ x: number; y: number }>, tp: number, floorY = 0) {
-    const mob = A.mobile, gap = lerp(mob ? 3 : 6, mob ? 6 : 16, tp);
+  function rowLayout(count: number, widths: number[], rowPos: Array<{ x: number; y: number }>, tp: number, floorY = 0, tight = false) {
+    const mob = A.mobile, gap = tight && mob ? 4 : lerp(mob ? 3 : 6, mob ? 6 : 16, tp);   // tight: the token row of ~10 pieces on a phone
     const left = gut, right = A.W - gut - (mob ? 0 : cardW + 28), maxW = right - left;
     const items = [] as number[]; for (let i = 0; i < count; i++) items.push(widths[i] + (mob ? 12 : 24) * tp);
     const span = (L: number[], k: number) => L.reduce((a, i, n) => a + (items[i] + (n ? gap : 0)) * k, 0);
@@ -187,7 +193,7 @@ export function initLLM(gl: GL) {
     steps.forEach((li, i) => { const a = SP[i], b = SP[i + 1], on = p >= a && p < b, done = p >= b; li.classList.toggle('on', on); li.classList.toggle('done', done); const u = $('u i', li) as HTMLElement; u.style.transform = `scaleX(${seg(p, a, b).toFixed(3)})`; });
     // ----- the two rows of chips: A = Cartagena tokens (they split off the sentence at p .10), B = the dog context + the sampled token
     const tpA = eo(seg(p, 0.1, 0.17));
-    const kA = rowLayout(NQ, widthsA, posA, tpA, copyBot ? copyBot + 34 : 0), kB = rowLayout(NT, widthsB, posB, 1);   // A drops below the headline copy when that runs long (EN on a phone)
+    const kA = rowLayout(NQ, widthsA, posA, tpA, copyBot ? copyBot + 34 : 0), kB = rowLayout(NT, widthsB, posB, 1, 0, true);   // A drops below the headline copy when that runs long (EN on a phone)
     const T0 = 0.3;
     // temperature dial over stage 4: 0.30 → 1.60 → 0.70
     const T = p < SP[3] ? T0 : p < 0.87 ? lerp(T0, 1.6, eio(seg(p, SP[3], 0.87))) : lerp(1.6, 0.7, eio(seg(p, 0.87, 0.93)));
@@ -206,7 +212,8 @@ export function initLLM(gl: GL) {
     // A is up from the split until the vectors are done, then B's words arrive one by one (never both on screen), and only after
     // them, at the prediction flash (.50), the sampled token
     const visV = eo(seg(p, 0.1, 0.14)), outA = 1 - eio(seg(p, 0.296, 0.33));
-    const visB = (i: number) => i < NB ? eio(seg(p, 0.335 + i * 0.004, 0.375 + i * 0.004)) : i === NB ? eio(seg(p, 0.5, 0.54)) : 0;
+    const stag = 0.024 / Math.max(1, NB - 1);        // the pieces arrive over the same window whatever their number
+    const visB = (i: number) => i < NB ? eio(seg(p, 0.335 + i * stag, 0.375 + i * stag)) : i === NB ? eio(seg(p, 0.5, 0.54)) : 0;
     const lift = (mob ? 21 : 26) * s;
     // ----- cloud + near lines (stage 1)
     const cA = 0.16 + 0.85 * eC + 0.1 * seg(p, 0.0, 0.06) * (1 - seg(p, 0.14, 0.2)); cloudMat.opacity = 1; (cloud.material as any).opacity = 1;
@@ -258,7 +265,7 @@ export function initLLM(gl: GL) {
     const old = seg(p, 0.72, 0.78);              // the oldest tokens fall off the table
     arcs.forEach(a => {
       const v = Math.min(visB(a.i), visB(a.j)), w = ATT[a.i][a.j];
-      const oldGone = (a.j < 2 ? 1 - 0.85 * old : 1);
+      const oldGone = (wd[a.j] < 2 ? 1 - 0.85 * old : 1);   // the first two WORDS
       const o = env * v * oldGone * ((a.i === foc ? w * 3.2 : 0) + allDim * (0.3 + w));
       a.line.visible = o > 0.004; if (!a.line.visible) return;
       (a.line.material as ThreeNS.LineBasicMaterial).opacity = Math.min(1, o);
@@ -285,8 +292,8 @@ export function initLLM(gl: GL) {
       let o = visB(i);
       proj(ancB[i]); if (tmp.z > 1) o = 0;
       const key = foc >= 0 && ATT[foc][i] > 0.2 && i < foc, isF = i === foc;
-      const dim = i < 2 ? old : 0;
-      c.style.setProperty('--pad', (mob ? 6 : 9) + 'px');
+      const dim = wd[i] < 2 ? old : 0;
+      c.style.setProperty('--pad', (mob ? 5 : 9) + 'px');
       c.style.transform = `translate3d(${tmp.x.toFixed(1)}px,${tmp.y.toFixed(1)}px,0) translate(-50%,-50%) scale(${(clamp(12 / Math.max(1, tmp.d), 0.7, 1.12) * kB).toFixed(3)})`;
       c.style.opacity = (o * (1 - 0.78 * dim)).toFixed(3); c.style.visibility = o > 0.005 ? 'visible' : 'hidden';
       c.classList.toggle('on', true); c.classList.toggle('f', isF); c.classList.toggle('h', !!key); c.classList.toggle('nw', i === NB && p > 0.5 && p < 0.58);

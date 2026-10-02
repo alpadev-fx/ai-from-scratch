@@ -14,7 +14,7 @@ import { modulos, candidatos, preguntas } from '../data/landing';
 import { jsonSafe } from '../lib/json-safe';
 import PrefToggles from '../components/PrefToggles.astro';
 import { TOKENS } from '../lib/theme-css';
-import { tokenize, candRowsHTML, ctxOf } from '../aegis/specimens';
+import { tokenize, candRowsHTML, ctxOf, ctxChips } from '../aegis/specimens';
 import { guard, withoutCity } from '../aegis/copy-guard';
 import V3CSS from '../aegis/v3.css?raw';
 
@@ -45,7 +45,7 @@ const toks = tokenize(sentence);
 // Los candidatos (Max, Luna…) son respuestas al contexto del especimen B, no a «Cartagena es hermosa»:
 // el capítulo los muestra SOLO después de esa frase, que es el primer enunciado de P.bD (sin texto nuevo).
 const ctx = ctxOf(P.bD);                     // «Le pediste un nombre para tu perro.»
-const ctxWords = ctx.split(/\s+/).filter(Boolean);
+const ctxToks = ctxChips(ctx);               // mismo tokenizer que el especimen A: «Le | pedis | te | un | nombr | e | para | tu | perro | .»
 guard('delta context', ctx);
 const sym = [
   { lbl: P.s1Lbl, lec: P.s1Lec, h: P.s1H, d: P.s1D, c: P.s1C },
@@ -173,7 +173,7 @@ if(rm){d.classList.add('rm')}else if(gl){d.classList.add('fx');var s=false;try{s
       {toks.map((tk) => (<div class="tk"><b>{tk}</b></div>))}
     </div>
     <div class="chips ctx" aria-hidden="true">
-      {ctxWords.map((w) => (<div class="tk cw"><b>{w}</b></div>))}
+      {ctxToks.map((c) => (<div class="tk cw" data-w={c.w}><b>{c.t}</b></div>))}
       <div class="tk ans"><b>{cands[0].name}</b></div>
     </div>
     <aside class="pcard" aria-label={V.cand}>

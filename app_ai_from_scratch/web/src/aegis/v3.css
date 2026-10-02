@@ -306,6 +306,10 @@ html[data-ch="cL"] .cue{display:none}
   html.fx #c01 .copy::before{content:'';position:absolute;z-index:-1;inset:-52px calc(-1 * var(--gut)) -34px;background:linear-gradient(180deg,transparent 0,color-mix(in srgb,var(--bg) 90%,transparent) 40px,color-mix(in srgb,var(--bg) 90%,transparent) calc(100% - 44px),transparent 100%)}
   html.fx .micro,html.fx .sub{color:color-mix(in srgb,var(--l1) 84%,transparent)}
   html.fx .cue{bottom:calc(18px + env(safe-area-inset-bottom,0px))}      /* the hero stack now carries two buttons: the cue goes to the very bottom, below the trust line (the HUD log that stood there is empty while the cue shows) */
+  /* In this layout the footage plate is full-bleed and rises from the bottom edge, where the cue stands, and it is dark in EVERY theme: paper's black ink
+     (and its 66% black text) would be invisible on it. Paper takes the dark theme's ink here: #fff, the value of --l1 in :root. */
+  html[data-theme="paper"].fx .cue{color:#fff}html[data-theme="paper"].fx .cue u{background:#fff}
+  @media (prefers-color-scheme:light){html[data-theme="auto"].fx .cue{color:#fff}html[data-theme="auto"].fx .cue u{background:#fff}}
   html.fx .pcard{left:var(--gut);right:var(--gut);width:auto;top:auto;bottom:128px;padding:10px 14px}
   html.fx .pcard .crow{padding:3px 0;grid-template-columns:92px minmax(0,1fr) 44px}
   html.fx .pcard .ph{display:none}

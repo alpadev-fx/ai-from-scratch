@@ -31,13 +31,15 @@ export function initC01() {
   (ch as any).seq = seq;
   const bNum = new Bracket(st, [D.cifra, D.fuente], D.ilus), bSig = new Bracket(st, [D.s1Lec, D.s1C]);
   ch.warm = () => seq.warm();
-  let plate: Box = [0, 0, 1, 1];
+  let plate: Box = [0, 0, 1, 1], base: Box = [0, 0, 1, 1], baseKey = '';
   const layout = (p: number) => {
     const push = 1 + 0.05 * ss(p);
     let w: number, h: number, x: number, y: number;
-    if (A.mobile) { const s = Math.max(A.W / 720, A.H / 1280) * push; w = 720 * s; h = 1280 * s; x = (A.W - w) / 2; y = (A.H - h) / 2; }
-    else { h = A.H * 0.86 * push; w = h * 9 / 16; x = A.W * 0.6 - w / 2; y = (A.H - h) / 2 + 12; }
-    plate = [x, y, w, h];
+    if (A.mobile) { const s = Math.max(A.W / 720, A.H / 1280); w = 720 * s; h = 1280 * s; x = (A.W - w) / 2; y = (A.H - h) / 2; }
+    else { h = A.H * 0.86; w = h * 9 / 16; x = A.W * 0.6 - w / 2; y = (A.H - h) / 2 + 12; }
+    base = [x, y, w, h];
+    // push-in: scale about the plate centre
+    const cx = x + w / 2, cy = y + h / 2; plate = [cx - w * push / 2, cy - h * push / 2, w * push, h * push];
     st.style.setProperty('--copyW', Math.max(260, Math.min(A.W * 0.38, x - 56 - 24)) + 'px');
   };
   ch.resize = () => layout(ch.p);
@@ -58,13 +60,15 @@ export function initC01() {
     const joinB = Math.sin(Math.PI * seg(p, 0.46, 0.62));
     const out = seg(p, 0.9, 0.97);
     // plate frame (DOM) and brackets
-    frame.style.cssText = `left:${plate[0].toFixed(1)}px;top:${plate[1].toFixed(1)}px;width:${plate[2].toFixed(1)}px;height:${plate[3].toFixed(1)}px`;
+    const bk = base.map(v => v.toFixed(0)).join(',');
+    if (bk !== baseKey) { baseKey = bk; frame.style.width = base[2].toFixed(1) + 'px'; frame.style.height = base[3].toFixed(1) + 'px'; }
+    frame.style.transform = `translate3d(${plate[0].toFixed(1)}px,${plate[1].toFixed(1)}px,0) scale(${(plate[2] / base[2]).toFixed(4)})`;
     const toScreen = (b: Box): Box => [plate[0] + b[0] * plate[2], plate[1] + b[1] * plate[3], plate[0] + b[2] * plate[2], plate[1] + b[3] * plate[3]];
     bNum.set(inN1 ? toScreen(boxAt(tClip)) : null, seg(p, 0.10, 0.17) * (1 - seg(p, 0.36, 0.40)), t);
     bSig.set(toScreen(SIG), seg(p, 0.70, 0.78) * (1 - out), t);
     // headline writes itself after the ignition; leaves at the end
     head.set(Math.max(seg(p, 0, 0.1), A.intro), out);
-    const give = A.mobile ? seg(p, 0.1, 0.18) : seg(p, 0.46, 0.56);
+    const give = A.mobile ? seg(p, 0.06, 0.13) : seg(p, 0.46, 0.56);
     ($('.copy', st) as HTMLElement).style.opacity = (1 - (A.mobile ? 1 : 0.78) * give * (1 - out)).toFixed(3);
     copy.style.transform = `translate3d(0,${((0.5 - p) * 60 - out * 30).toFixed(1)}px,0)`;
     cd.show(seg(p, 0.56, 0.68) * (1 - out));

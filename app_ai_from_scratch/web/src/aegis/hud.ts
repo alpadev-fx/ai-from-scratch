@@ -69,28 +69,35 @@ export function watchHeads() {
   addEventListener('resize', () => { clearTimeout(rt); rt = window.setTimeout(() => { if (innerWidth !== lastW) { lastW = innerWidth; heads.forEach(x => x.redo()); } }, 220); });
 }
 
-/** Four corner brackets + a leader line to a mono plate. Coordinates are screen px. */
+/** Four corner brackets + a leader line to a mono plate. Coordinates are screen px.
+ *  Everything moves with transform only (fixed-size parts, scaled fill/scan), so
+ *  tracking never changes layout and cannot register as layout shift. */
 export class Bracket {
-  e: HTMLElement; plate: HTMLElement; lines: HTMLElement[]; ln: HTMLElement; locked = false; pw = 0; ph = 0;
+  e: HTMLElement; plate: HTMLElement; lines: HTMLElement[]; ln: HTMLElement; fill: HTMLElement; scan: HTMLElement; cs: HTMLElement[]; locked = false; pw = 0; ph = 0;
   constructor(parent: HTMLElement, public label: string[], public tag?: string) {
     this.e = el('div', 'bk');
-    this.e.innerHTML = '<i class="c tl"></i><i class="c tr"></i><i class="c bl"></i><i class="c br"></i><div class="fillg"></div><div class="scan"></div><div class="ldr"></div>' +
+    this.e.innerHTML = '<i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><div class="fillg"></div><div class="scan"></div><div class="ldr"></div>' +
       '<div class="plt">' + label.map(t => `<span>${t}</span>`).join('') + (tag ? `<em>${tag}</em>` : '') + '</div>';
     parent.appendChild(this.e);
     this.plate = $('.plt', this.e)!; this.ln = $('.ldr', this.e)!; this.lines = $$('.plt span', this.e);
+    this.fill = $('.fillg', this.e)!; this.scan = $('.scan', this.e)!; this.cs = $$('.c', this.e);
   }
   /** r: [x0,y0,x1,y1] screen px. appear 0..1. */
   set(r: [number, number, number, number] | null, appear: number, t = 0) {
     if (!r || appear <= 0.001) { this.e.style.opacity = '0'; if (this.locked) this.locked = false; return; }
-    const [x0, y0, x1, y1] = r, w = x1 - x0, h = y1 - y0, a = eo(clamp(appear)), s = 1 + (1 - a) * 0.5;
-    this.e.style.cssText = `opacity:${Math.min(1, a * 1.4).toFixed(3)};left:${x0.toFixed(1)}px;top:${y0.toFixed(1)}px;width:${w.toFixed(1)}px;height:${h.toFixed(1)}px;transform:scale(${s.toFixed(4)})`;
+    const a = eo(clamp(appear)), grow = (1 - a) * 18;
+    const x0 = r[0] - grow, y0 = r[1] - grow, x1 = r[2] + grow, y1 = r[3] + grow, w = x1 - x0, h = y1 - y0, S = 16;
+    this.e.style.opacity = Math.min(1, a * 1.4).toFixed(3);
+    const tr = (n: HTMLElement, x: number, y: number, extra = '') => { n.style.transform = `translate3d(${x.toFixed(1)}px,${y.toFixed(1)}px,0)${extra}`; };
+    tr(this.cs[0], x0, y0); tr(this.cs[1], x1 - S, y0); tr(this.cs[2], x0, y1 - S); tr(this.cs[3], x1 - S, y1 - S);
+    tr(this.fill, x0, y0, ` scale(${w.toFixed(2)},${h.toFixed(2)})`);
+    tr(this.scan, x0, y0 + ((t * 0.55) % 1) * h, ` scale(${w.toFixed(2)},1)`);
     if (!this.pw) { this.pw = this.plate.offsetWidth; this.ph = this.plate.offsetHeight; }
     // plate sits above the box; if no room it goes below. Always kept inside the viewport.
     const gap = 26, below = y0 - this.ph - gap < 70;
-    const lx = clamp(x0, 12, Math.max(12, A.W - 12 - this.pw)) - x0;
-    this.plate.style.transform = `translate(${lx.toFixed(1)}px,${(below ? h + gap : -this.ph - gap).toFixed(1)}px)`;
-    this.ln.style.cssText = below ? `top:100%;height:${gap}px;left:${Math.max(0, -lx) + 8}px` : `bottom:100%;height:${gap}px;left:${Math.max(0, -lx) + 8}px`;
-    $('.scan', this.e)!.style.top = (((t * 0.55) % 1) * 100).toFixed(1) + '%';
+    const px = clamp(x0, 12, Math.max(12, A.W - 12 - this.pw)), py = below ? y1 + gap : y0 - this.ph - gap;
+    tr(this.plate, px, py);
+    tr(this.ln, clamp(x0 + 8, px + 8, px + this.pw - 8), below ? y1 : y0 - gap);
     if (a > 0.98 && !this.locked) {
       this.locked = true;
       if (!A.rm) this.lines.forEach((l, i) => { const t0 = l.textContent || ''; gsap.to(l, { duration: 0.55, delay: i * 0.08, ease: 'none', scrambleText: { text: t0, chars: SCR, speed: 0.8 } }); });

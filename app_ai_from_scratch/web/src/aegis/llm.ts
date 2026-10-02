@@ -101,12 +101,12 @@ export function initLLM(gl: GL) {
   const accents = [nodeRing.material, nodePulse.material, nodeCore.material, beam.material] as any[];
 
   // ---------- layout ----------
-  let lastW = 0, lastH = 0, gut = 24, hdrB = 64, stepsTop = 700, cardW = 262;
+  let trkW = 0; let lastW = 0, lastH = 0, gut = 24, hdrB = 64, stepsTop = 700, cardW = 262;
   const widths = chipEls.map(() => 80);
   function measure() {
     const sr = st.getBoundingClientRect(), r = panel.getBoundingClientRect();
     hdrB = ($('#hdr') as HTMLElement | null)?.getBoundingClientRect().bottom || 64; gut = A.mobile ? 14 : Math.max(24, A.W * 0.04);
-    stepsTop = (r.top - sr.top) || A.H * 0.8; cardW = pCard.offsetWidth || 262;
+    stepsTop = (r.top - sr.top) || A.H * 0.8; cardW = pCard.offsetWidth || 262; trkW = ($('.trk', pCard) as HTMLElement | null)?.clientWidth || 100;
     chipEls.forEach((c, i) => { widths[i] = (c.offsetWidth || 90); });
   }
   const S = () => 2 * 12 * Math.tan(20 * Math.PI / 180) / A.H;     // world units per px at z = 0
@@ -251,7 +251,7 @@ export function initLLM(gl: GL) {
     candRows.forEach((row, i) => { const f = pr[i] * fill, bar = $('i', row) as HTMLElement, pv = $('.cp', row)!;
       bar.style.width = Math.max(1.2, f * 100).toFixed(1) + '%'; const txt = pctText(f); if (pv.textContent !== txt) pv.textContent = txt;
       row.classList.toggle('win', i === win && fill > 0.95); });
-    if (dial) { const k = seg(p, SP[3], SP[3] + 0.03); dial.style.opacity = k.toFixed(3); (dial.querySelector('i') as HTMLElement).style.left = (clamp((T - 0.1) / 1.7) * 100).toFixed(1) + '%'; }
+    if (dial) { const k = seg(p, SP[3], SP[3] + 0.03); dial.style.opacity = k.toFixed(3); (dial.querySelector('i') as HTMLElement).style.transform = `translate3d(${(clamp((T - 0.1) / 1.7) * (trkW - 2)).toFixed(1)}px,0,0)`; }
     if (dialV && Math.abs(T - tShown) > 0.004) { tShown = T; dialV.textContent = T.toFixed(2); }
     pCard.style.opacity = cardOn.toFixed(3); pCard.style.visibility = cardOn > 0.005 ? 'visible' : 'hidden';
     pCard.style.transform = mob ? `translate3d(0,${((1 - cardOn) * 14).toFixed(1)}px,0)` : `translate3d(${((1 - cardOn) * 24).toFixed(1)}px,0,0)`;

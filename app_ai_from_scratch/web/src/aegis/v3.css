@@ -41,7 +41,7 @@ html.fx #prog{display:block;position:fixed;left:var(--gut);right:var(--gut);top:
 #prog u{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--l1)}
 #prog i{position:absolute;top:-2px;width:1px;height:5px;background:var(--l3)}
 html.fx #gl{display:block;position:fixed;inset:0;width:100%;height:100%;z-index:0;visibility:hidden;pointer-events:none}
-html.gl-on #log{display:block;position:fixed;left:var(--gut);bottom:24px;z-index:21;font:400 11px/1.75 var(--m);letter-spacing:.14em;color:var(--l2);pointer-events:none;min-width:240px;text-shadow:0 0 12px var(--bg),0 0 3px var(--bg)}
+html.gl-on #log{display:block;position:fixed;left:var(--gut);bottom:24px;z-index:21;font:400 11px/1.75 var(--m);letter-spacing:.14em;color:var(--l2);pointer-events:none;min-width:240px;height:62px;text-shadow:0 0 12px var(--bg),0 0 3px var(--bg)}
 #log .ln{white-space:nowrap;display:flex;gap:10px}#log .ln::before{content:'›';color:var(--l3)}#log .ln.new{color:var(--l1)}
 html[data-ch="cL"] #log{opacity:0}
 
@@ -113,7 +113,7 @@ html:not([data-theme="paper"]) .plate{box-shadow:0 0 70px rgba(10,132,255,.14);b
 .cp{text-align:right;font:500 13px/1 var(--m);font-variant-numeric:tabular-nums}
 .crow.win .cn{color:var(--l1)}
 .dial{display:none;align-items:center;gap:12px;margin-top:12px;font:500 10px/1 var(--m);letter-spacing:.16em;color:var(--l3)}
-.dial .trk{position:relative;flex:1;height:1px;background:var(--hair)}.dial .trk i{position:absolute;top:-8px;width:2px;height:17px;background:var(--ac);left:10%}
+.dial .trk{position:relative;flex:1;height:1px;background:var(--hair)}.dial .trk i{position:absolute;top:-8px;width:2px;height:17px;background:var(--ac);left:0;will-change:transform}
 .dial b{color:var(--ac);font-weight:600;font-size:13px}
 .steps{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0}
 .steps li{padding:16px 18px 18px 0;border-top:1px solid var(--hair);position:relative}
@@ -206,7 +206,7 @@ html.fx .pstat .plate{display:none}
 html.gl-on .pstat{display:none}
 html.fx .scrim{display:block;position:absolute;inset:0;pointer-events:none;z-index:3;background:linear-gradient(90deg,var(--bg) 0,transparent 55%)}
 html.gl-on #cL .scrim{display:none}
-html.fx .pframe{display:block;position:absolute;z-index:3;pointer-events:none;border:1px solid var(--hair);opacity:0}
+html.fx .pframe{display:block;position:absolute;left:0;top:0;z-index:3;pointer-events:none;border:1px solid var(--hair);opacity:0;transform-origin:0 0}
 html.gl-on .pframe{opacity:1}
 html.fx .pframe::before,html.fx .pframe::after{content:'';position:absolute;width:18px;height:18px;border:0 solid var(--l1)}
 html.fx .pframe::before{left:-1px;top:-1px;border-left-width:2px;border-top-width:2px}
@@ -219,15 +219,15 @@ html.fx .cue u{width:1px;height:34px;background:var(--l1);transform-origin:top;a
 @keyframes cue{0%{transform:scaleY(0)}60%{transform:scaleY(1)}100%{transform:scaleY(1);opacity:0}}
 html.fx .card{position:absolute;right:var(--gut);bottom:11svh;z-index:5;width:clamp(270px,22vw,330px);max-width:none;background:var(--glass);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);opacity:0;overflow:hidden;padding:16px 18px 6px}
 html.fx .card .sweep{display:block;position:absolute;left:-40%;top:0;bottom:0;width:40%;background:linear-gradient(90deg,transparent,var(--hair2),transparent);pointer-events:none}
-/* HUD brackets (JS-made) */
-.bk{position:absolute;left:0;top:0;z-index:5;opacity:0;pointer-events:none;--c:var(--ac)}
-.bk .c{position:absolute;width:16px;height:16px;border:0 solid var(--c)}
-.bk .tl{left:0;top:0;border-left-width:2px;border-top-width:2px}.bk .tr{right:0;top:0;border-right-width:2px;border-top-width:2px}
-.bk .bl{left:0;bottom:0;border-left-width:2px;border-bottom-width:2px}.bk .br{right:0;bottom:0;border-right-width:2px;border-bottom-width:2px}
-.bk .fillg{position:absolute;inset:0;background:linear-gradient(180deg,color-mix(in srgb,var(--ac) 14%,transparent),transparent 70%)}
-.bk .scan{position:absolute;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--c),transparent);opacity:.7;top:0}
-.bk .ldr{position:absolute;width:1px;background:var(--c);opacity:.8}
-.bk .plt{position:absolute;left:0;top:0}
+/* HUD brackets (JS-made): transform-only, so tracking never shifts layout */
+.bk{position:absolute;inset:0;z-index:5;opacity:0;pointer-events:none;--c:var(--ac)}
+.bk>*{position:absolute;left:0;top:0;transform-origin:0 0;will-change:transform}
+.bk .c{width:16px;height:16px;border:0 solid var(--c)}
+.bk .c:nth-child(1){border-left-width:2px;border-top-width:2px}.bk .c:nth-child(2){border-right-width:2px;border-top-width:2px}
+.bk .c:nth-child(3){border-left-width:2px;border-bottom-width:2px}.bk .c:nth-child(4){border-right-width:2px;border-bottom-width:2px}
+.bk .fillg{width:1px;height:1px;background:linear-gradient(180deg,color-mix(in srgb,var(--ac) 14%,transparent),transparent 70%)}
+.bk .scan{width:1px;height:1px;background:linear-gradient(90deg,transparent,var(--c),transparent);opacity:.7}
+.bk .ldr{width:1px;height:26px;background:var(--c);opacity:.8}
 html.fx:not(.gl-on) .bk,html.fx:not(.gl-on) .sbk{display:none}
 html.gl-on .sbk{display:none}
 /* Δ engine */
@@ -266,7 +266,7 @@ html[data-ch="cL"] .cue{display:none}
   html.fx .pcard .crow{padding:3px 0;grid-template-columns:92px minmax(0,1fr) 44px}
   html.fx .pcard .ph{display:none}
   html.fx .dial{margin-top:6px}
-  html.fx .steps{gap:0 8px;grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:auto 1px auto auto}
+  html.fx .steps{gap:0 8px;grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:34px 1px auto auto}
   html.fx .steps li{display:contents;opacity:1}
   html.fx .steps li u{position:relative;grid-row:2;top:auto;left:auto;right:auto}
   html.fx .steps li .n{grid-row:3;margin-top:8px;opacity:.45}html.fx .steps li .t{grid-row:4;font-size:9px;letter-spacing:.08em;opacity:.45}
@@ -274,7 +274,7 @@ html[data-ch="cL"] .cue{display:none}
   html.fx .steps li:nth-child(1)>:not(.h):not(.d){grid-column:1}html.fx .steps li:nth-child(2)>:not(.h):not(.d){grid-column:2}
   html.fx .steps li:nth-child(3)>:not(.h):not(.d){grid-column:3}html.fx .steps li:nth-child(4)>:not(.h):not(.d){grid-column:4}
   html.fx .steps .h,html.fx .steps .d{display:none!important}
-  html.fx .steps li.on .h{display:block!important;grid-row:1;grid-column:1/-1;font-size:14px;padding-bottom:8px}
+  html.fx .steps li.on .h{display:block!important;grid-row:1;grid-column:1/-1;font-size:14px;padding-bottom:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   html.fx .tk,html.fx .sent{font-size:14.5px}
   html.fx .lend{top:30svh}
   html.fx #log{bottom:18px}

@@ -140,6 +140,6 @@ export function makeLog(box: HTMLElement): Log {
   }
   return {
     set(k, list, n) { const kk = k + ':' + n; if (kk === key) return; const grow = key.startsWith(k + ':') && n > +key.split(':')[1]; key = kk; lines = list.slice(0, n); render(grow || n === 1); },
-    clear() { key = ''; lines = []; box.innerHTML = ''; },
+    clear() { if (!key && !lines.length) return; key = ''; lines = []; box.innerHTML = ''; },
   };
 }

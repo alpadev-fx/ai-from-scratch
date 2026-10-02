@@ -31,18 +31,23 @@ const progressOf = (ch: Chapter, y: number) => (A.rm && ch.rmP != null ? ch.rmP 
 // one screen of scroll (their translation is cancelled), so the engine can
 // dissolve between them instead of cutting.
 function hold(ch: Chapter, dy: number) { const v = Math.round(dy * 10) / 10; if (ch._hold !== v) { ch._hold = v; ch.stage.style.transform = v ? `translate3d(0,${v}px,0)` : ''; } }
-let bPrev: string | null = null;
+let bPrev: string | null = null, logO = '';
 function shotAt(y: number) {
   let shot: Shot | null = null; const L = A.chapters;
   for (let i = 0; i < L.length; i++) {
     const C = L[i], N = L[i + 1] || null;
     if (y >= C.top - 2 && y <= C.top + C.span) { shot = { a: C, b: null, t: 0 }; break; }
-    if (y > C.top + C.span && y < C.top + C.h) { shot = { a: C, b: N, t: (y - C.top - C.span) / A.H }; break; }
+    // a static section between two chapters (no adjacency) means no dissolve: the stage is held and the section slides over it like a curtain
+    if (y > C.top + C.span && y < C.top + C.h) { const adj = N && Math.abs(N.top - (C.top + C.h)) < 4; shot = { a: C, b: adj ? N : null, t: (y - C.top - C.span) / A.H }; break; }
   }
   A.shot = shot;
-  const key = shot && shot.b ? shot.a.id + '>' + shot.b.id : null;
+  const key = shot && (shot.b || shot.t > 0) ? shot.a.id + '>' + (shot.b ? shot.b.id : '') : null;
   if (bPrev && bPrev !== key) { const [a, b] = bPrev.split('>').map(id => A.byId[id]); if (a) { hold(a, 0); a.boundOut && a.boundOut(-1); } if (b) { hold(b, 0); b.boundIn && b.boundIn(-1); } }
   bPrev = key;
+  if (shot && !shot.b && shot.t > 0 && !A.rm) hold(shot.a, shot.t * A.H);
+  // the HUD log belongs to the chapter on screen: it fades out first while a static section slides over the held stage
+  const lo = shot && !shot.b && shot.t > 0 ? (1 - clamp(shot.t / 0.2)).toFixed(2) : '';
+  if (lo !== logO) { logO = lo; const lg = $('#log'); if (lg) lg.style.opacity = lo; }
   if (shot && shot.b && !A.rm) { const { a, b, t } = shot; hold(a, t * A.H); hold(b, -(1 - t) * A.H); a.boundOut && a.boundOut(t); b.boundIn && b.boundIn(t); }
 }
 

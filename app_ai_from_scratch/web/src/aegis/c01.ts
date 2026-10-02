@@ -73,7 +73,11 @@ export function initC01() {
     copy.style.transform = `translate3d(0,${((0.5 - p) * 60 - out * 30).toFixed(1)}px,0)`;
     cd.show(seg(p, 0.56, 0.68) * (1 - out));
     if (cue) cue.style.opacity = (1 - seg(p, 0.01, 0.05)).toFixed(3);
-    if (A.log) { const lines = [D.cifra, D.fuente, D.ilus]; const n = p > 0.28 ? 3 : p > 0.2 ? 2 : p > 0.12 ? 1 : 0; if (n) A.log.set('c01', lines, n); if (p > 0.7) A.log.set('c01b', [D.s1Lec + ' · ' + D.s1C, D.logFirma], p > 0.8 ? 2 : 1); }
+    // one log owner per frame: two keys set in the same frame would re-render (and re-scramble) the box on every tick
+    if (A.log) {
+      if (p > 0.7) A.log.set('c01b', [D.s1Lec + ' · ' + D.s1C, D.logFirma], p > 0.8 ? 2 : 1);
+      else { const n = p > 0.28 ? 3 : p > 0.2 ? 2 : p > 0.12 ? 1 : 0; if (n) A.log.set('c01', [D.cifra, D.fuente, D.ilus], n); else A.log.clear(); }
+    }
     A.gl && A.gl.set('c01', {
       kind: 'foot', seq, f: fi, plate, fill: A.mobile ? 0 : 1,
       focus: (0.25 + 0.75 * eio(seg(p, 0, 0.12))) * (1 - 0.7 * joinB) * (1 - 0.4 * seg(p, 0.93, 1)),

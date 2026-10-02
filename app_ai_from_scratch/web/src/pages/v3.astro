@@ -15,6 +15,7 @@ import { jsonSafe } from '../lib/json-safe';
 import PrefToggles from '../components/PrefToggles.astro';
 import { TOKENS } from '../lib/theme-css';
 import { tokenize, candRowsHTML } from '../aegis/specimens';
+import { guard, withoutCity } from '../aegis/copy-guard';
 import V3CSS from '../aegis/v3.css?raw';
 
 const { lang, langPref, theme } = publicPrefs(Astro.request);
@@ -25,15 +26,20 @@ const precioBig = PRECIO_VISUAL[lang] ?? PRECIO_VISUAL.es;
 const { mercado } = mercadoDe(Astro.request);
 const N = narrativaDe(mercado, lang);
 
-// Reglas de copy del dueño: ninguna ciudad, nunca «cursos»/«courses» en plural,
-// ni cifras fuera del conjunto permitido (9 prompts, 40 min). Lo que no pasa no
-// se pinta; se informa en el reporte de la fase.
-const BAD = /cursos|courses|Medell|Cartagena|\b9\b|\b40\b/i;
-const ok = (s: string) => !BAD.test(s);
+// Reglas de copy del dueño (las únicas): ninguna ciudad y nunca «cursos»/«courses»
+// en plural. Nada se filtra en silencio: las cadenas que las rompen tienen una
+// variante explícita en `pub.v3` (vivoV, l4DV, preWhy3V, faqIncluyeA) y la ciudad
+// de la narrativa se recorta aquí. `guard` LANZA si algo prohibido sobrevive en
+// el copy que esta página pinta (la frase del tokenizer es la única excepción).
 const mods = modulos(lang);
 const cands = candidatos(lang);
-const faqs = preguntas(lang).filter((f) => ok(f.q) && ok(f.a));
-const prueba = N.prueba.filter(ok);
+const faqs = preguntas(lang).map((f, i) => ({ q: f.q, a: i === 3 ? V.faqIncluyeA : f.a }));
+faqs.forEach((f, i) => { guard(`faq ${i + 1} q`, f.q); guard(`faq ${i + 1} a`, f.a); });
+const prueba = N.prueba.map((x, i) => guard(`narrative.prueba[${i}]`, withoutCity(x)));
+mods.forEach((m) => { guard(`modulo ${m.n}`, m.h + m.d + m.k + m.kc); });
+[P.heroH1a, P.heroH1b, P.heroSub, P.heroCta, P.heroMicro, P.sintH2, P.heroPitch, P.preWhy1, P.preWhy2, V.preWhy3V, P.preWhy4, P.l1D, P.l2D, P.l3D, P.l4H, V.vivoV,
+  P.l5H, P.l5D, P.vivoLbl, P.preH2, P.preNota, P.pre1, P.pre2, P.pre3, P.preGar, P.preTerm, P.cierreH2, P.cierreSub, P.pieMeta2, N.garantiaTxt, N.moneda, N.pagoTxt,
+].forEach((x, i) => guard(`copy[${i}]`, x));
 const sentence = P.aEjemplo;                 // «Cartagena es hermosa» — el ejemplo del especimen
 const toks = tokenize(sentence);
 const sym = [
@@ -140,6 +146,14 @@ if(rm){d.classList.add('rm')}else if(gl){d.classList.add('fx');var s=false;try{s
   </div>
 </section>
 
+<!-- ===== 02 · SUENA ≠ CIERTO (estática en Fase 1; el gancho data-seq="n3" es para la secuencia N3 de Fase 2) ===== -->
+<section id="c02" class="sec s02" aria-labelledby="c02h">
+  <div class="sh"><div class="sn">■ {label('02', V.chSuena)}</div></div>
+  <h2 id="c02h">{P.sintH2}</h2>
+  <p class="lede big">{P.heroPitch}</p>
+  <div class="n3-hook" data-seq="n3" aria-hidden="true"></div>
+</section>
+
 <!-- ===== Δ · CÓMO PIENSA ===== -->
 <section class="ch" id="cL" style="--len:6.4" aria-labelledby="cLh">
   <div class="stage" data-stage="1">
@@ -211,13 +225,29 @@ if(rm){d.classList.add('rm')}else if(gl){d.classList.add('fx');var s=false;try{s
 </section>
 
 <!-- ===== VENTAJAS ===== -->
-<section class="sec">
+<section class="sec" id="ventajas">
   <div class="sh"><div class="sn">■ {label('04', V.chLlevas)}</div><h2>{P.llevasH2}</h2></div>
   <div class="why">
     {[[P.l1H, P.l1D], [P.l2H, P.l2D], [P.l3H, P.l3D]].map(([h, d], i) => (
       <div class="wrow"><div class="in">0{i + 1}</div><h3>{h}</h3><p>{d}</p></div>
     ))}
   </div>
+</section>
+
+<!-- ===== 05 · QUIÉN ===== -->
+<section class="sec" id="quien">
+  <div class="sh"><div class="sn">■ {label('05', V.chQuien)}</div></div>
+  <div class="bio">
+    <i class="c tl"></i><i class="c tr"></i><i class="c bl"></i><i class="c br"></i>
+    <p class="bio-l">{P.preWhy2}</p>
+    <div class="bio-h"><h3>{P.l5H}</h3><p>{P.l5D}</p></div>
+  </div>
+</section>
+
+<!-- ===== 06 · CURSO VIVO ===== -->
+<section class="sec" id="vivo">
+  <div class="sh"><div class="sn">■ {label('06', P.vivoLbl)}</div><h2>{P.l4H}</h2></div>
+  <div class="live"><span class="mk" aria-hidden="true">›</span><p>{V.vivoV}</p></div>
 </section>
 
 <!-- ===== PRECIO ===== -->
@@ -230,6 +260,7 @@ if(rm){d.classList.add('rm')}else if(gl){d.classList.add('fx');var s=false;try{s
       <div class="pp">{prueba.map((x) => (<p>{x}</p>))}<small>{N.moneda}</small></div>
       <ul class="inc">
         <li><span>{P.incluye}</span><b>{P.pre1}</b></li>
+        <li><span>{P.incluye}</span><b>{P.pre2}</b></li>
         <li><span>{P.incluye}</span><b>{P.pre3}</b></li>
       </ul>
     </div>
@@ -237,15 +268,15 @@ if(rm){d.classList.add('rm')}else if(gl){d.classList.add('fx');var s=false;try{s
       <div class="pbig"><b>{precioBig}</b><span>{P.preUnidad}</span></div>
       <p>{P.preNota}</p>
       <a href="/pago" class="buy big"><span>{P.preCta}</span><svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h11M11 5.5l4.5 4.5L11 14.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path></svg></a>
-      <div class="why2"><h4>{P.preWhyH}</h4><p>{P.preWhy1}</p><p>{P.preWhy2}</p><p>{P.preWhy4}</p></div>
-      <div class="legal"><span>{P.preGar}</span><span>{P.preTerm.split(' · ').filter(ok).join(' · ')}</span></div>
+      <div class="why2"><h4>{P.preWhyH}</h4><p>{P.preWhy1}</p><p>{V.preWhy3V}</p><p>{P.preWhy4}</p></div>
+      <div class="legal"><span>{P.preGar}</span><span>{P.preTerm}</span></div>
     </div>
   </div>
   <div class="pay"><h4>{N.pagoTit}</h4><div class="chipsrow">{N.medios.map((m) => (<span>{m}</span>))}</div><p>{N.pagoTxt}</p></div>
 </section>
 
 <!-- ===== FAQ ===== -->
-<section class="sec">
+<section class="sec" id="faq">
   <div class="sh"><div class="sn">■ {label('08', 'FAQ')}</div><h2>{P.faqH2}</h2></div>
   <div class="faq">
     {faqs.map((f, i) => (

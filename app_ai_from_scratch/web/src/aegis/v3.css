@@ -68,9 +68,10 @@ html.ign-on,html.ign-on body{overflow:hidden}
 .head{margin:18px 0 0;font:700 clamp(34px,5.2vw,84px)/.98 var(--f);letter-spacing:-.045em;text-wrap:balance}
 .head .ln{display:block}
 .rule{margin-top:24px;width:120px;height:1px;background:var(--hair);transform-origin:0 0}
-.sub{margin-top:20px;font:400 clamp(17px,1.5vw,21px)/1.45 var(--f);color:var(--l2);max-width:36ch}
+.sub{margin-top:20px;font:400 clamp(17px,1.5vw,21px)/1.45 var(--f);color:var(--l2);max-width:40ch}
 .cta{margin-top:26px;display:flex;flex-direction:column;gap:12px;align-items:flex-start}
-.micro{font:400 14px/1.45 var(--f);color:var(--l2);max-width:34ch}
+.micro{font:400 14px/1.45 var(--f);color:var(--l2);max-width:52ch}
+.sub .h2l{margin-bottom:12px;font-weight:600;color:var(--l1)}
 #c01 .stage{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);gap:36px 44px;align-items:start}
 #c01 .copy{grid-column:1}
 .pstat{grid-column:2;grid-row:1 / span 2;margin:0;display:flex;justify-content:center}
@@ -131,7 +132,6 @@ html:not([data-theme="paper"]) .plate{box-shadow:0 0 70px rgba(10,132,255,.14);b
 .sec{position:relative;z-index:2;margin:0;padding:86px max(var(--gut),calc(50% - 620px + var(--gut))) 0;background:var(--bg)}
 .sh{display:flex;align-items:baseline;flex-wrap:wrap;gap:12px 18px;padding-bottom:28px}
 .sn{font:600 10px/1 var(--m);letter-spacing:.22em;color:var(--ac)}
-.sh h2{font:700 clamp(26px,3vw,40px)/1.05 var(--f);letter-spacing:-.035em}
 .sx{font:500 10px/1 var(--m);letter-spacing:.18em;color:var(--l3);margin-left:auto}
 .lede{font:400 17px/1.5 var(--f);color:var(--l2);max-width:620px;padding-bottom:28px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--hair);border-left:1px solid var(--hair)}
@@ -139,6 +139,7 @@ html:not([data-theme="paper"]) .plate{box-shadow:0 0 70px rgba(10,132,255,.14);b
 .spec h3{font:700 27px/1.1 var(--f);letter-spacing:-.032em}.spec p{font:400 16px/1.5 var(--f);color:var(--l2)}
 .meta{display:flex;justify-content:space-between;align-items:center;gap:12px;font:600 10px/1 var(--m);letter-spacing:.2em;color:var(--l3)}
 .meta.sm{font-size:9px;letter-spacing:.14em;font-weight:500}.meta b{font:600 15px/1 var(--m)}
+.meta.sm > span:nth-child(2){flex:1 1 auto;text-align:center}   /* the verdict word changes with the dial: its box must not move (CLS) */
 .tokin{width:100%;background:var(--panel);border:1px solid var(--hair);border-radius:0;padding:15px 16px;font:400 17px/1.2 var(--f);color:var(--l1);outline:none}
 .tokin:focus{border-color:var(--l1)}
 .toks{display:flex;gap:7px;flex-wrap:wrap;min-height:46px}.tokc{border:1px solid var(--hair);font:500 15px/1 var(--m);padding:11px 12px}
@@ -157,9 +158,6 @@ input[type=range]::-moz-range-track{height:1px;background:var(--hair)}input[type
 .ie{font:600 10px/1 var(--m);letter-spacing:.18em;color:var(--ac);margin-bottom:7px}.ih{font:700 21px/1.16 var(--f);letter-spacing:-.028em}
 .irow p{font:400 16px/1.5 var(--f);color:var(--l2)}
 .ik{font:600 17px/1.15 var(--m);letter-spacing:-.01em}.ikc{font:400 12px/1.45 var(--f);color:var(--l3);margin-top:6px}
-.why{border-top:1px solid var(--hair)}
-.wrow{display:grid;grid-template-columns:52px 300px 1fr;gap:24px;padding:24px 0;border-bottom:1px solid var(--hair2)}
-.wrow h3{font:700 19px/1.2 var(--f);letter-spacing:-.025em}.wrow p{font:400 16px/1.5 var(--f);color:var(--l2)}
 .price{display:grid;grid-template-columns:1.2fr .8fr;border:1px solid var(--hair);background:var(--panel)}
 .pl,.pr{padding:44px 40px;display:flex;flex-direction:column;gap:22px;min-width:0}
 .pl{border-right:1px solid var(--hair)}
@@ -184,12 +182,12 @@ summary i{justify-self:end;width:12px;height:12px;position:relative}summary i::b
 details[open] summary i::after{transform:rotate(0)}
 details p{padding:0 0 24px 76px;font:400 16px/1.55 var(--f);color:var(--l2);max-width:760px}
 .close{padding-bottom:110px;border-top:0}
-.close h2{font:700 clamp(34px,5.4vw,80px)/.96 var(--f);letter-spacing:-.05em;max-width:900px;text-wrap:balance;margin-top:30px;border-top:1px solid var(--hair);padding-top:40px}
+.close h2{font:700 clamp(34px,5.4vw,80px)/.96 var(--f);letter-spacing:-.05em;max-width:900px;text-wrap:balance;margin-top:48px}
 .crow2{display:flex;align-items:center;gap:26px;flex-wrap:wrap;margin:30px 0}.crow2 p{font:400 17px/1.45 var(--f);color:var(--l2);max-width:340px}
 .foot{display:grid;grid-template-columns:repeat(4,1fr);gap:24px;border-top:1px solid var(--hair2);padding:24px 0;font:500 10px/1.6 var(--m);letter-spacing:.14em;color:var(--l3)}
 .foot .lg{--lg:22px;margin-right:8px;vertical-align:middle}
 .legal2{display:block;border-top:1px solid var(--hair2)}
-@media (max-width:900px){.grid2,.price{grid-template-columns:1fr}.pl{border-right:0;border-bottom:1px solid var(--hair)}.pl,.pr{padding:28px 22px}.irow{grid-template-columns:44px 1fr;gap:6px 14px}.irow>p,.irow>div:last-child{grid-column:2}.wrow{grid-template-columns:44px 1fr;gap:6px 14px}.wrow p{grid-column:2}.foot{grid-template-columns:1fr}.spec{padding:22px}details p{padding-left:0}summary{grid-template-columns:36px 1fr 24px;gap:12px}.sx{margin-left:0;flex-basis:100%}}
+@media (max-width:900px){.grid2,.price{grid-template-columns:1fr}.pl{border-right:0;border-bottom:1px solid var(--hair)}.pl,.pr{padding:28px 22px}.irow{grid-template-columns:44px 1fr;gap:6px 14px}.irow>p,.irow>div:last-child{grid-column:2}.foot{grid-template-columns:1fr}.spec{padding:22px}details p{padding-left:0}summary{grid-template-columns:36px 1fr 24px;gap:12px}.sx{margin-left:0;flex-basis:100%}}
 
 
 /* ---------- 02 suena ≠ cierto · 05 quién · 06 vivo ---------- */
@@ -200,15 +198,9 @@ html.fx .s02{padding-top:max(110px,22svh);padding-bottom:86px;min-height:100svh;
 .lede.big{margin-top:28px;font:400 clamp(18px,1.7vw,24px)/1.45 var(--f);max-width:40ch;padding-bottom:0}
 .n3-hook{display:none}
 .bio{position:relative;border:1px solid var(--hair);background:var(--panel);padding:44px 40px;display:grid;grid-template-columns:1fr 1fr;gap:36px 48px}
-.bio .c{position:absolute;width:16px;height:16px;border:0 solid var(--ac)}
-.bio .tl{left:-1px;top:-1px;border-left-width:2px;border-top-width:2px}.bio .tr{right:-1px;top:-1px;border-right-width:2px;border-top-width:2px}
-.bio .bl{left:-1px;bottom:-1px;border-left-width:2px;border-bottom-width:2px}.bio .br{right:-1px;bottom:-1px;border-right-width:2px;border-bottom-width:2px}
-.bio-l{font:700 clamp(22px,2.4vw,32px)/1.2 var(--f);letter-spacing:-.03em;text-wrap:balance}
-.bio-h h3{font:600 11px/1.3 var(--m);letter-spacing:.2em;color:var(--ac);text-transform:uppercase}
-.bio-h p{margin-top:14px;font:400 16px/1.55 var(--f);color:var(--l2)}
-.live{display:flex;gap:16px;align-items:flex-start;border-left:2px solid var(--ac);padding:6px 0 6px 20px;max-width:760px}
-.live .mk{font:500 18px/1.5 var(--m);color:var(--ac)}
-.live p{font:400 clamp(16px,1.5vw,19px)/1.55 var(--f);color:var(--l1)}
+.bio .c,.chat .c{position:absolute;width:16px;height:16px;border:0 solid var(--ac)}
+.bio .tl,.chat .tl{left:-1px;top:-1px;border-left-width:2px;border-top-width:2px}.bio .tr,.chat .tr{right:-1px;top:-1px;border-right-width:2px;border-top-width:2px}
+.bio .bl,.chat .bl{left:-1px;bottom:-1px;border-left-width:2px;border-bottom-width:2px}.bio .br,.chat .br{right:-1px;bottom:-1px;border-right-width:2px;border-bottom-width:2px}
 @media (max-width:900px){.bio{grid-template-columns:1fr;padding:28px 22px}.s02{padding-top:72px}html.fx .s02{padding-top:max(86px,20svh)}}
 
 /* ---------- ENGINE MODE: tall chapters, sticky stage, WebGL behind ---------- */
@@ -313,3 +305,214 @@ html[data-ch="cL"] .cue{display:none}
 @media (max-width:359px){.buy{white-space:normal;text-align:center;line-height:1.35;padding:10px 14px;max-width:100%}}
 /* short phones: the hero copy needs the room the scroll cue would take */
 @media (max-width:900px) and (max-height:720px){html.fx .cue{display:none}}
+/* The stage-2A hero carries two lines more than phase 1's (the bold «Enseñada desde la frontera.» line and the trust line under the
+   free CTA). On a short screen the same copy gets tighter, in tiers, so the CTA and its line stay inside the 100svh stage: the stage
+   clips, and a CTA below the fold of a pinned hero is a CTA nobody can press. */
+@media (max-width:1100px) and (max-height:780px){
+  html.fx #c01 .copy{top:calc(var(--hdr) + 22px)}
+  html.fx #c01 .head{margin-top:12px;font-size:clamp(28px,8.4vw,44px)}
+  html.fx #c01 .sub{margin-top:12px;font-size:15.5px;line-height:1.38}
+  html.fx #c01 .sub .h2l{margin-bottom:6px}
+  html.fx #c01 .cta{margin-top:16px;gap:8px}
+  html.fx #c01 .micro{font-size:12.5px;line-height:1.4}
+  html.fx #c01 .buy.big{padding:14px 22px}
+}
+@media (max-width:1100px) and (max-height:640px){
+  html.fx #c01 .copy{top:calc(var(--hdr) + 10px)}
+  html.fx #c01 .head{margin-top:8px;font-size:clamp(26px,7.6vw,38px)}
+  html.fx #c01 .sub{margin-top:8px;font-size:14px;line-height:1.35}
+  html.fx #c01 .cta{margin-top:12px}
+  html.fx #c01 .micro{font-size:12px}
+}
+@media (min-width:1101px) and (max-height:780px){html.fx #c01 .copy{top:calc(var(--hdr) + 9svh)}}
+/* chapter 04's headline is longer too («Por dentro no hay magia. Hay números.»): on a short phone it takes three lines and the engine
+   places the sentence under the copy, so the copy gets tighter to leave the room the step tabs at the bottom need */
+@media (max-width:1100px) and (max-height:640px){
+  html.fx #cL .copy{top:calc(var(--hdr) + 14px)}
+  html.fx #cL .head{margin-top:10px;font-size:clamp(25px,7.8vw,34px)}
+  html.fx #cL .sub{margin-top:10px;font-size:14px;line-height:1.38}
+}
+/* chapter 01's eyebrow is scrambled in by the engine and its final text («01 — IA DESDE CERO · 12 LECCIONES · ES/EN») takes two lines on a
+   phone: it reserves both from the first frame, with the dot on the first line, so the headline under it never moves (CLS 0) */
+@media (max-width:460px){
+  html.fx #c01 .label{align-items:flex-start;min-height:calc(2 * 1.4em)}
+  html.fx #c01 .label i{margin-top:.34em}
+}
+/* at 320 the header wraps to three rows (155px), taller than the 100px the rest of the page assumes for phones */
+@media (max-width:359px){:root{--hdr:154px}}
+@media (max-width:359px) and (max-height:640px){
+  html.fx #c01 .copy{top:calc(var(--hdr) - 8px)}
+  html.fx #c01 .head{font-size:25px}
+  html.fx #c01 .sub{font-size:13.5px}
+}
+
+
+/* ---------- STAGE 2A · the Hormozi chapters 02, 03, 05–08, 10–16. STATIC, AEGIS tokens only (no new color). Each chapter carries a
+   data-fx name and data-* hooks: those are what stage 2B animates, so the markup below is the state the motion lands on. ---------- */
+.cx .sh{flex-wrap:nowrap;align-items:center;gap:12px 18px;border-top:1px solid var(--hair);padding-top:16px;padding-bottom:26px}
+.cx .sn{flex:1 1 auto;min-width:0;line-height:1.5}
+.cx .sx{flex:none;margin-left:auto;font:500 10px/1 var(--m);letter-spacing:.18em;color:var(--l3);font-variant-numeric:tabular-nums}
+.hx{font:700 clamp(30px,4.6vw,66px)/1.02 var(--f);letter-spacing:-.045em;text-wrap:balance;max-width:22ch}
+.hx.wide{max-width:27ch}
+.hx.xl{font-size:clamp(46px,9vw,136px);line-height:.92;letter-spacing:-.058em;max-width:11ch}
+.cx .lede{margin-top:22px;max-width:52ch;padding-bottom:0}
+.cx .lede + .grid2{margin-top:44px}
+.xsub{margin:18px 0 34px;font:500 10px/1.4 var(--m);letter-spacing:.18em;color:var(--l3)}
+.ctarow{display:flex;align-items:center;flex-wrap:wrap;gap:16px 26px;margin-top:60px;padding-top:28px;border-top:1px solid var(--hair2)}
+.ctarow p{flex:1 1 260px;font:500 10px/1.6 var(--m);letter-spacing:.14em;color:var(--l3)}
+.buy.ghost{background:transparent;color:var(--l1);border:1px solid var(--hair)}
+.buy.ghost:hover:not(:disabled){background:var(--ac);color:var(--on-ac,#fff);border-color:var(--ac)}
+.buy.ghost:disabled{opacity:.45;cursor:default}
+
+/* 02 · te ha pasado: a chat plate with three failed answers, each struck and tagged with the lesson that explains it */
+.chat{position:relative;margin:54px 0 0;max-width:920px;border:1px solid var(--hair);background:var(--panel)}
+.beat{display:grid;grid-template-columns:76px minmax(0,1fr);padding:30px 32px 32px 0;border-top:1px solid var(--hair2)}
+.beat:first-of-type{border-top:0}
+.bn{padding:3px 0 0 32px;font:600 11px/1 var(--m);letter-spacing:.18em;color:var(--ac)}
+.bt{display:flex;flex-direction:column;gap:13px;min-width:0}
+.who{display:inline-block;margin-right:12px;font:600 10px/1 var(--m);letter-spacing:.2em;color:var(--l3);vertical-align:2px}
+.you{font:600 clamp(16px,1.5vw,19px)/1.4 var(--f)}
+.you.faint{font-weight:500;color:var(--l3)}
+.gap{padding:2px 0;font:500 11px/1.4 var(--m);letter-spacing:.14em;color:var(--l3)}
+.ia{font:400 clamp(15px,1.3vw,17px)/1.55 var(--f);color:var(--l2)}
+.rp{text-decoration:line-through;text-decoration-thickness:1.5px;text-decoration-color:var(--l1)}
+.tag{display:flex;align-items:flex-start;gap:10px;align-self:flex-start;max-width:100%;padding:9px 13px;border:1px solid var(--ac);font:600 11px/1.5 var(--m);letter-spacing:.1em;color:var(--l1)}
+.tag i{flex:none;width:7px;height:7px;margin-top:5px;background:var(--ac)}
+.shout{margin-top:46px;max-width:22ch;font:700 clamp(26px,3.4vw,50px)/1.06 var(--f);letter-spacing:-.04em;text-wrap:balance}
+
+/* 03 · qué cambia: three plates, one word each */
+.trio{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin-top:48px;border-top:1px solid var(--hair)}
+.tri{padding:28px 32px 36px 0}
+.tri + .tri{padding-left:32px;border-left:1px solid var(--hair2)}
+.tri .no{font:600 11px/1 var(--m);letter-spacing:.2em;color:var(--ac)}
+.tri h3{margin-top:30px;font:700 clamp(28px,3vw,44px)/1 var(--f);letter-spacing:-.05em;overflow-wrap:anywhere}
+.tri p{margin-top:20px;max-width:34ch;font:400 16px/1.5 var(--f);color:var(--l2)}
+
+/* 05 · cifras: six figures. The size of each comes from its container, so «70.000.000.000» never leaves its plate */
+.figs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-top:1px solid var(--hair);border-left:1px solid var(--hair)}
+.fig{position:relative;container-type:inline-size;display:flex;flex-direction:column;gap:14px;min-width:0;padding:30px 28px 32px;border-right:1px solid var(--hair);border-bottom:1px solid var(--hair);background:var(--panel)}
+.fig .ie{padding-right:36px;font:600 10px/1.3 var(--m);letter-spacing:.18em;color:var(--ac)}
+.fig .no{position:absolute;right:24px;top:26px;font:700 14px/1 var(--m);color:var(--l3)}
+.fig .big{margin:26px 0 2px;font:700 44px/.95 var(--f);letter-spacing:-.055em;white-space:nowrap}
+.fig .k-xs{font-size:min(30cqw,92px)}.fig .k-s{font-size:min(17cqw,66px)}.fig .k-m{font-size:min(11.5cqw,46px)}
+.fig .k-l{font-size:min(9.4cqw,36px);line-height:1;white-space:normal}
+.fig .cap{font:400 14px/1.5 var(--f);color:var(--l2)}
+.fig h3{margin-top:auto;padding-top:20px;border-top:1px solid var(--hair2);font:700 21px/1.15 var(--f);letter-spacing:-.03em}
+.fig .fd{margin-top:-6px;font:400 15px/1.5 var(--f);color:var(--l2)}
+.figs-sec{padding-bottom:0}
+html.fx .figs-sec{min-height:100svh}
+
+/* 06 · lo que no necesitas: the six words struck out, then the line */
+.nots{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-top:1px solid var(--hair);border-left:1px solid var(--hair)}
+.nots li{padding:34px 28px;border-right:1px solid var(--hair);border-bottom:1px solid var(--hair);background:var(--panel)}
+.nots s{font:700 clamp(26px,3.4vw,52px)/1 var(--f);letter-spacing:-.045em;color:var(--l3);text-decoration:line-through;text-decoration-thickness:2px;text-decoration-color:var(--l1)}
+.cx .hx.xl[data-final]{margin-top:64px;max-width:13ch}
+
+/* 07 · el tiempo: a ring of 12 ticks (one per lesson), fully drawn; then the four figures */
+.time{display:grid;grid-template-columns:minmax(0,320px) minmax(0,1fr);gap:40px 72px;align-items:center}
+.clock{position:relative;width:100%;max-width:320px;aspect-ratio:1}
+.clock svg{display:block;width:100%;height:100%;overflow:visible}
+.clock .r0{fill:none;stroke:var(--hair);stroke-width:1.5}
+.clock .r1{fill:none;stroke:var(--l1);stroke-width:1.5;stroke-linecap:round;stroke-dasharray:1;stroke-dashoffset:0}
+.clock .tick{fill:var(--l1)}
+.clock .ctr{position:absolute;inset:0;display:grid;place-content:center;justify-items:center;gap:4px}
+.clock .ctr b{font:700 clamp(68px,8.4vw,112px)/1 var(--f);letter-spacing:-.06em;font-variant-numeric:tabular-nums}
+.clock .ctr span{font:500 11px/1 var(--m);letter-spacing:.32em;color:var(--l3);padding-left:.32em}
+.specs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));margin:60px 0 0;border-top:1px solid var(--hair)}
+.srow{padding:26px 24px 30px 0}
+.srow + .srow{padding-left:24px;border-left:1px solid var(--hair2)}
+.srow dt{font:700 clamp(44px,4.8vw,70px)/1 var(--f);letter-spacing:-.055em;font-variant-numeric:tabular-nums}
+.srow dd{margin:14px 0 0;max-width:24ch;font:400 15px/1.45 var(--f);color:var(--l2)}
+
+/* 08 · prueba: the temperature specimen asks the dog question; «Pídele un nombre» draws from the very distribution the bars show */
+.spec .pctx{font:400 16px/1.4 var(--m);color:var(--l1)}
+.spec .ph{margin:-6px 0 -8px;font:500 10px/1.35 var(--m);letter-spacing:.16em;color:var(--l3)}
+.askrow{display:flex;flex-wrap:wrap;align-items:center;gap:12px 16px;border-top:1px solid var(--hair);padding-top:18px}
+.picks{display:flex;flex-wrap:wrap;align-items:center;gap:8px;min-height:36px}
+.pk{padding:8px 12px;border:1px solid var(--hair);font:500 13px/1 var(--m)}
+.pk.new{border-color:var(--ac);color:var(--ac)}
+
+/* 10 · la oferta: seven items down a spine. Stage 2B docks them one by one */
+.stack{position:relative;list-style:none;margin:50px 0 0;padding:0;border-top:1px solid var(--hair)}
+.stack::before{content:'';position:absolute;left:27px;top:0;bottom:0;width:1px;background:var(--hair)}
+.stack li{display:grid;grid-template-columns:54px minmax(0,1fr);gap:0 20px;align-items:start;padding:24px 0;border-bottom:1px solid var(--hair2)}
+.stack .no{position:relative;z-index:1;width:54px;padding:5px 0;background:var(--bg);text-align:center;font:700 13px/1 var(--m);letter-spacing:.06em;color:var(--ac)}
+.stack p{max-width:68ch;font:400 clamp(16px,1.5vw,19px)/1.5 var(--f);color:var(--l2)}
+.stack b{font-weight:700;color:var(--l1)}
+
+/* 11 · garantía: the seal. The ring of text turns in stage 2B; the 14 stays */
+.gar{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,.8fr);gap:40px 72px;align-items:center}
+.seal{position:relative;width:min(100%,360px);aspect-ratio:1;justify-self:center}
+.seal svg{display:block;width:100%;height:100%;overflow:visible}
+.seal .sr{stroke:var(--hair);stroke-width:1}.seal .sr2{stroke:var(--hair2);stroke-width:1}
+.seal .st{font:600 10.5px var(--m);fill:var(--l2)}
+.seal .core{position:absolute;inset:0;display:grid;place-items:center;font:700 clamp(96px,13vw,168px)/1 var(--f);letter-spacing:-.07em}
+
+/* 12 · quién: the bio plate (HUD corners), the claim and what backs it */
+.bio-l{font:700 clamp(28px,3.4vw,50px)/1.05 var(--f);letter-spacing:-.045em;text-wrap:balance}
+.bio-h{display:flex;flex-direction:column;gap:20px}
+.bio-body{font:400 clamp(16px,1.4vw,18px)/1.6 var(--f);color:var(--l2)}
+.bio-em{padding-left:16px;border-left:2px solid var(--ac);font:700 clamp(20px,2vw,28px)/1.2 var(--f);letter-spacing:-.03em}
+.bio-close{padding-top:20px;border-top:1px solid var(--hair2);font:500 15px/1.55 var(--f);color:var(--l2)}
+
+/* 13 · para quién */
+.para{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));border:1px solid var(--hair);background:var(--panel)}
+.pcol{padding:36px 36px 40px}
+.pcol + .pcol{border-left:1px solid var(--hair)}
+.pcol h2{font:700 clamp(26px,2.8vw,40px)/1.05 var(--f);letter-spacing:-.042em}
+.pcol ul{list-style:none;margin:28px 0 0;padding:0}
+.pcol li{position:relative;padding:17px 0 17px 34px;border-top:1px solid var(--hair2);font:400 16px/1.5 var(--f)}
+.pcol li::before{content:'+';position:absolute;left:0;top:17px;font:700 15px/1.5 var(--m);color:var(--ac)}
+.pcol.no li{color:var(--l2)}
+.pcol.no li::before{content:'\00d7';color:var(--l3)}
+
+/* 14 · precio: the prod block plus a 30-segment bar (30 days) */
+.segbar{display:grid;grid-template-columns:repeat(30,minmax(0,1fr));gap:2px;height:8px;margin-top:-6px}
+.segbar i{display:block;background:var(--ac)}
+
+/* 16 · cierre: the three steps as a constellation of nodes on one line */
+.steps3{position:relative;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0 28px;list-style:none;margin:6px 0 0;padding:0 0 48px;border-bottom:1px solid var(--hair2)}
+.steps3::before{content:'';position:absolute;left:0;right:0;top:7px;height:1px;background:var(--hair)}
+.steps3 li{position:relative;padding-top:34px}
+.steps3 li i{position:absolute;left:0;top:0;width:15px;height:15px;border:1px solid var(--ac);background:var(--bg)}
+.steps3 li i::after{content:'';position:absolute;inset:3px;background:var(--ac)}
+.steps3 p{max-width:26ch;font:600 clamp(17px,1.6vw,21px)/1.3 var(--f);letter-spacing:-.02em}
+.close .ctarow{margin-top:34px;margin-bottom:56px;padding-top:0;border-top:0}
+/* 15 · faq: the heading keeps clear of the list's top rule (descenders of «Preguntas») */
+#c15 .hx{margin-bottom:40px}
+
+@media (max-width:1100px){
+  .figs{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .specs{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .srow:nth-child(odd){padding-left:0;border-left:0}
+  .srow:nth-child(n+3){border-top:1px solid var(--hair2)}
+  .nots{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:900px){
+  .cx .sh{padding-bottom:20px}
+  .beat{grid-template-columns:48px minmax(0,1fr);padding:24px 18px 26px 0}.bn{padding-left:16px}
+  .trio{grid-template-columns:1fr;margin-top:34px}
+  .tri,.tri + .tri{padding:26px 0 30px;border-left:0;border-top:1px solid var(--hair2)}
+  .tri:first-child{border-top:0}
+  .tri h3{margin-top:22px}
+  .time,.gar{grid-template-columns:1fr;gap:34px}
+  .clock{max-width:260px}
+  .seal{width:min(100%,300px)}
+  .para{grid-template-columns:1fr}
+  .pcol{padding:28px 22px 30px}
+  .pcol + .pcol{border-left:0;border-top:1px solid var(--hair)}
+  .steps3{grid-template-columns:1fr;gap:26px 0;margin-top:0;padding-bottom:40px}
+  .steps3::before{left:7px;right:auto;top:0;bottom:40px;width:1px;height:auto}
+  .steps3 li{padding:0 0 0 38px}
+  .steps3 li i{top:2px}
+  .stack li{grid-template-columns:42px minmax(0,1fr);gap:0 14px}
+  .stack::before{left:21px}.stack .no{width:42px}
+  .ctarow{margin-top:44px}
+}
+@media (max-width:640px){
+  .figs{grid-template-columns:1fr}
+  .nots li{padding:24px 18px}
+  .specs{margin-top:44px}
+  .hx.xl{max-width:none}
+  .meta{line-height:1.55}
+}

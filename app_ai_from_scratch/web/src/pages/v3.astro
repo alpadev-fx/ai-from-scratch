@@ -1,8 +1,19 @@
 ---
-// /v3 — la landing en estilo AEGIS (vista previa, Fase 1). noindex, sin Meta Pixel,
-// fuera del sitemap. Mismo mecanismo de idioma (cookie pref_lang) y de tema
-// (Auto/Oscuro/Papel vía theme-css.ts + data-theme) que index.astro. TODO el
-// copy está en el HTML del servidor: el motor (src/aegis/*) solo lo anima.
+// /v3 — the landing in AEGIS style (preview). noindex, no Meta Pixel, out of the sitemap. Same language mechanism
+// (cookie pref_lang) and theme mechanism (Auto/Oscuro/Papel via theme-css.ts + data-theme) as index.astro.
+//
+// STAGE 2A: the Hormozi sales argument on the AEGIS chapters. 17 chapters, in this order (the order IS the argument):
+//   00 ignition · 01 hero · 02 te ha pasado · 03 qué cambia · 04 por dentro (Δ) · 05 cifras · 06 lo que no necesitas ·
+//   07 el tiempo · 08 prueba · 09 temario · 10 la oferta · 11 garantía · 12 quién · 13 para quién · 14 precio · 15 FAQ · 16 cierre
+// The engine chapters (00 ignition, 01 hero sequence, 04 Δ) are untouched apart from their words. Every other chapter is
+// STATIC here, with AEGIS tokens (HUD label, plates, hairlines, mono eyebrows) and data-fx / data-* hooks that stage 2B animates.
+// ALL the copy is in the server HTML: the engine (src/aegis/*) only animates it, so ?rm=1, ?nogl=1 and a real no-WebGL
+// browser read every chapter in full.
+//
+// COPY RULES, enforced by code and not by hope. Everything this page reads from `pub` passes through `guarded()`, which
+// THROWS the moment a banned string is read (city, plural courses, the Hormozi §0.4 list, monthly wording, «veinte segundos»,
+// the cat prompt, a testimonial outside its one sentence). web/scripts/v3-copy-check.mjs applies the same rule table to the
+// rendered HTML of every market. Prod sells ONE thing: the price for 30 days, auto-renew OFF by default.
 export const prerender = false;
 import { mercadoDe } from '../lib/region';
 import { narrativaDe } from '../lib/narrative';
@@ -13,40 +24,39 @@ import { t } from '../lib/i18n';
 import { modulos, candidatos, preguntas } from '../data/landing';
 import { jsonSafe } from '../lib/json-safe';
 import PrefToggles from '../components/PrefToggles.astro';
+import V3Cta from '../components/V3Cta.astro';
 import { TOKENS } from '../lib/theme-css';
 import { tokenize, candRowsHTML, ctxOf, ctxChips } from '../aegis/specimens';
-import { guard, withoutCity } from '../aegis/copy-guard';
+import { guard, guarded, withoutCity } from '../aegis/copy-guard';
 import V3CSS from '../aegis/v3.css?raw';
 
 const { lang, langPref, theme } = publicPrefs(Astro.request);
 const L = t(lang);
-const P = L.pub.land;
-const V = L.pub.v3;
+const PUB = guarded(L.pub, 'pub');            // a string is checked at the moment this page reads it, so no list can fall behind the markup
+const P = PUB.land;
+const V = PUB.v3;
 const precioBig = PRECIO_VISUAL[lang] ?? PRECIO_VISUAL.es;
+const fill = (s: string) => s.split('{precio}').join(precioBig);   // prices come from PRECIO_VISUAL, never a literal
 const { mercado } = mercadoDe(Astro.request);
 const N = narrativaDe(mercado, lang);
 
-// Reglas de copy del dueño (las únicas): ninguna ciudad y nunca «cursos»/«courses»
-// en plural. Nada se filtra en silencio: las cadenas que las rompen tienen una
-// variante explícita en `pub.v3` (vivoV, preWhy3V, faqIncluyeA) y la ciudad
-// de la narrativa se recorta aquí. `guard` LANZA si algo prohibido sobrevive en
-// el copy que esta página pinta (la frase del tokenizer es la única excepción).
+// Data that does not live in `pub`. The Colombian narrative carries a city, which v3 cuts; lesson 01 is the only text
+// allowed to say «gatos» (it is published course copy), and it is named, exactly, as the exemption.
 const mods = modulos(lang);
 const cands = candidatos(lang);
 const faqs = preguntas(lang).map((f, i) => ({ q: f.q, a: i === 3 ? V.faqIncluyeA : f.a }));
 faqs.forEach((f, i) => { guard(`faq ${i + 1} q`, f.q); guard(`faq ${i + 1} a`, f.a); });
+mods.forEach((m) => { guard(`modulo ${m.n}`, m.eb + m.h + m.d + m.k + m.kc, { allow: m.n === '01' ? [m.kc] : [] }); });
+cands.forEach((c) => guard(`candidate ${c.name}`, c.name));
 const prueba = N.prueba.map((x, i) => guard(`narrative.prueba[${i}]`, withoutCity(x)));
-mods.forEach((m) => { guard(`modulo ${m.n}`, m.h + m.d + m.k + m.kc); });
-[P.heroH1a, P.heroH1b, P.heroSub, P.heroCta, P.heroMicro, P.sintH2, P.heroPitch, P.preWhy1, P.preWhy2, V.preWhy3V, P.preWhy4, P.l1D, P.l2D, P.l3D, P.l4H, V.vivoV,
-  P.l5H, P.l5D, P.vivoLbl, P.preH2, P.preNota, P.pre1, P.pre2, P.pre3, P.preGar, P.preTerm, P.cierreH2, P.cierreSub, P.pieMeta2, N.garantiaTxt, N.moneda, N.pagoTxt,
-].forEach((x, i) => guard(`copy[${i}]`, x));
-const sentence = P.aEjemplo;                 // «Cartagena es hermosa» — el ejemplo del especimen A (lección 05)
+[N.garantiaTxt, N.moneda, N.pagoTit, N.pagoTxt, ...N.medios].forEach((x, i) => guard(`narrative[${i}]`, x));
+
+const sentence = P.aEjemplo;                 // «Cartagena es hermosa» — the example of specimen A (lesson 05)
 const toks = tokenize(sentence);
-// Los candidatos (Max, Luna…) son respuestas al contexto del especimen B, no a «Cartagena es hermosa»:
-// el capítulo los muestra SOLO después de esa frase, que es el primer enunciado de P.bD (sin texto nuevo).
+// The candidates (Max, Luna…) answer specimen B's context, not «Cartagena es hermosa»: chapter 04 shows them ONLY after
+// that sentence, which is the first sentence of P.bD (no new text). Chapter 08 uses the same line as its prompt.
 const ctx = ctxOf(P.bD);                     // «Le pediste un nombre para tu perro.»
-const ctxToks = ctxChips(ctx);               // mismo tokenizer que el especimen A: «Le | pedis | te | un | nombr | e | para | tu | perro | .»
-guard('delta context', ctx);
+const ctxToks = ctxChips(ctx);               // same tokenizer as specimen A: «Le | pedis | te | un | nombr | e | para | tu | perro | .»
 const sym = [
   { lbl: P.s1Lbl, lec: P.s1Lec, h: P.s1H, d: P.s1D, c: P.s1C },
   { lbl: P.s2Lbl, lec: P.s2Lec, h: P.s2H, d: P.s2D, c: P.s2C },
@@ -62,7 +72,21 @@ const DATA = {
   logVec: V.logVec, logAtt: V.logAtt, logLay: V.logLay, logNext: V.logNext, logLoop: V.logLoop, tabTemp: V.tabTemp,
   txt: { ejemplo: P.aEjemplo, predecible: P.bPredecible, equilibrada: P.bEquilibrada, impredecible: P.bImpredecible },
 };
+
 const label = (n: string, s: string) => `${n} — ${s}`;
+const TOTAL = 16;
+const cnt = (n: string) => `${n} / ${TOTAL}`;
+// The size class of a figure comes from its length, not from the eye: «1 vez» is 5 characters and «3 palabras = 5 tokens» is 21.
+const escala = (k: string): string => (k.length <= 6 ? 'k-xs' : k.length <= 10 ? 'k-s' : k.length <= 15 ? 'k-m' : 'k-l');
+// 10 · the offer stack: the five Hormozi items, «lo que publique después» (its description is the published vivoV), the guarantee.
+const offer = [
+  ...V.s7Items.map((it) => ({ t: it.t, d: fill(it.d) })),
+  { t: V.s7Next, d: V.vivoV },
+  { t: V.s7Gar.t, d: fill(V.s7Gar.d) },
+];
+// 07 · twelve ticks, one per lesson, on a circle of radius 88
+const ticks = Array.from({ length: 12 }, (_, i) => { const a = (i / 12) * Math.PI * 2 - Math.PI / 2; return { x: +(100 + Math.cos(a) * 88).toFixed(2), y: +(100 + Math.sin(a) * 88).toFixed(2) }; });
+const seal = V.s8Sello.repeat(2);
 ---
 <!doctype html>
 <html lang={lang} data-theme={theme}>
@@ -105,10 +129,10 @@ if(rm){d.classList.add('rm')}else if(gl){d.classList.add('fx');var s=false;try{s
 <header id="hdr">
   <div class="hdr-in">
     <a class="brand" href="#c01" aria-label={P.figMarca}><span class="lg" aria-hidden="true">IA</span><b>{P.figMarca}</b></a>
-    <div class="hdr-lang"><PrefToggles lang={langPref} theme={theme} labels={{ auto: L.pub.auto, dark: L.pub.oscuro, paper: L.pub.papel, langAria: L.pub.ariaIdioma, themeAria: L.pub.ariaTema }} /></div>
+    <div class="hdr-lang"><PrefToggles lang={langPref} theme={theme} labels={{ auto: PUB.auto, dark: PUB.oscuro, paper: PUB.papel, langAria: PUB.ariaIdioma, themeAria: PUB.ariaTema }} /></div>
     <nav class="hdr-nav">
-      <a href="#indice" class="nl hide-m">{P.navIndice}</a>
-      <a href="#especimenes" class="nl hide-m">{P.navEspec}</a>
+      <a href="#c09" class="nl hide-m">{P.navIndice}</a>
+      <a href="#c08" class="nl hide-m">{P.navEspec}</a>
       <a href="/login" class="nl">{P.navEntrar}</a>
       <a href="/pago" class="buy">{P.navCta}</a>
     </nav>
@@ -119,7 +143,7 @@ if(rm){d.classList.add('rm')}else if(gl){d.classList.add('fx');var s=false;try{s
 <div id="log" aria-hidden="true"></div>
 
 <main>
-<!-- ===== 01 · SÍNTOMA ===== -->
+<!-- ===== 01 · HERO (Hormozi: heroEb, heroH, heroH2, heroSub, free CTA to /registro, heroConfianza). Engine chapter: the markup the engine reads is unchanged. ===== -->
 <section class="ch" id="c01" style="--len:5.6" aria-labelledby="c01h">
   <div class="stage">
     <figure class="pstat" aria-hidden="true">
@@ -132,13 +156,13 @@ if(rm){d.classList.add('rm')}else if(gl){d.classList.add('fx');var s=false;try{s
     <div class="pframe" aria-hidden="true"></div>
     <div class="scrim" aria-hidden="true"></div>
     <div class="copy">
-      <div class="label"><i></i><span>{label('01', V.ch01)}</span></div>
-      <h1 class="head" id="c01h">{P.heroH1a} {P.heroH1b}</h1>
+      <div class="label"><i></i><span>{label('01', V.heroEb)}</span></div>
+      <h1 class="head" id="c01h">{V.heroH}</h1>
       <div class="rule"></div>
-      <p class="sub">{P.heroSub}</p>
+      <div class="sub"><p class="h2l">{V.heroH2}</p><p>{V.heroSub}</p></div>
       <div class="cta">
         <a href="/registro" class="buy big"><span>{P.heroCta}</span><svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h11M11 5.5l4.5 4.5L11 14.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path></svg></a>
-        <p class="micro">{P.heroMicro}</p>
+        <p class="micro">{V.heroConfianza}</p>
       </div>
     </div>
     <aside class="card" aria-label={V.sintomas}>
@@ -151,20 +175,48 @@ if(rm){d.classList.add('rm')}else if(gl){d.classList.add('fx');var s=false;try{s
   </div>
 </section>
 
-<!-- ===== 02 · SUENA ≠ CIERTO (estática en Fase 1; el gancho data-seq="n3" es para la secuencia N3 de Fase 2) ===== -->
-<section id="c02" class="sec s02" aria-labelledby="c02h">
-  <div class="sh"><div class="sn">■ {label('02', V.chSuena)}</div></div>
-  <h2 id="c02h">{P.sintH2}</h2>
-  <p class="lede big">{P.heroPitch}</p>
+<!-- ===== 02 · TE HA PASADO (Hormozi s1). Static. Stage 2B: the replies are typed (ScrambleText), the strike draws, the HUD tag drops.
+     The N3 hook (the bust that cracks) is kept from phase 1. ===== -->
+<section id="c02" class="sec cx s02" aria-labelledby="c02h" data-fx="type-strike">
+  <div class="sh"><div class="sn">■ {label('02', V.s1Eb)}</div><div class="sx">{cnt('02')}</div></div>
+  <h2 id="c02h" class="hx xl">{V.s1H}</h2>
+  <figure class="chat" data-chat>
+    <i class="c tl"></i><i class="c tr"></i><i class="c bl"></i><i class="c br"></i>
+    {V.s1Beats.map((b, i) => (
+      <div class="beat" data-beat={i}>
+        <span class="bn" aria-hidden="true">{String(i + 1).padStart(2, '0')}</span>
+        <div class="bt">
+          {i === 1 && <p class="you faint"><span class="who">{V.chatTu}</span>{V.s1Earlier}</p>}
+          {i === 1 && <p class="gap">{V.s1Gap}</p>}
+          <p class="you"><span class="who">{V.chatTu}</span>{b.tu}</p>
+          <p class="ia"><span class="who">{V.chatIa}</span><span class="rp" data-type data-strike>{b.ia}</span></p>
+          <p class="tag" data-tag><i aria-hidden="true"></i>{b.tag}</p>
+        </div>
+      </div>
+    ))}
+  </figure>
+  <p class="shout">{V.s1Cierre}</p>
   <div class="n3-hook" data-seq="n3" aria-hidden="true"></div>
 </section>
 
-<!-- ===== Δ · CÓMO PIENSA ===== -->
+<!-- ===== 03 · QUÉ CAMBIA (prod l1–l3) + CTA. Stage 2B: a circular lens reveals the footage packs named in data-lens. ===== -->
+<section id="c03" class="sec cx" aria-labelledby="c03h" data-fx="lens">
+  <div class="sh"><div class="sn">■ {label('03', V.ch03)}</div><div class="sx">{cnt('03')}</div></div>
+  <h2 id="c03h" class="hx">{P.llevasH2}</h2>
+  <div class="trio">
+    {[[P.l1H, P.l1D, 'v1'], [P.l2H, P.l2D, 'v2'], [P.l3H, P.l3D, 'n5']].map(([h, d, pack], i) => (
+      <article class="tri" data-lens={pack}><span class="no">0{i + 1}</span><h3>{h}</h3><p>{d}</p></article>
+    ))}
+  </div>
+  <V3Cta label={P.preCta} micro={P.heroGar} />
+</section>
+
+<!-- ===== 04 · POR DENTRO (Δ). Engine chapter, unchanged but for its h2 (Hormozi s2.h2 replaces «Así la lee la IA.»). ===== -->
 <section class="ch" id="cL" style="--len:6.4" aria-labelledby="cLh">
   <div class="stage" data-stage="1">
     <div class="copy">
-      <div class="label"><i></i><span>{label('Δ', V.chDelta)}</span></div>
-      <h2 class="head" id="cLh">{V.deltaH}</h2>
+      <div class="label"><i></i><span>{label('04', V.ch04)}</span></div>
+      <h2 class="head" id="cLh">{V.adentroH}</h2>
       <div class="rule"></div>
       <p class="sub">{P.aD}</p>
     </div>
@@ -194,11 +246,73 @@ if(rm){d.classList.add('rm')}else if(gl){d.classList.add('fx');var s=false;try{s
   </div>
 </section>
 
-<!-- ===== ESPECÍMENES REALES ===== -->
-<section id="especimenes" class="sec">
-  <div class="sh"><div class="sn">■ {label('Δ', V.cierreEnd)}</div><h2>{P.espH2}</h2></div>
-  <p class="lede">{P.espSub}</p>
+<!-- ===== 05 · CIFRAS (the first six figures of the curriculum). Static grid; stage 2B turns data-track into the horizontal track with parallax. ===== -->
+<section id="c05" class="sec cx figs-sec" aria-labelledby="c05n" data-fx="track">
+  <div class="sh"><div class="sn" id="c05n">■ {label('05', V.ch05)}</div><div class="sx">{cnt('05')}</div></div>
+  <div class="figs" data-track>
+    {mods.slice(0, 6).map((m) => (
+      <article class="fig" data-fig>
+        <p class="ie">{m.eb}</p>
+        <p class={`big ${escala(m.k)}`} data-cifra>{m.k}</p>
+        <p class="cap">{m.kc}</p>
+        <h3>{m.h}</h3>
+        <p class="fd">{m.d}</p>
+        <span class="no">{m.n}</span>
+      </article>
+    ))}
+  </div>
+</section>
+
+<!-- ===== 06 · LO QUE NO NECESITAS (Hormozi s3). Static: the six words struck out, then the line. Stage 2B: the words implode toward the centre. ===== -->
+<section id="c06" class="sec cx" aria-labelledby="c06h" data-fx="implode">
+  <div class="sh"><div class="sn">■ {label('06', V.s3Eb)}</div><div class="sx">{cnt('06')}</div></div>
+  <ul class="nots" data-nots>
+    {V.s3Palabras.map((w) => (<li><s data-word>{w}</s></li>))}
+  </ul>
+  <h2 id="c06h" class="hx xl" data-final>{V.s3H}</h2>
+</section>
+
+<!-- ===== 07 · EL TIEMPO (Hormozi s4 + the four figures) + CTA. Static ring, fully drawn. Stage 2B: the ring draws and the counter runs 0 to 40. ===== -->
+<section id="c07" class="sec cx" aria-labelledby="c07h" data-fx="ring">
+  <div class="sh"><div class="sn">■ {label('07', V.ch07)}</div><div class="sx">{cnt('07')}</div></div>
+  <div class="time">
+    <div class="clock" data-ring aria-hidden="true">
+      <svg viewBox="0 0 200 200">
+        <circle class="r0" cx="100" cy="100" r="88"></circle>
+        <circle class="r1" data-ring-stroke cx="100" cy="100" r="88" pathLength="1" transform="rotate(-90 100 100)"></circle>
+        {ticks.map((k) => (<circle class="tick" data-tick cx={k.x} cy={k.y} r="3"></circle>))}
+      </svg>
+      <div class="ctr"><b data-count="40">40</b><span>MIN</span></div>
+    </div>
+    <div class="tcopy">
+      <h2 id="c07h" class="hx">{V.s4H}</h2>
+      <p class="lede">{V.s4Sub}</p>
+    </div>
+  </div>
+  <dl class="specs" data-specs>
+    {V.specs.map((s) => (<div class="srow" data-spec><dt data-count={s.k}>{s.k}</dt><dd>{s.d}</dd></div>))}
+  </dl>
+  <V3Cta label={P.preCta} micro={P.heroGar} />
+</section>
+
+<!-- ===== 08 · PRUEBA (Hormozi s5 + the two real specimens). The prompt is the published dog sentence, never the cat. ===== -->
+<section id="c08" class="sec cx" aria-labelledby="c08h" data-fx="bars-once">
+  <div class="sh"><div class="sn">■ {label('08', V.ch08)}</div><div class="sx">{cnt('08')}</div></div>
+  <h2 id="c08h" class="hx wide">{V.s5H}</h2>
+  <p class="lede">{V.s5Sub}</p>
   <div class="grid2">
+    <div class="spec">
+      <div class="meta"><span>{V.s5Eb}</span><span class="ac">{P.espInter}</span></div>
+      <p class="pctx">{ctx}</p>
+      <div class="ph">{V.cand}</div>
+      <div id="cands" class="cands" set:html={candRowsHTML(cands, 0.3)}></div>
+      <div class="temp">
+        <div class="meta"><span>{P.bTemp}</span><b id="tempLabel" class="ac">0.30</b></div>
+        <input id="tempin" class="deslizador" type="range" min="1" max="180" step="1" value="30" aria-label={P.bTemp}>
+        <div class="meta sm"><span>{P.bSeguro}</span><span id="tempVerdict">{P.bPredecible}</span><span>{P.bArriesga}</span></div>
+      </div>
+      <div class="askrow"><button id="ask" class="buy ghost" type="button" disabled>{V.s5Boton}</button><div id="picks" class="picks" aria-live="polite"></div></div>
+    </div>
     <div class="spec">
       <div class="meta"><span>{P.aLbl}</span><span class="ac">{P.espInter}</span></div>
       <h3>{P.aH}</h3><p>{P.aD}</p>
@@ -210,61 +324,85 @@ if(rm){d.classList.add('rm')}else if(gl){d.classList.add('fx');var s=false;try{s
         <div><b id="charCount">{sentence.replace(/\s/g, '').length}</b><span>{P.aLetras}</span></div>
       </div>
     </div>
-    <div class="spec">
-      <div class="meta"><span>{P.bLbl}</span><span class="ac">{P.espInter}</span></div>
-      <h3>{P.bH}</h3><p>{P.bD}</p>
-      <div id="cands" class="cands" set:html={candRowsHTML(cands, 0.3)}></div>
-      <div class="temp">
-        <div class="meta"><span>{P.bTemp}</span><b id="tempLabel" class="ac">0.30</b></div>
-        <input id="tempin" class="deslizador" type="range" min="1" max="180" step="1" value="30" aria-label={P.bTemp}>
-        <div class="meta sm"><span>{P.bSeguro}</span><span id="tempVerdict">{P.bPredecible}</span><span>{P.bArriesga}</span></div>
-      </div>
+  </div>
+</section>
+
+<!-- ===== 09 · TEMARIO (the 12 lessons). Stage 2B: the bento reorders with Flip. ===== -->
+<section id="c09" class="sec cx" aria-labelledby="c09h" data-fx="flip">
+  <div class="sh"><div class="sn">■ {label('09', V.ch09)}</div><div class="sx">{cnt('09')}</div></div>
+  <h2 id="c09h" class="hx">{P.indH2}</h2>
+  <p class="xsub">{P.indSub}</p>
+  <div class="idx">
+    {mods.map((m) => (
+      <div class="irow" data-flip={m.n}><div class="in">{m.n}</div><div><div class="ie">{m.eb}</div><div class="ih">{m.h}</div></div><p>{m.d}</p><div><div class="ik">{m.k}</div><div class="ikc">{m.kc}</div></div></div>
+    ))}
+  </div>
+</section>
+
+<!-- ===== 10 · LA OFERTA (Hormozi s7: seven items, item 6 = «lo que publique después» + the published vivoV) + CTA. Stage 2B: docking onto the spine. ===== -->
+<section id="c10" class="sec cx" aria-labelledby="c10h" data-fx="dock">
+  <div class="sh"><div class="sn">■ {label('10', V.ch10)}</div><div class="sx">{cnt('10')}</div></div>
+  <h2 id="c10h" class="hx wide">{fill(V.s7H)}</h2>
+  <ol class="stack" data-dock data-total={offer.length}>
+    {offer.map((it, i) => (
+      <li data-dock-item><span class="no">{String(i + 1).padStart(2, '0')}</span><p><b>{it.t}</b> — {it.d}</p></li>
+    ))}
+  </ol>
+  <V3Cta label={P.preCta} micro={P.heroGar} />
+</section>
+
+<!-- ===== 11 · GARANTÍA (Hormozi s8) + CTA. Static seal. Stage 2B: the ring of text rotates; the 14 in the centre stays. ===== -->
+<section id="c11" class="sec cx" aria-labelledby="c11h" data-fx="seal">
+  <div class="sh"><div class="sn">■ {label('11', V.ch11)}</div><div class="sx">{cnt('11')}</div></div>
+  <div class="gar">
+    <div class="gar-t">
+      <h2 id="c11h" class="hx">{V.s8H}</h2>
+      <p class="lede">{fill(V.s8Body)}</p>
+    </div>
+    <div class="seal" data-seal aria-hidden="true">
+      <svg viewBox="0 0 240 240">
+        <defs><path id="sealPath" d="M120,120 m-100,0 a100,100 0 1,1 200,0 a100,100 0 1,1 -200,0"></path></defs>
+        <g data-seal-ring>
+          <circle cx="120" cy="120" r="100" fill="none" class="sr"></circle>
+          <circle cx="120" cy="120" r="78" fill="none" class="sr2"></circle>
+          <text class="st"><textPath href="#sealPath" textLength="628" lengthAdjust="spacing">{seal}</textPath></text>
+        </g>
+      </svg>
+      <b class="core" data-seal-core>14</b>
+    </div>
+  </div>
+  <V3Cta label={P.preCta} micro={P.heroGar} />
+</section>
+
+<!-- ===== 12 · QUIÉN (Hormozi instr*, approved word for word on 2026-09-21; it backs «frontera» in the hero) ===== -->
+<section id="c12" class="sec cx" aria-labelledby="c12h" data-fx="plate-parallax">
+  <div class="sh"><div class="sn">■ {label('12', V.instrEb)}</div><div class="sx">{cnt('12')}</div></div>
+  <div class="bio">
+    <i class="c tl"></i><i class="c tr"></i><i class="c bl"></i><i class="c br"></i>
+    <h2 id="c12h" class="bio-l">{V.instrH}</h2>
+    <div class="bio-h">
+      <p class="bio-body" data-line>{V.instrBody}</p>
+      <p class="bio-em" data-line>{V.instrEnfasis}</p>
+      <p class="bio-close" data-line>{V.instrCierre}</p>
     </div>
   </div>
 </section>
 
-<!-- ===== ÍNDICE ===== -->
-<section id="indice" class="sec">
-  <div class="sh"><div class="sn">■ {label('03', V.chIdx)}</div><h2>{P.indH2}</h2><div class="sx">{P.indSub}</div></div>
-  <div class="idx">
-    {mods.map((m) => (
-      <div class="irow"><div class="in">{m.n}</div><div><div class="ie">{m.eb}</div><div class="ih">{m.h}</div></div><p>{m.d}</p><div><div class="ik">{m.k}</div><div class="ikc">{m.kc}</div></div></div>
-    ))}
+<!-- ===== 13 · PARA QUIÉN (Hormozi s10). Stage 2B: the two columns come in from opposite sides. ===== -->
+<section id="c13" class="sec cx" aria-labelledby="c13n" data-fx="split-in">
+  <div class="sh"><div class="sn" id="c13n">■ {label('13', V.ch13)}</div><div class="sx">{cnt('13')}</div></div>
+  <div class="para">
+    <div class="pcol yes" data-col="yes"><h2>{V.s10TituloSi}</h2><ul>{V.s10Si.map((x) => (<li>{x}</li>))}</ul></div>
+    <div class="pcol no" data-col="no"><h2>{V.s10TituloNo}</h2><ul>{V.s10No.map((x) => (<li>{x}</li>))}</ul></div>
   </div>
 </section>
 
-<!-- ===== VENTAJAS ===== -->
-<section class="sec" id="ventajas">
-  <div class="sh"><div class="sn">■ {label('04', V.chLlevas)}</div><h2>{P.llevasH2}</h2></div>
-  <div class="why">
-    {[[P.l1H, P.l1D], [P.l2H, P.l2D], [P.l3H, P.l3D]].map(([h, d], i) => (
-      <div class="wrow"><div class="in">0{i + 1}</div><h3>{h}</h3><p>{d}</p></div>
-    ))}
-  </div>
-</section>
-
-<!-- ===== 05 · QUIÉN ===== -->
-<section class="sec" id="quien">
-  <div class="sh"><div class="sn">■ {label('05', V.chQuien)}</div></div>
-  <div class="bio">
-    <i class="c tl"></i><i class="c tr"></i><i class="c bl"></i><i class="c br"></i>
-    <p class="bio-l">{P.preWhy2}</p>
-    <div class="bio-h"><h3>{P.l5H}</h3><p>{P.l5D}</p></div>
-  </div>
-</section>
-
-<!-- ===== 06 · CURSO VIVO ===== -->
-<section class="sec" id="vivo">
-  <div class="sh"><div class="sn">■ {label('06', P.vivoLbl)}</div><h2>{P.l4H}</h2></div>
-  <div class="live"><span class="mk" aria-hidden="true">›</span><p>{V.vivoV}</p></div>
-</section>
-
-<!-- ===== PRECIO ===== -->
-<section id="precio" class="sec">
-  <div class="sh"><div class="sn">■ {label('07', V.chPrecio)}</div></div>
+<!-- ===== 14 · PRECIO (the prod block; the in-card button is this chapter's CTA). Stage 2B: odometer up to the price + the segmented bar. ===== -->
+<section id="c14" class="sec cx" aria-labelledby="c14h" data-fx="odometer">
+  <div class="sh"><div class="sn">■ {label('14', V.ch14)}</div><div class="sx">{cnt('14')}</div></div>
   <div class="price">
     <div class="pl">
-      <h2>{P.preH2}</h2>
+      <h2 id="c14h">{P.preH2}</h2>
       <p class="pg">{N.garantiaTxt}</p>
       <div class="pp">{prueba.map((x) => (<p>{x}</p>))}<small>{N.moneda}</small></div>
       <ul class="inc">
@@ -274,19 +412,21 @@ if(rm){d.classList.add('rm')}else if(gl){d.classList.add('fx');var s=false;try{s
       </ul>
     </div>
     <div class="pr">
-      <div class="pbig"><b>{precioBig}</b><span>{P.preUnidad}</span></div>
+      <div class="pbig"><b data-odo>{precioBig}</b><span>{P.preUnidad}</span></div>
+      <div class="segbar" aria-hidden="true" data-segbar>{Array.from({ length: 30 }, () => (<i></i>))}</div>
       <p>{P.preNota}</p>
-      <a href="/pago" class="buy big"><span>{P.preCta}</span><svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h11M11 5.5l4.5 4.5L11 14.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path></svg></a>
-      <div class="why2"><h4>{P.preWhyH}</h4><p>{P.preWhy1}</p><p>{V.preWhy3V}</p><p>{P.preWhy4}</p></div>
+      <a href="/pago" class="buy big" data-cta><span>{P.preCta}</span><svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h11M11 5.5l4.5 4.5L11 14.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path></svg></a>
+      <div class="why2"><h4>{P.preWhyH}</h4><p>{P.preWhy1}</p><p>{P.preWhy2}</p><p>{V.preWhy3V}</p><p>{P.preWhy4}</p></div>
       <div class="legal"><span>{P.preGar}</span><span>{P.preTerm}</span></div>
     </div>
   </div>
   <div class="pay"><h4>{N.pagoTit}</h4><div class="chipsrow">{N.medios.map((m) => (<span>{m}</span>))}</div><p>{N.pagoTxt}</p></div>
 </section>
 
-<!-- ===== FAQ ===== -->
-<section class="sec" id="faq">
-  <div class="sh"><div class="sn">■ {label('08', 'FAQ')}</div><h2>{P.faqH2}</h2></div>
+<!-- ===== 15 · FAQ (the 8 prod questions; the fourth answer is the plural-free variant). Reading, so no effect. ===== -->
+<section id="c15" class="sec cx" aria-labelledby="c15h">
+  <div class="sh"><div class="sn">■ {label('15', V.ch15)}</div><div class="sx">{cnt('15')}</div></div>
+  <h2 id="c15h" class="hx">{P.faqH2}</h2>
   <div class="faq">
     {faqs.map((f, i) => (
       <details><summary><span class="in">{String(i + 1).padStart(2, '0')}</span><span class="q">{f.q}</span><i aria-hidden="true"></i></summary><p>{f.a}</p></details>
@@ -294,20 +434,21 @@ if(rm){d.classList.add('rm')}else if(gl){d.classList.add('fx');var s=false;try{s
   </div>
 </section>
 
-<!-- ===== CIERRE ===== -->
-<section class="sec close">
-  <h2>{P.cierreH2}</h2>
-  <div class="crow2">
-    <a href="/pago" class="buy big"><span>{P.cierreCta}</span><svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h11M11 5.5l4.5 4.5L11 14.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path></svg></a>
-    <p>{P.cierreSub}</p>
-  </div>
+<!-- ===== 16 · CIERRE (Hormozi s14 with step 1 adapted, «La IA no se va a ir.», the closing CTA). Stage 2B: the three-node constellation draws. ===== -->
+<section id="c16" class="sec cx close" aria-labelledby="c16h" data-fx="constellation">
+  <div class="sh"><div class="sn">■ {label('16', V.ch16)}</div><div class="sx">{cnt('16')}</div></div>
+  <ol class="steps3" data-nodes>
+    {V.s14Pasos.map((s) => (<li data-node><i aria-hidden="true"></i><p>{s}</p></li>))}
+  </ol>
+  <h2 id="c16h">{V.cierreH}</h2>
+  <V3Cta label={P.cierreCta} />
   <div class="foot">
     <div><span class="lg" aria-hidden="true">IA</span> {MARCA}</div>
     <div>{P.pieHand}</div>
     <div>{P.pieMeta2}</div>
     <div><a href="/login">{P.navEntrar}</a></div>
   </div>
-  <div class="foot legal2"><a href="/terminos">{L.pub.footer.term}</a> · <a href="/privacidad">{L.pub.footer.priv}</a></div>
+  <div class="foot legal2"><a href="/terminos">{PUB.footer.term}</a> · <a href="/privacidad">{PUB.footer.priv}</a></div>
 </section>
 </main>
 

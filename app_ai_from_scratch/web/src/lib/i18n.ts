@@ -540,23 +540,93 @@ export const STR = {
         barraUnidad: '/ 30 DÍAS',
         barraMeta: '12 LECCIONES · 30 DÍAS · GARANTÍA 14 DÍAS', barraCta: 'EMPEZAR AHORA',
       },
-      // /v3 (landing AEGIS, vista previa). Solo etiquetas HUD cortas y las dos
-      // frases nuevas del capítulo Δ: todo lo demás sale de `land` y de landing.ts.
+      // /v3 (landing AEGIS, vista previa). TODO el copy de venta de /v3 vive aquí. Tres orígenes, marcados en cada grupo:
+      //   HORMOZI  = el copy aprobado el 2026-09-25, palabra por palabra (landing-hormozi).
+      //   ADAPTADO = Hormozi con el cambio mínimo que piden los hechos de prod: un solo producto, 30 días, renovación apagada.
+      //   NUEVO    = etiquetas HUD cortas, a la espera del visto bueno del dueño.
+      // Los precios no se escriben aquí: {precio} lo sustituye la página con PRECIO_VISUAL. Nada de `land` se edita.
       v3: {
+        // — motor: capítulos 00, 01 y 04. Sin cambios. —
         ignLog: 'IA DESDE CERO // cargando · 12 lecciones · ES/EN',
-        ch01: 'SÍNTOMA', chDelta: 'CÓMO PIENSA', chIdx: 'ÍNDICE', chLlevas: 'VENTAJAS', chPrecio: 'PRECIO', chCierre: 'CIERRE',
-        cifra: 'CIFRA · 18,615', fuente: 'FUENTE · NINGUNA', ilus: 'ILUSTRATIVO',
-        sintomas: 'SÍNTOMAS', logFirma: 'FIRMADO CON TU NOMBRE',
-        deltaH: 'Así la lee la IA.',
+        cifra: 'CIFRA · 18,615', fuente: 'FUENTE · NINGUNA', ilus: 'ILUSTRATIVO', sintomas: 'SÍNTOMAS', logFirma: 'FIRMADO CON TU NOMBRE',
         tabTok: 'TOKENS', tabNext: 'SIGUIENTE TOKEN', tabCtx: 'CONTEXTO', tabTemp: 'TEMPERATURA', lec: 'LECCIÓN',
         logVec: 'VECTORES', logAtt: 'ATENCIÓN · SOLO HACIA ATRÁS', logLay: 'CAPAS', logNext: 'SIGUIENTE TOKEN', logLoop: 'BUCLE',
-        cand: 'CANDIDATOS', cierreEnd: 'ESPECÍMENES REALES',
-        // Variantes v3 de cadenas de `land`: quitan SOLO el plural «cursos» o la ciudad.
+        cand: 'CANDIDATOS', scroll: 'DESLIZA',
+        // — variantes de prod sin el plural «cursos» ni la ciudad —
         vivoV: 'El curso no se queda quieto: cuando la IA cambia, reescribo lo que quedó viejo. Se van sumando tutoriales, labs y actualizaciones, incluidos mientras tu acceso esté activo. Aplican términos y condiciones.',
         preWhy3V: 'Esto lo hace una persona, no una empresa con equipo de ventas. Y lo que voy aprendiendo lo voy subiendo: tutoriales, labs y actualizaciones, incluidos en tu suscripción.',
         faqIncluyeA: 'Todo lo que hay hoy y todo lo que se vaya publicando: tutoriales, labs y actualizaciones se suman a tu suscripción sin costo extra mientras esté activa. Yo los sigo produciendo; tú no vuelves a pagar por ellos.',
-        chSuena: 'SUENA ≠ CIERTO', chQuien: 'QUIÉN',
-        scroll: 'DESLIZA',
+        // — NUEVO: etiquetas HUD de capítulo (01, 02, 06 y 12 usan su antetítulo Hormozi) y las dos etiquetas del chat —
+        ch03: 'QUÉ CAMBIA', ch04: 'POR DENTRO', ch05: 'CIFRAS', ch07: 'EL TIEMPO', ch08: 'PRUEBA', ch09: 'TEMARIO',
+        ch10: 'LA OFERTA', ch11: 'GARANTÍA', ch13: 'PARA QUIÉN', ch14: 'PRECIO', ch15: 'FAQ', ch16: 'CIERRE',
+        chatTu: 'TÚ', chatIa: 'IA',
+        // — 01 Hero (HORMOZI) —
+        heroEb: 'IA DESDE CERO · 12 LECCIONES · ES/EN',
+        heroH: 'Deja de mandar datos inventados con tu nombre.',
+        heroH2: '40 minutos de lectura. Sin código. Enseñada desde la frontera.',
+        heroSub: 'Doce lecciones cortas, desde el celular: por qué se inventa cosas, por qué se pone rara a mitad del chat y cómo pedirle para que no salga genérico.',
+        heroConfianza: 'Garantía 14 días: te devuelvo todo · Cancelas en un clic',
+        // — 02 Te ha pasado (HORMOZI s1). La instrucción vieja del segundo caso y el salto de tiempo viajan aparte para que los tres casos tengan la misma forma. —
+        s1Eb: 'EJEMPLO · ASÍ SE VE', s1H: 'Te ha pasado.',
+        s1Beats: [
+          { tu: 'Resume el informe que te pegué.', ia: 'El informe concluye que las ventas crecieron gracias al canal digital y recomienda ampliar el equipo.', tag: 'NO PEGASTE NINGÚN INFORME. RELLENÓ EL HUECO → LECCIÓN 10' },
+          { tu: '¿Y el presupuesto?', ia: 'Antes de entrar en el presupuesto, vale la pena repasar el contexto completo del proyecto: los objetivos iniciales, el cronograma que se acordó en la reunión de arranque, los riesgos que identificamos por el camino, las dependencias con el equipo de diseño, y cómo todo esto se conecta con la estrategia general del trimestre. Dicho esto, el presupuesto sigue en revisión y debería estar listo pronto.', tag: 'SE LE LLENÓ LA MESA: LO DEL PRINCIPIO QUEDÓ FUERA → LECCIÓN 08' },
+          { tu: 'Escríbeme un correo para un cliente.', ia: 'Estimado cliente: espero que este mensaje le encuentre bien. Le escribo para…', tag: 'NO LE DIJISTE QUÉ, PARA QUIÉN NI CÓMO → LECCIÓN 07' },
+        ],
+        s1Earlier: 'Respóndeme siempre en tres líneas.', s1Gap: '· · · muchos mensajes después · · ·',
+        s1Cierre: 'Las tres tienen explicación. Y las tres tienen arreglo.',
+        // — 04 Por dentro (HORMOZI s2.h2; sustituye a «Así la lee la IA.») —
+        adentroH: 'Por dentro no hay magia. Hay números.',
+        // — 06 Lo que no necesitas (HORMOZI s3) —
+        s3Eb: 'LO QUE NO NECESITAS', s3H: 'Solo necesitas el celular.',
+        s3Palabras: ['código', 'fórmulas', 'computador', 'tardes libres', 'inglés', 'experiencia previa'],
+        // — 07 El tiempo (HORMOZI s4 + las cuatro cifras) —
+        s4H: 'Todo el curso se lee en 40 minutos.',
+        s4Sub: 'Los labs van aparte, a tu ritmo, y el avance se guarda donde lo dejes.',
+        specs: [
+          { k: 12, d: 'lecciones, en español y en inglés' },
+          { k: 36, d: 'labs que se resuelven eligiendo y ordenando, sin escribir código' },
+          { k: 9, d: 'prompts listos, con sus plantillas' },
+          { k: 40, d: 'minutos de lectura en total' },
+        ],
+        // — 08 Prueba (HORMOZI s5). NO se usa su «prompt» (el gato): el contexto es la frase del perro de land.bD. —
+        s5Eb: 'ESPÉCIMEN · LECCIÓN 09 · TEMPERATURA',
+        s5H: 'No te voy a mostrar testimonios. Te muestro el producto funcionando.',
+        s5Sub: 'Esta es la lección 09 en pequeño. Baja la perilla y elige lo seguro; súbela y se arriesga.',
+        s5Boton: 'Pídele un nombre',
+        // — 10 La oferta (HORMOZI s7). {precio} lo pone la página con PRECIO_VISUAL. El ítem 6 es s7Next + vivoV. —
+        s7H: 'Todo lo que entra por {precio} por 30 días.',
+        s7Items: [
+          { t: '12 lecciones cortas, en español y en inglés', d: 'para entender qué pasa por dentro, no para memorizar trucos.' },
+          { t: '36 labs que se resuelven eligiendo y ordenando', d: 'aprendes haciendo, sin escribir código.' },
+          { t: 'Un tutor de IA que solo ve tus datos', d: 'para preguntar cuando te trabas; sus herramientas no aceptan el id de otra persona.' },
+          { t: '9 prompts listos, con sus plantillas', d: 'para que deje de salir genérico.' },
+          { t: 'Mi harness de Claude Code', d: 'skills, hooks, agentes y workflows: el mismo que uso, para cuando quieras dar el siguiente paso.' },
+        ],
+        s7Next: 'Lo que publique después',
+        s7Gar: { t: 'Garantía de 14 días', d: 'si no te sirve, te devuelvo los {precio}.' },
+        // — 11 Garantía (HORMOZI s8) —
+        s8H: 'Pruébalo 14 días. Si no te sirve, te devuelvo todo.',
+        s8Body: 'Me escribes y recibes el reembolso completo de los {precio}. Sin formularios ni preguntas. Y si sigues, cancelas cuando quieras desde tu perfil, en un clic.',
+        s8Sello: 'GARANTÍA · 14 DÍAS · REEMBOLSO COMPLETO · ',
+        // — 12 Quién (HORMOZI instr*, aprobado palabra por palabra el 2026-09-21) —
+        instrEb: 'QUIÉN ENSEÑA ESTO',
+        instrH: 'Una persona, no un equipo de marketing.',
+        instrBody: 'Soy ingeniero de IA, senior, más de seis años en esto. Llevo la infraestructura de una aplicación nativa de IA. Preentreno, entreno y ajusto modelos, y compruebo si interpolan lo que vieron o inventan lo que no. Lo que te enseño es lo que hago.',
+        instrEnfasis: 'No te lo enseña un recuento. Te lo enseña quien lo opera.',
+        instrCierre: 'Incluye mi harness de Claude Code — skills, hooks, agentes, workflows y 9 prompts — el mismo que uso, actualizado mientras tu acceso esté activo.',
+        // — 13 Para quién (HORMOZI s10) —
+        s10TituloSi: 'Es para ti si',
+        s10Si: ['Usas ChatGPT u otra IA y no siempre te fías de lo que responde.', 'Nunca has programado y no piensas empezar ahora.', 'Prefieres entender por qué falla a coleccionar trucos.', 'Tienes el celular y ratos cortos.'],
+        s10TituloNo: 'No es para ti si',
+        s10No: ['Ya entrenas modelos: aquí no vas a aprender nada nuevo.', 'Buscas que la IA decida por ti: es una herramienta, no decide.', 'Quieres prompts mágicos sin entender por qué funcionan.'],
+        // — 16 Cierre (HORMOZI cierreH y s14; el paso 1 se adapta: «veinte segundos» no está publicado en ningún sitio) —
+        cierreH: 'La IA no se va a ir.',
+        s14Pasos: [
+          '1 · Creas tu cuenta, sin tarjeta.',
+          '2 · Pagas con Mercado Pago.',
+          '3 · Se abren las doce lecciones.',
+        ],
       },
       marca: 'FUNDAMENTOS · VOL. 1', auto: 'Auto', oscuro: 'Oscuro', papel: 'Papel',
       ariaIdioma: 'Idioma', ariaTema: 'Tema',
@@ -1188,20 +1258,89 @@ export const STR = {
         barraUnidad: '/ 30 DAYS',
         barraMeta: '12 LESSONS · 30 DAYS · 14-DAY REFUND', barraCta: 'START NOW',
       },
+      // /v3 (AEGIS landing, preview). Same keys as the Spanish block; see it for the origin of each group (HORMOZI, ADAPTED, NEW).
       v3: {
+        // — motor: capítulos 00, 01 y 04. Sin cambios. —
         ignLog: 'AI FROM SCRATCH // loading · 12 lessons · ES/EN',
-        ch01: 'SYMPTOM', chDelta: 'HOW IT THINKS', chIdx: 'CONTENTS', chLlevas: 'BENEFITS', chPrecio: 'PRICE', chCierre: 'CLOSING',
-        cifra: 'FIGURE · 18,615', fuente: 'SOURCE · NONE', ilus: 'ILLUSTRATIVE',
-        sintomas: 'SYMPTOMS', logFirma: 'SIGNED WITH YOUR NAME',
-        deltaH: 'This is how the AI reads it.',
+        cifra: 'FIGURE · 18,615', fuente: 'SOURCE · NONE', ilus: 'ILLUSTRATIVE', sintomas: 'SYMPTOMS', logFirma: 'SIGNED WITH YOUR NAME',
         tabTok: 'TOKENS', tabNext: 'NEXT TOKEN', tabCtx: 'CONTEXT', tabTemp: 'TEMPERATURE', lec: 'LESSON',
         logVec: 'VECTORS', logAtt: 'ATTENTION · LOOKS BACK ONLY', logLay: 'LAYERS', logNext: 'NEXT TOKEN', logLoop: 'LOOP',
-        cand: 'CANDIDATES', cierreEnd: 'REAL SPECIMENS',
+        cand: 'CANDIDATES', scroll: 'SCROLL',
+        // — variantes de prod sin el plural «cursos» ni la ciudad —
         vivoV: 'The course does not stand still: when AI changes, I rewrite what went stale. Tutorials, labs and updates keep getting added, included while your access is active. Terms and conditions apply.',
         preWhy3V: 'One person runs this, not a company with a sales team. And what I keep learning, I keep uploading: new tutorials, labs and updates, included in your subscription.',
         faqIncluyeA: 'Everything that is here today and everything published from now on: new tutorials, labs and updates are added to your subscription at no extra cost while it is active. I keep producing them; you never pay extra for them.',
-        chSuena: 'FLUENT ≠ TRUE', chQuien: 'WHO',
-        scroll: 'SCROLL',
+        // — NUEVO: etiquetas HUD de capítulo (01, 02, 06 y 12 usan su antetítulo Hormozi) y las dos etiquetas del chat —
+        ch03: 'WHAT CHANGES', ch04: 'INSIDE', ch05: 'FIGURES', ch07: 'THE TIME', ch08: 'PROOF', ch09: 'CURRICULUM',
+        ch10: 'THE OFFER', ch11: 'GUARANTEE', ch13: "WHO IT'S FOR", ch14: 'PRICE', ch15: 'FAQ', ch16: 'CLOSING',
+        chatTu: 'YOU', chatIa: 'AI',
+        // — 01 Hero (HORMOZI) —
+        heroEb: 'AI FROM SCRATCH · 12 LESSONS · ES/EN',
+        heroH: 'Stop sending made-up facts with your name on them.',
+        heroH2: '40 minutes of reading. No code. Taught from the frontier.',
+        heroSub: "Twelve short lessons, on your phone: why it makes things up, why it goes strange mid-chat, and how to ask so it doesn't come back generic.",
+        heroConfianza: '14-day guarantee: full refund · Cancel in one click',
+        // — 02 Te ha pasado (HORMOZI s1). La instrucción vieja del segundo caso y el salto de tiempo viajan aparte para que los tres casos tengan la misma forma. —
+        s1Eb: 'EXAMPLE · WHAT IT LOOKS LIKE', s1H: "You've seen this.",
+        s1Beats: [
+          { tu: 'Summarize the report I just pasted.', ia: 'The report concludes that sales grew thanks to the digital channel and recommends expanding the team.', tag: 'YOU NEVER PASTED A REPORT. IT FILLED THE GAP → LESSON 10' },
+          { tu: 'So, the budget?', ia: "Before getting into the budget, it's worth revisiting the full context of the project: the original goals, the timeline agreed on in the kickoff meeting, the risks flagged along the way, the dependencies with the design team, and how all of this ties back into the quarter's broader strategy. That said, the budget is still under review and should be ready soon.", tag: 'THE TABLE FILLED UP: WHAT YOU SAID FIRST FELL OFF → LESSON 08' },
+          { tu: 'Write me an email for a client.', ia: 'Dear client, I hope this message finds you well. I am writing to…', tag: 'YOU NEVER SAID WHAT, FOR WHOM, OR HOW → LESSON 07' },
+        ],
+        s1Earlier: 'Always answer me in three lines.', s1Gap: '· · · many messages later · · ·',
+        s1Cierre: 'All three have an explanation. And a fix.',
+        // — 04 Por dentro (HORMOZI s2.h2; sustituye a «Así la lee la IA.») —
+        adentroH: "Inside there's no magic. There are numbers.",
+        // — 06 Lo que no necesitas (HORMOZI s3) —
+        s3Eb: "WHAT YOU DON'T NEED", s3H: 'All you need is your phone.',
+        s3Palabras: ['code', 'formulas', 'a laptop', 'free evenings', 'a tech background', 'prior experience'],
+        // — 07 El tiempo (HORMOZI s4 + las cuatro cifras) —
+        s4H: 'The whole course reads in 40 minutes.',
+        s4Sub: 'The labs are separate, at your pace, and your progress is saved right where you leave it.',
+        specs: [
+          { k: 12, d: 'lessons, in Spanish and English' },
+          { k: 36, d: 'labs solved by choosing and ordering, never by writing code' },
+          { k: 9, d: 'ready-made prompts, with their templates' },
+          { k: 40, d: 'minutes of reading in total' },
+        ],
+        // — 08 Prueba (HORMOZI s5). NO se usa su «prompt» (el gato): el contexto es la frase del perro de land.bD. —
+        s5Eb: 'SPECIMEN · LESSON 09 · TEMPERATURE',
+        s5H: "I won't show you testimonials. I'll show you the product working.",
+        s5Sub: 'This is lesson 09, in miniature. Turn the dial down and it plays it safe; turn it up and it takes risks.',
+        s5Boton: 'Ask it for a name',
+        // — 10 La oferta (HORMOZI s7). {precio} lo pone la página con PRECIO_VISUAL. El ítem 6 es s7Next + vivoV. —
+        s7H: 'Everything included for {precio} for 30 days.',
+        s7Items: [
+          { t: '12 short lessons, in Spanish and English', d: "to understand what's happening underneath, not to memorize tricks." },
+          { t: '36 labs solved by choosing and ordering', d: 'you learn by doing, without writing code.' },
+          { t: 'An AI tutor that only ever sees your data', d: "ask it when you're stuck; its tools won't accept another person's id." },
+          { t: '9 ready-made prompts, with their templates', d: 'so it stops coming back generic.' },
+          { t: 'My Claude Code harness', d: 'skills, hooks, agents and workflows: the same one I use, for when you want to take the next step.' },
+        ],
+        s7Next: 'Whatever I publish next',
+        s7Gar: { t: '14-day guarantee', d: "if it's not for you, you get your {precio} back." },
+        // — 11 Garantía (HORMOZI s8) —
+        s8H: "Try it for 14 days. If it's not for you, you get everything back.",
+        s8Body: 'You email me and get the full {precio} refunded. No forms, no questions. And if you stay, cancel whenever you want from your profile, in one click.',
+        s8Sello: '14-DAY GUARANTEE · FULL REFUND · ',
+        // — 12 Quién (HORMOZI instr*, aprobado palabra por palabra el 2026-09-21) —
+        instrEb: 'WHO TEACHES THIS',
+        instrH: 'One person, not a marketing team.',
+        instrBody: "I'm an AI engineer, senior, six-plus years in this. I run the infrastructure for an AI-native application. I pretrain, train and fine-tune models, and I check whether they're interpolating what they saw or inventing what they didn't. What I teach you is what I do.",
+        instrEnfasis: "It's not taught by a recap. It's taught by whoever operates it.",
+        instrCierre: 'It includes my Claude Code harness — skills, hooks, agents, workflows and 9 prompts — the same one I use, updated while your access stays active.',
+        // — 13 Para quién (HORMOZI s10) —
+        s10TituloSi: "It's for you if",
+        s10Si: ["You use ChatGPT or another AI and don't always trust what it answers.", "You've never coded and have no plans to start now.", "You'd rather understand why it fails than collect tricks.", 'You have your phone and short bursts of time.'],
+        s10TituloNo: "It's not for you if",
+        s10No: ["You already train models: there's nothing new for you here.", "You want AI to decide for you: it's a tool, it doesn't decide.", 'You want magic prompts without understanding why they work.'],
+        // — 16 Cierre (HORMOZI cierreH y s14; el paso 1 se adapta: «veinte segundos» no está publicado en ningún sitio) —
+        cierreH: 'AI is not going away.',
+        s14Pasos: [
+          '1 · Create your account, no card.',
+          '2 · Pay with Mercado Pago.',
+          '3 · The twelve lessons unlock.',
+        ],
       },
       login: {
         eb: 'Sign in', h1a: 'Come back in and', h1b: 'pick up where you left.',

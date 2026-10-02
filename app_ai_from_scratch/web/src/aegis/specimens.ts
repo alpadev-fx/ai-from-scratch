@@ -40,6 +40,17 @@ export function softmax(c: Candidate[], T: number): number[] {
   const sum = ex.reduce((a, b) => a + b, 0);
   return ex.map((e) => e / sum);
 }
+/** One draw from a distribution: `r` in [0,1) -> the index whose slice of the unit interval contains it.
+ *  Fail closed: an empty list, a probability that is not a finite number >= 0, or an `r` outside [0,1) throws, so a broken
+ *  distribution can never answer «the last candidate» by accident. The only fallthrough is float rounding at the very top. */
+export function draw(pr: readonly number[], r: number): number {
+  if (!pr.length) throw new RangeError('draw: no candidates');
+  if (!(r >= 0 && r < 1)) throw new RangeError(`draw: r must be in [0,1), got ${r}`);
+  if (pr.some((p) => !Number.isFinite(p) || p < 0)) throw new RangeError('draw: probabilities must be finite and >= 0');
+  let c = 0;
+  for (let i = 0; i < pr.length; i++) { c += pr[i]; if (r < c) return i; }
+  return pr.length - 1;
+}
 export const pctText = (p: number) => { const pct = p * 100; return pct >= 9.5 ? Math.round(pct) + '%' : pct < 0.5 ? '~0%' : pct.toFixed(1) + '%'; };
 const esc = (s: unknown) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
@@ -75,5 +86,18 @@ export function mountSpecimens(D: { candidatos: Candidate[]; txt: Record<string,
       document.getElementById('tempVerdict')!.textContent = T < 0.5 ? D.txt.predecible : T < 1.05 ? D.txt.equilibrada : D.txt.impredecible;
     };
     tempin.addEventListener('input', render); render();
+  }
+  // «Pídele un nombre» (chapter 08): one draw from the SAME distribution the bars show, kept in a list of the last five.
+  // The button is rendered `disabled`; only this code enables it, so without JS it stays an honest, inert control.
+  const ask = document.getElementById('ask') as HTMLButtonElement | null;
+  const picks = document.getElementById('picks');
+  if (ask && picks && tempin) {
+    const hist: string[] = [];
+    ask.disabled = false;
+    ask.addEventListener('click', () => {
+      const i = draw(softmax(D.candidatos, +tempin.value / 100), Math.random());
+      hist.unshift(D.candidatos[i].name); hist.length = Math.min(hist.length, 5);
+      picks.innerHTML = hist.map((n, k) => `<span class="pk${k === 0 ? ' new' : ''}">${esc(n)}</span>`).join('');
+    });
   }
 }

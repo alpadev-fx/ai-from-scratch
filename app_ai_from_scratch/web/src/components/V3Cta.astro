@@ -1,0 +1,11 @@
+---
+// One CTA row of /v3 (after chapters 03, 07, 10, 11 and 14, and the closing). The label is a PROD string that names the
+// price (preCta «PAGAR $39.990 · 30 DÍAS», cierreCta «EMPEZAR POR $39.990») and the route is prod's: /pago. The mono line
+// under it is the guarantee line prod already prints (heroGar). The page passes both through its copy guard.
+interface Props { label: string; micro?: string; href?: string }
+const { label, micro, href = '/pago' } = Astro.props;
+---
+<div class="ctarow" data-cta>
+  <a href={href} class="buy big"><span>{label}</span><svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h11M11 5.5l4.5 4.5L11 14.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path></svg></a>
+  {micro && <p>{micro}</p>}
+</div>

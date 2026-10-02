@@ -1,0 +1,280 @@
+---
+// /v3 — la landing en estilo AEGIS (vista previa, Fase 1). noindex, sin Meta Pixel,
+// fuera del sitemap. Mismo mecanismo de idioma (cookie pref_lang) y de tema
+// (Auto/Oscuro/Papel vía theme-css.ts + data-theme) que index.astro. TODO el
+// copy está en el HTML del servidor: el motor (src/aegis/*) solo lo anima.
+export const prerender = false;
+import { mercadoDe } from '../lib/region';
+import { narrativaDe } from '../lib/narrative';
+import { MARCA } from '../lib/site';
+import { PRECIO_VISUAL } from '../lib/price';
+import { publicPrefs } from '../lib/prefs';
+import { t } from '../lib/i18n';
+import { modulos, candidatos, preguntas } from '../data/landing';
+import { jsonSafe } from '../lib/json-safe';
+import PrefToggles from '../components/PrefToggles.astro';
+import { TOKENS } from '../lib/theme-css';
+import { tokenize, candRowsHTML } from '../aegis/specimens';
+import V3CSS from '../aegis/v3.css?raw';
+
+const { lang, langPref, theme } = publicPrefs(Astro.request);
+const L = t(lang);
+const P = L.pub.land;
+const V = L.pub.v3;
+const precioBig = PRECIO_VISUAL[lang] ?? PRECIO_VISUAL.es;
+const { mercado } = mercadoDe(Astro.request);
+const N = narrativaDe(mercado, lang);
+
+// Reglas de copy del dueño: ninguna ciudad, nunca «cursos»/«courses» en plural,
+// ni cifras fuera del conjunto permitido (9 prompts, 40 min). Lo que no pasa no
+// se pinta; se informa en el reporte de la fase.
+const BAD = /cursos|courses|Medell|Cartagena|\b9\b|\b40\b/i;
+const ok = (s: string) => !BAD.test(s);
+const mods = modulos(lang);
+const cands = candidatos(lang);
+const faqs = preguntas(lang).filter((f) => ok(f.q) && ok(f.a));
+const prueba = N.prueba.filter(ok);
+const sentence = P.aEjemplo;                 // «Cartagena es hermosa» — el ejemplo del especimen
+const toks = tokenize(sentence);
+const sym = [
+  { lbl: P.s1Lbl, lec: P.s1Lec, h: P.s1H, d: P.s1D, c: P.s1C },
+  { lbl: P.s2Lbl, lec: P.s2Lec, h: P.s2H, d: P.s2D, c: P.s2C },
+  { lbl: P.s3Lbl, lec: P.s3Lec, h: P.s3H, d: P.s3D, c: P.s3C },
+];
+const byN = (n: string) => mods.find((m) => m.n === n)!;
+const steps = [
+  { n: '05', name: V.tabTok }, { n: '06', name: V.tabNext }, { n: '08', name: V.tabCtx }, { n: '09', name: V.tabTemp },
+].map((s) => ({ ...s, h: byN(s.n).h, d: byN(s.n).d }));
+const DATA = {
+  lang, sentence, candidatos: cands,
+  cifra: V.cifra, fuente: V.fuente, ilus: V.ilus, s1Lec: P.s1Lec, s1C: P.s1C, logFirma: V.logFirma,
+  logVec: V.logVec, logAtt: V.logAtt, logLay: V.logLay, logNext: V.logNext, logLoop: V.logLoop, tabTemp: V.tabTemp,
+  txt: { ejemplo: P.aEjemplo, predecible: P.bPredecible, equilibrada: P.bEquilibrada, impredecible: P.bImpredecible },
+};
+const label = (n: string, s: string) => `${n} — ${s}`;
+---
+<!doctype html>
+<html lang={lang} data-theme={theme}>
+<head>
+<style set:html={TOKENS}></style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml" sizes="any">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<title>{P.titulo}</title>
+<meta name="description" content={P.desc}>
+<link rel="preload" as="image" href="/v3/poster/n1.webp">
+<script is:inline>
+/* Modo antes de pintar: movimiento reducido o ?rm=1, y WebGL2. Sin ninguno de los dos, la página estática es la página. */
+(function(){var d=document.documentElement,q=location.search,rm=/[?&]rm=1/.test(q)||(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches),gl=false;
+try{gl=!!document.createElement('canvas').getContext('webgl2')}catch(e){}
+if(/[?&]nogl=1/.test(q))gl=false;
+if(rm){d.classList.add('rm')}else if(gl){d.classList.add('fx');var s=false;try{s=sessionStorage.getItem('v3_ign')==='1'}catch(e){}if(!s)d.classList.add('ign-on')}else{d.classList.add('nogl')}})();
+</script>
+<style is:global set:html={V3CSS}></style>
+</head>
+<body>
+<a class="skip" href="#c01">{P.saltar}</a>
+
+<!-- ===== 00 · IGNICIÓN (solo con motor; el HTML estático no la necesita) ===== -->
+<div id="ign" aria-hidden="true">
+  <div class="ibg"></div>
+  <div class="pt"></div>
+  <div class="iln"></div>
+  <div class="lock">
+    <svg viewBox="0 0 200 200" width="100%" height="100%"><rect class="isq" x="22" y="22" width="156" height="156" fill="none" stroke="currentColor" stroke-width="5"></rect><text class="iia" x="100" y="128" text-anchor="middle" font-size="84" font-weight="700" fill="currentColor">IA</text></svg>
+    <div class="glint"></div>
+  </div>
+  <div class="ilog" data-text={V.ignLog}></div>
+  <div class="pct">000</div>
+  <button class="iskip" type="button">{P.saltar} →</button>
+</div>
+
+<header id="hdr">
+  <div class="hdr-in">
+    <a class="brand" href="#c01" aria-label={P.figMarca}><span class="lg" aria-hidden="true">IA</span><b>{P.figMarca}</b></a>
+    <div class="hdr-lang"><PrefToggles lang={langPref} theme={theme} labels={{ auto: L.pub.auto, dark: L.pub.oscuro, paper: L.pub.papel, langAria: L.pub.ariaIdioma, themeAria: L.pub.ariaTema }} /></div>
+    <nav class="hdr-nav">
+      <a href="#indice" class="nl hide-m">{P.navIndice}</a>
+      <a href="#especimenes" class="nl hide-m">{P.navEspec}</a>
+      <a href="/login" class="nl">{P.navEntrar}</a>
+      <a href="/pago" class="buy">{P.navCta}</a>
+    </nav>
+  </div>
+</header>
+<div id="prog" aria-hidden="true"><u></u></div>
+<canvas id="gl" aria-hidden="true"></canvas>
+<div id="log" aria-hidden="true"></div>
+
+<main>
+<!-- ===== 01 · SÍNTOMA ===== -->
+<section class="ch" id="c01" style="--len:5.6" aria-labelledby="c01h">
+  <div class="stage">
+    <figure class="pstat" aria-hidden="true">
+      <img class="poster" src="/v3/poster/n1.webp" alt="" width="48" height="85">
+      <div class="plate"><img class="still" src="/v3/still/n1.webp" alt="" width="540" height="960" loading="eager" decoding="async">
+        <div class="sbk" aria-hidden="true"><i class="c tl"></i><i class="c tr"></i><i class="c bl"></i><i class="c br"></i>
+          <div class="plt"><span>{V.cifra}</span><span>{V.fuente}</span><em>{V.ilus}</em></div></div>
+      </div>
+    </figure>
+    <div class="pframe" aria-hidden="true"></div>
+    <div class="scrim" aria-hidden="true"></div>
+    <div class="copy">
+      <div class="label"><i></i><span>{label('01', V.ch01)}</span></div>
+      <h1 class="head" id="c01h">{P.heroH1a} {P.heroH1b}</h1>
+      <div class="rule"></div>
+      <p class="sub">{P.heroSub}</p>
+      <div class="cta">
+        <a href="/registro" class="buy big"><span>{P.heroCta}</span><svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h11M11 5.5l4.5 4.5L11 14.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path></svg></a>
+        <p class="micro">{P.heroMicro}</p>
+      </div>
+    </div>
+    <aside class="card" aria-label={V.sintomas}>
+      <div class="hd"><span>{V.sintomas}</span><b><i class="dot"></i></b></div>
+      {sym.map((s) => (
+        <div class="row"><span class="k">{s.lec}</span><span class="v">{s.h}<small>{s.c}</small></span></div>
+      ))}
+    </aside>
+    <div class="cue" aria-hidden="true"><span>{V.scroll}</span><u></u></div>
+  </div>
+</section>
+
+<!-- ===== Δ · CÓMO PIENSA ===== -->
+<section class="ch" id="cL" style="--len:6.4" aria-labelledby="cLh">
+  <div class="stage" data-stage="1">
+    <div class="copy">
+      <div class="label"><i></i><span>{label('Δ', V.chDelta)}</span></div>
+      <h2 class="head" id="cLh">{V.deltaH}</h2>
+      <div class="rule"></div>
+      <p class="sub">{P.aD}</p>
+    </div>
+    <div class="sent" aria-hidden="true">{sentence}</div>
+    <div class="chips" aria-label={sentence}>
+      {toks.map((tk) => (<div class="tk"><b>{tk}</b></div>))}
+      <div class="tk ans"><b>{cands[0].name}</b></div>
+    </div>
+    <aside class="pcard" aria-label={V.cand}>
+      <div class="hd"><span>{steps[1].h}</span><b><i class="dot"></i><em>{V.ilus}</em></b></div>
+      <div class="ph">{V.cand}</div>
+      <div set:html={candRowsHTML(cands, 0.3)}></div>
+      <div class="dial"><span>{V.tabTemp}</span><div class="trk"><i></i></div><b class="dialv">0.30</b></div>
+    </aside>
+    <div class="steps-wrap">
+      <ol class="steps">
+        {steps.map((s) => (
+          <li><u><i></i></u><div class="n">{V.lec} {s.n}</div><div class="t">{s.name}</div><div class="h">{s.h}</div><div class="d">{s.d}</div></li>
+        ))}
+      </ol>
+    </div>
+    <div class="lend copy2"><h3 class="head">{P.espH2}</h3></div>
+  </div>
+</section>
+
+<!-- ===== ESPECÍMENES REALES ===== -->
+<section id="especimenes" class="sec">
+  <div class="sh"><div class="sn">■ {label('Δ', V.cierreEnd)}</div></div>
+  <p class="lede">{P.espSub}</p>
+  <div class="grid2">
+    <div class="spec">
+      <div class="meta"><span>{P.aLbl}</span><span class="ac">{P.espInter}</span></div>
+      <h3>{P.aH}</h3><p>{P.aD}</p>
+      <input id="tokin" class="tokin" type="text" value={P.aEjemplo} maxlength="46" aria-label={P.aH}>
+      <div id="tokens" class="toks">{toks.map((tk) => (<div class="tokc">{tk}</div>))}</div>
+      <div class="stats">
+        <div><b id="tokenCount" class="ac">{toks.length}</b><span>{P.aTokens}</span></div>
+        <div><b id="wordCount">{sentence.split(/\s+/).length}</b><span>{P.aPalabras}</span></div>
+        <div><b id="charCount">{sentence.replace(/\s/g, '').length}</b><span>{P.aLetras}</span></div>
+      </div>
+    </div>
+    <div class="spec">
+      <div class="meta"><span>{P.bLbl}</span><span class="ac">{P.espInter}</span></div>
+      <h3>{P.bH}</h3><p>{P.bD}</p>
+      <div id="cands" class="cands" set:html={candRowsHTML(cands, 0.3)}></div>
+      <div class="temp">
+        <div class="meta"><span>{P.bTemp}</span><b id="tempLabel" class="ac">0.30</b></div>
+        <input id="tempin" class="deslizador" type="range" min="1" max="180" step="1" value="30" aria-label={P.bTemp}>
+        <div class="meta sm"><span>{P.bSeguro}</span><span id="tempVerdict">{P.bPredecible}</span><span>{P.bArriesga}</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== ÍNDICE ===== -->
+<section id="indice" class="sec">
+  <div class="sh"><div class="sn">■ {label('03', V.chIdx)}</div><h2>{P.indH2}</h2><div class="sx">{P.indSub}</div></div>
+  <div class="idx">
+    {mods.map((m) => (
+      <div class="irow"><div class="in">{m.n}</div><div><div class="ie">{m.eb}</div><div class="ih">{m.h}</div></div><p>{m.d}</p><div><div class="ik">{m.k}</div><div class="ikc">{m.kc}</div></div></div>
+    ))}
+  </div>
+</section>
+
+<!-- ===== VENTAJAS ===== -->
+<section class="sec">
+  <div class="sh"><div class="sn">■ {label('04', V.chLlevas)}</div><h2>{P.llevasH2}</h2></div>
+  <div class="why">
+    {[[P.l1H, P.l1D], [P.l2H, P.l2D], [P.l3H, P.l3D]].map(([h, d], i) => (
+      <div class="wrow"><div class="in">0{i + 1}</div><h3>{h}</h3><p>{d}</p></div>
+    ))}
+  </div>
+</section>
+
+<!-- ===== PRECIO ===== -->
+<section id="precio" class="sec">
+  <div class="sh"><div class="sn">■ {label('07', V.chPrecio)}</div></div>
+  <div class="price">
+    <div class="pl">
+      <h2>{P.preH2}</h2>
+      <p class="pg">{N.garantiaTxt}</p>
+      <div class="pp">{prueba.map((x) => (<p>{x}</p>))}<small>{N.moneda}</small></div>
+      <ul class="inc">
+        <li><span>{P.incluye}</span><b>{P.pre1}</b></li>
+        <li><span>{P.incluye}</span><b>{P.pre3}</b></li>
+      </ul>
+    </div>
+    <div class="pr">
+      <div class="pbig"><b>{precioBig}</b><span>{P.preUnidad}</span></div>
+      <p>{P.preNota}</p>
+      <a href="/pago" class="buy big"><span>{P.preCta}</span><svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h11M11 5.5l4.5 4.5L11 14.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path></svg></a>
+      <div class="why2"><h4>{P.preWhyH}</h4><p>{P.preWhy1}</p><p>{P.preWhy2}</p><p>{P.preWhy4}</p></div>
+      <div class="legal"><span>{P.preGar}</span><span>{P.preTerm.split(' · ').filter(ok).join(' · ')}</span></div>
+    </div>
+  </div>
+  <div class="pay"><h4>{N.pagoTit}</h4><div class="chipsrow">{N.medios.map((m) => (<span>{m}</span>))}</div><p>{N.pagoTxt}</p></div>
+</section>
+
+<!-- ===== FAQ ===== -->
+<section class="sec">
+  <div class="sh"><div class="sn">■ {label('08', 'FAQ')}</div><h2>{P.faqH2}</h2></div>
+  <div class="faq">
+    {faqs.map((f, i) => (
+      <details><summary><span class="in">{String(i + 1).padStart(2, '0')}</span><span class="q">{f.q}</span><i aria-hidden="true"></i></summary><p>{f.a}</p></details>
+    ))}
+  </div>
+</section>
+
+<!-- ===== CIERRE ===== -->
+<section class="sec close">
+  <h2>{P.cierreH2}</h2>
+  <div class="crow2">
+    <a href="/pago" class="buy big"><span>{P.cierreCta}</span><svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h11M11 5.5l4.5 4.5L11 14.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path></svg></a>
+    <p>{P.cierreSub}</p>
+  </div>
+  <div class="foot">
+    <div><span class="lg" aria-hidden="true">IA</span> {MARCA}</div>
+    <div>{P.pieHand}</div>
+    <div>{P.pieMeta2}</div>
+    <div><a href="/login">{P.navEntrar}</a></div>
+  </div>
+  <div class="foot legal2"><a href="/terminos">{L.pub.footer.term}</a> · <a href="/privacidad">{L.pub.footer.priv}</a></div>
+</section>
+</main>
+
+<script type="application/json" id="v3-data" is:inline set:html={jsonSafe(DATA)}></script>
+<script>
+  import { boot } from '../aegis/main';
+  boot();
+</script>
+</body>
+</html>

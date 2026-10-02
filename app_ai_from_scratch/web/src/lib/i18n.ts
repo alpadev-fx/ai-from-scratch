@@ -540,6 +540,19 @@ export const STR = {
         barraUnidad: '/ 30 DÍAS',
         barraMeta: '12 LECCIONES · 30 DÍAS · GARANTÍA 14 DÍAS', barraCta: 'EMPEZAR AHORA',
       },
+      // /v3 (landing AEGIS, vista previa). Solo etiquetas HUD cortas y las dos
+      // frases nuevas del capítulo Δ: todo lo demás sale de `land` y de landing.ts.
+      v3: {
+        ignLog: 'IA DESDE CERO // cargando · 12 lecciones · ES/EN',
+        ch01: 'SÍNTOMA', chDelta: 'CÓMO PIENSA', chIdx: 'ÍNDICE', chLlevas: 'VENTAJAS', chPrecio: 'PRECIO', chCierre: 'CIERRE',
+        cifra: 'CIFRA · 18,615', fuente: 'FUENTE · NINGUNA', ilus: 'ILUSTRATIVO',
+        sintomas: 'SÍNTOMAS', logFirma: 'FIRMADO CON TU NOMBRE',
+        deltaH: 'Así la lee la IA.',
+        tabTok: 'TOKENS', tabNext: 'SIGUIENTE TOKEN', tabCtx: 'CONTEXTO', tabTemp: 'TEMPERATURA', lec: 'LECCIÓN',
+        logVec: 'VECTORES', logAtt: 'ATENCIÓN · SOLO HACIA ATRÁS', logLay: 'CAPAS', logNext: 'SIGUIENTE TOKEN', logLoop: 'BUCLE',
+        cand: 'CANDIDATOS', cierreEnd: 'ESPECÍMENES REALES',
+        scroll: 'DESLIZA',
+      },
       marca: 'FUNDAMENTOS · VOL. 1', auto: 'Auto', oscuro: 'Oscuro', papel: 'Papel',
       ariaIdioma: 'Idioma', ariaTema: 'Tema',
       login: {
@@ -1169,6 +1182,17 @@ export const STR = {
         pieLegal: 'LIVING COURSE · NEW TUTORIALS, LABS AND COURSES INCLUDED WHILE YOU STAY SUBSCRIBED · TERMS AND CONDITIONS APPLY',
         barraUnidad: '/ 30 DAYS',
         barraMeta: '12 LESSONS · 30 DAYS · 14-DAY REFUND', barraCta: 'START NOW',
+      },
+      v3: {
+        ignLog: 'AI FROM SCRATCH // loading · 12 lessons · ES/EN',
+        ch01: 'SYMPTOM', chDelta: 'HOW IT THINKS', chIdx: 'CONTENTS', chLlevas: 'BENEFITS', chPrecio: 'PRICE', chCierre: 'CLOSING',
+        cifra: 'FIGURE · 18,615', fuente: 'SOURCE · NONE', ilus: 'ILLUSTRATIVE',
+        sintomas: 'SYMPTOMS', logFirma: 'SIGNED WITH YOUR NAME',
+        deltaH: 'This is how the AI reads it.',
+        tabTok: 'TOKENS', tabNext: 'NEXT TOKEN', tabCtx: 'CONTEXT', tabTemp: 'TEMPERATURE', lec: 'LESSON',
+        logVec: 'VECTORS', logAtt: 'ATTENTION · LOOKS BACK ONLY', logLay: 'LAYERS', logNext: 'NEXT TOKEN', logLoop: 'LOOP',
+        cand: 'CANDIDATES', cierreEnd: 'REAL SPECIMENS',
+        scroll: 'SCROLL',
       },
       login: {
         eb: 'Sign in', h1a: 'Come back in and', h1b: 'pick up where you left.',

@@ -31,6 +31,8 @@ export function runIgnition(first: Seq | null): Promise<void> {
     addEventListener('keydown', onKey); ign.addEventListener('click', finish);
     A.lenis && A.lenis.stop();
     const text = ilog.dataset.text || '';
+    // the scramble types the line in; on a phone it wraps onto a second line part-way, which shifted the layout (CLS 0.0012). Reserve the final wrap first.
+    ilog.textContent = text; const lh = ilog.offsetHeight; ilog.textContent = ''; if (lh > 0) ilog.style.minHeight = lh + 'px';
     gsap.to(ilog, { duration: 1.0, scrambleText: { text, chars: '01·—/<>', speed: 0.7 } });
     gsap.set(pt, { scale: 1 }); gsap.set([ln, sq, ia, glint], { opacity: 0 });
     first && first.warm();

@@ -38,9 +38,10 @@ const LEGACY = ['especimenes', 'indice', 'ventajas', 'quien', 'vivo', 'precio', 
 const FX_HOOKS = {
   c02: { fx: 'type-strike', hooks: [['data-chat', 1], ['data-beat', 3], ['data-type', 3], ['data-strike', 3], ['data-tag', 3]] },
   c03: { fx: 'lens', hooks: [['data-lens', 3]] },
+  c05: { fx: 'track', hooks: [['data-track', 1], ['data-fig', 6], ['data-cifra', 6]], stage: true },
 };
 // the parts that exist only because an effect added them (they must hang on html.fxl) · the selectors that name the copy of an effect chapter · what hides it
-const FX_ONLY = /\.(?:sk|ty|sp|lens|lc|lr)\b|\[data-fx-/;
+const FX_ONLY = /\.(?:sk|ty|sp|lens|lc|lr|pin|rail)\b|\[data-fx-/;
 const FX_COPY = /\.(?:rp|tag|you|ia|who|shout|bt|beat|chat|trio|tri|figs|fig|big|cap|ie|nots|hx|ctr|specs|srow|tcopy|lede|clock)\b|\bs\[data-word\]|\bdt\b|\bdd\b|#c0[2-7]\b/;
 const FX_HIDES = /(?:^|;)\s*(?:opacity\s*:\s*0(?![.\d])|visibility\s*:\s*hidden|display\s*:\s*none|clip-path\s*:|color\s*:\s*transparent|font-size\s*:\s*0\b|transform\s*:\s*scale\(0\b)/;
 const CTA_CHAPTERS = ['c03', 'c07', 'c10', 'c11'];       // CTA rows with the price label + the guarantee line; c14 has its in-card button; c16 closes
@@ -292,6 +293,18 @@ function judge(html, lang) {
     const c = ch[id].html; if (!c) continue;
     if (!new RegExp(`^<section\\b[^>]*\\bdata-fx="${want.fx}"`).test(c)) f.push(`fx: #${id} lost its data-fx="${want.fx}"`);
     for (const [hook, n] of want.hooks) { const got = (c.match(new RegExp(`\\s${hook}(?=[\\s=>])`, 'g')) ?? []).length; if (got !== n) f.push(`fx: #${id} has ${got} ${hook}, the effect needs ${n}`); }
+    // a chapter whose effect pins a stage has ONE .pstage wrapper (no style until the engine adds `pin`: the effect never re-parents anything), opening on the header row and holding every hook
+    if (want.stage) {
+      const at = c.indexOf('<div class="pstage">');
+      if ((c.match(/<div class="pstage">/g) ?? []).length !== 1) f.push(`fx: #${id} has ${(c.match(/<div class="pstage">/g) ?? []).length} .pstage wrappers, the pinned stage needs 1`);
+      else if (!/<div class="pstage">\s*<div class="sh">/.test(c)) f.push(`fx: #${id}'s .pstage no longer opens on the header row (.sh)`);
+      else {
+        // the wrapper is the balanced <div> that opens at `at`: every hook the effect drives must be inside it
+        let depth = 0, end = c.length; for (const m of c.slice(at).matchAll(/<div\b|<\/div>/g)) { depth += m[0] === '</div>' ? -1 : 1; if (!depth) { end = at + m.index + m[0].length; break; } }
+        const inside = c.slice(at, end);
+        for (const [hook, n] of want.hooks) if ((inside.match(new RegExp(`\\s${hook}(?=[\\s=>])`, 'g')) ?? []).length !== n) f.push(`fx: #${id}'s ${hook} is outside its .pstage wrapper`);
+      }
+    }
   }
   {
     const beats = ch.c02.html.split(/\sdata-beat=/).slice(1);
@@ -419,6 +432,15 @@ function mutants(html, lang) {
     ['a chapter 03 card without its footage hook', html.replace(' data-lens="n5"', ''), /fx: #c03 has 2 data-lens|fx: #c03's lens packs/],
     ['a chapter 03 card naming a pack that does not exist', html.replace('data-lens="n5"', 'data-lens="zz"'), /fx: #c03 names the lens pack "zz"/],
     ['chapter 03 packs in another order', html.replace('data-lens="v1"', 'data-lens="__"').replace('data-lens="v2"', 'data-lens="v1"').replace('data-lens="__"', 'data-lens="v2"'), /fx: #c03's lens packs are \[v2,v1,n5\]/],
+    ['chapter 05 without its data-fx name', html.replace('data-fx="track"', 'data-fx="x"'), /fx: #c05 lost its data-fx/],
+    ['chapter 05 without its track hook', inChapter('c05', (c) => c.replace(' data-track', '')), /fx: #c05 has 0 data-track/],
+    ['a chapter 05 figure without its number hook', html.replace(' data-cifra', ''), /fx: #c05 has 5 data-cifra/],
+    ['chapter 05 without its pinned-stage wrapper', inChapter('c05', (c) => c.replace('<div class="pstage">', '<div class="x">')), /fx: #c05 has 0 \.pstage wrappers/],
+    ['chapter 05\'s wrapper not opening on the header row', inChapter('c05', (c) => c.replace(/(<div class="pstage">)\s*(<div class="sh">)/, '$1<div class="y"></div>$2')), /fx: #c05's \.pstage no longer opens on the header row/],
+    ['chapter 05\'s track outside its wrapper', inChapter('c05', (c) => c.replace('<div class="figs" data-track>', '</div><div class="figs" data-track>').replace(/<\/div>\s*<\/section>/, '</section>')), /fx: #c05's data-track is outside its \.pstage wrapper/],
+    ['chapter 05 with the pin class in the markup', html.replace('<section id="c05" class="sec cx figs-sec"', '<section id="c05" class="sec cx figs-sec pin"'), /layout: #c05 carries the effects' `pin` class/],
+    ['the pinned stage keyed to html.fx instead of html.fxl', html.replace('html.fxl .pin .pstage{', 'html.fx .pin .pstage{'), /fx: "html\.fx \.pin \.pstage" styles a part that only an effect adds/],
+    ['the pinned section height without html.fxl', html.replace('html.fxl .pin{--fx-cw', '.pin{--fx-cw'), /fx: "\.pin" styles a part that only an effect adds/],
     ['the lens ring styled without html.fxl', html.replace('html.fxl .lr{', '.lr{'), /fx: "\.lr" styles a part that only an effect adds/],
     ['a stage-2B rule on a plain element (it would outlive dispose)', html.replace('html.fxl [data-fx-s] .ia{position:relative}', 'html.fxl .ia{position:relative}'), /fx: "html\.fxl \.ia" is in the stage-2B block but styles an element no effect owns/],
     ['the lens glow back on the logo-size custom property', html.replace('html.fxl{--fx-glow:', 'html.fxl{--lg:'), /fx: "html\.fxl" declares --lg/],
@@ -519,8 +541,8 @@ function engineBootSelfTest(src) {
 // The effects are code that touches a page whose copy is its own gate's business. They write no copy (text comes from the DOM), they animate only transform,
 // opacity, clip-path and filter (layout is CSS under html.fxl, decided once at attach), and an effect that pre-arms something (hides it, waiting) does it only to
 // what is below the fold. `files` is { 'c02.ts': source, ... }.
-const FX_PREARM = ['c02.ts', 'c03.ts'];                              // modules that arm pre-states for play-once effects: they must ask belowFold() first
-const FX_MODULES = ['index.ts', 'common.ts', 'c02.ts', 'c03.ts'];
+const FX_PREARM = ['c02.ts', 'c03.ts'];                              // modules that arm pre-states for play-once effects: they must ask belowFold() first (a scrubbed one is a function of the scroll position and arms nothing)
+const FX_MODULES = ['index.ts', 'common.ts', 'c02.ts', 'c03.ts', 'c05.ts'];
 const ANIMATED = new Set(['transform', 'opacity', 'clipPath', 'filter', 'willChange']);
 function fxSource(files) {
   const f = [];

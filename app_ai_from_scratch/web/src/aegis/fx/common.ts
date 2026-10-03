@@ -39,6 +39,14 @@ export function onWidth(cb: () => void): () => void {
   return () => { clearTimeout(t); removeEventListener('resize', f); };
 }
 
+/** `cb` after the window is resized in ANY dimension (the page above a pinned chapter changes height with the viewport), debounced. Returns the remove. */
+export function onResize(cb: () => void): () => void {
+  let t = 0;
+  const f = () => { clearTimeout(t); t = window.setTimeout(cb, 150); };
+  addEventListener('resize', f);
+  return () => { clearTimeout(t); removeEventListener('resize', f); };
+}
+
 /** `cb` when the theme changes (the toggle sets data-theme on <html>; "auto" follows the system). Returns the remove. */
 export function onTheme(cb: () => void): () => void {
   const mo = new MutationObserver(cb); mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });

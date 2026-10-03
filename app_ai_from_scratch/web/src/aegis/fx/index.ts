@@ -4,8 +4,9 @@
 import { effect, REG, type Fx } from './common';
 import { initC02 } from './c02';
 import { initC03 } from './c03';
+import { initC05 } from './c05';
 
-const CHAPTERS: Array<[string, () => Fx]> = [['c02', initC02], ['c03', initC03]];
+const CHAPTERS: Array<[string, () => Fx]> = [['c02', initC02], ['c03', initC03], ['c05', initC05]];
 
 export function initFx(): Fx {
   const live: Fx[] = [];

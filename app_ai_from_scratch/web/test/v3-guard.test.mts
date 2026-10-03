@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { guard, guarded, violations, withoutCity } from '../src/aegis/copy-guard.ts';
+import { assertPriced, guard, guarded, violations, withoutCity } from '../src/aegis/copy-guard.ts';
 import { STR } from '../src/lib/i18n.ts';
 import { PRECIO_VISUAL } from '../src/lib/price.ts';
 import { ctxChips, ctxOf, draw, softmax, tokenize } from '../src/aegis/specimens.ts';
@@ -122,6 +122,33 @@ test('prod facts: ONE product for 30 days. The offer headline says so, the closi
   // the dog sentence of the published bD is the specimen context; the Hormozi cat prompt is not in any v3 string
   for (const lang of ['es', 'en'] as const) for (const [p, s] of walk(STR[lang].pub.v3, 'v3')) assert.ok(!/\bgatos?\b|\bcat'?s?\b|se llama…|name is…/i.test(s), `${lang} ${p} mentions the cat prompt`);
   assert.ok(/perro/.test(STR.es.pub.land.bD) && /dog/.test(STR.en.pub.land.bD));
+});
+// ---------- the price guard of the page ----------
+// v3.astro calls assertPriced() on the two paid buttons (pub.land.preCta, pub.land.cierreCta) while it renders, and it THROWS unless each one carries the
+// published price. Those two labels are literals in i18n.ts, outside pub.v3, so a price that moves in PRECIO_VISUAL (and in every string that uses {precio})
+// while they keep the old number is not caught by scripts/check-price.mjs (its forward check passes and nobody adds the old number to STALE): the page
+// would answer 500 on every request and every gate in the fast `pnpm verify` would stay green. This runs in that gate, with the page's own strings.
+test('the two paid buttons carry the published price in both languages: otherwise /v3 answers 500 on every request', () => {
+  for (const lang of ['es', 'en'] as const) {
+    const P = STR[lang].pub.land, price = PRECIO_VISUAL[lang];
+    assert.ok(price, `${lang}: there is a published price`);
+    assert.doesNotThrow(() => assertPriced('pub.land.preCta', P.preCta, price), `${lang}: preCta "${P.preCta}" must carry "${price}"`);
+    assert.doesNotThrow(() => assertPriced('pub.land.cierreCta', P.cierreCta, price), `${lang}: cierreCta "${P.cierreCta}" must carry "${price}"`);
+  }
+});
+test('assertPriced can fail: the price moved and the button kept the old number, no price, the other language\'s notation, no published price', () => {
+  for (const lang of ['es', 'en'] as const) {
+    const P = STR[lang].pub.land, price = PRECIO_VISUAL[lang], other = PRECIO_VISUAL[lang === 'es' ? 'en' : 'es'];
+    const moved = price.replace(/\d/g, (d) => String((+d + 1) % 10));       // the same notation with every digit changed: a price that moved
+    assert.notEqual(moved, price);
+    for (const [key, label] of [['preCta', P.preCta], ['cierreCta', P.cierreCta]] as const) {
+      assert.ok(label.includes(price), `${lang}.${key} carries the price, so the cases below change something real`);
+      assert.throws(() => assertPriced(key, label, moved), /does not carry the published price/, `${lang}.${key}: a moved price`);
+      assert.throws(() => assertPriced(key, label.replace(price, ''), price), /does not carry the published price/, `${lang}.${key}: no price`);
+      assert.throws(() => assertPriced(key, label.replace(price, other), price), /does not carry the published price/, `${lang}.${key}: the other language's notation`);
+      assert.throws(() => assertPriced(key, label, ''), /does not carry the published price/, `${lang}.${key}: no published price`);
+    }
+  }
 });
 test('guarded() checks a string at the moment it is read, in nested objects and arrays', () => {
   const o = guarded({ ok: 'hola', list: ['a', 'b'], deep: { bad: 'Hecho en Medellín', fine: 'x' }, items: [{ t: 'ok', d: 'pago único' }] }, 'o');

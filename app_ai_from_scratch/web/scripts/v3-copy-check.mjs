@@ -12,6 +12,9 @@
 //     a paid CTA that is not /pago, a hero pair that is not paid /pago then free /registro with the trust line under both, the offer not being seven items, preWhy2 shown
 //     twice, chapter 05 telling a lesson's title or description again (chapter 09's), a missing noindex, a Meta Pixel, and the Δ chapter's token rules
 //     (next-token candidates only after specimen B's own context, which is cut by the specimen tokenizer, never by spaces).
+//   · stage 2B (the chapters' motion): the hooks each effect drives are in the server-rendered markup, the effects' CSS hangs on html.fxl and on attributes
+//     the armed effect itself sets (never a default that hides copy), and the effect modules (src/aegis/fx) write no copy, animate only transform, opacity,
+//     clip-path and filter, pre-arm only what is below the fold, and are built after html.fxl and undone with it (main.ts).
 // Before it judges the real pages it proves, on MUTATED copies of the page, that every one of these rules CAN fail (and that the
 // two exemptions stay narrow). If the page cannot be fetched or a self-test cannot fail, the gate FAILS: it never skips.
 import { readFileSync } from 'node:fs';
@@ -30,6 +33,15 @@ const LANGS = ['es', 'en'];
 // necesitas · 07 el tiempo · 08 prueba · 09 temario · 10 la oferta · 11 garantía · 12 quién · 13 para quién · 14 precio · 15 FAQ · 16 cierre
 const CHAPTERS = ['ign', 'c01', 'c02', 'c03', 'cL', 'c05', 'c06', 'c07', 'c08', 'c09', 'c10', 'c11', 'c12', 'c13', 'c14', 'c15', 'c16'];
 const LEGACY = ['especimenes', 'indice', 'ventajas', 'quien', 'vivo', 'precio', 'faq'];
+// What each chapter's SERVER-RENDERED markup must carry for its stage-2B effect: the data-fx name and the hooks the effect reads, with how many of each. A hook that
+// goes missing makes its effect throw at attach (the chapter stays static, with a console warning): this catches it before it ships.
+const FX_HOOKS = {
+  c02: { fx: 'type-strike', hooks: [['data-chat', 1], ['data-beat', 3], ['data-type', 3], ['data-strike', 3], ['data-tag', 3]] },
+};
+// the parts that exist only because an effect added them (they must hang on html.fxl) · the selectors that name the copy of an effect chapter · what hides it
+const FX_ONLY = /\.(?:sk|ty|sp)\b|\[data-fx-/;
+const FX_COPY = /\.(?:rp|tag|you|ia|who|shout|bt|beat|chat|trio|tri|figs|fig|big|cap|ie|nots|hx|ctr|specs|srow|tcopy|lede|clock)\b|\bs\[data-word\]|\bdt\b|\bdd\b|#c0[2-7]\b/;
+const FX_HIDES = /(?:^|;)\s*(?:opacity\s*:\s*0(?![.\d])|visibility\s*:\s*hidden|display\s*:\s*none|clip-path\s*:|color\s*:\s*transparent|font-size\s*:\s*0\b|transform\s*:\s*scale\(0\b)/;
 const CTA_CHAPTERS = ['c03', 'c07', 'c10', 'c11'];       // CTA rows with the price label + the guarantee line; c14 has its in-card button; c16 closes
 const ALLOWED_NUM = new Set(['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '14', '16', '23', '24', '30', '31', '36', '40', '94', '100', '100.000', '100,000',
   '39.990', '39,990', '70.000.000.000', '70,000,000,000', '18,615', '0.30', '0', '000', '1.1', '18', '20', '70', '83', ...Array.from({ length: 16 }, (_, i) => String(i + 1).padStart(2, '0'))]);
@@ -271,6 +283,23 @@ function judge(html, lang) {
   if (!secs.some((x) => x.id === 'c01' && x.cls.includes('lay'))) f.push('layout: the hero lost its `lay` class in the markup: it would not be the one-screen engine look it paints at first');
   const stray = secs.filter((x) => x.id !== 'c01' && x.cls.includes('lay')).map((x) => `#${x.id}`);
   if (stray.length) f.push(`layout: ${stray.join(', ')} carries the engine's \`lay\` class in the markup: it gets it when the engine registers it, or it is pinned and one screen tall before any engine exists`);
+  const strayPin = secs.filter((x) => x.cls.includes('pin')).map((x) => `#${x.id}`);
+  if (strayPin.length) f.push(`layout: ${strayPin.join(', ')} carries the effects' \`pin\` class in the markup: an effect adds it when the engine attaches, or the chapter is tall and pinned before any engine exists`);
+
+  // stage 2B: the hooks the effects drive are in the markup the server renders, and the effects' CSS exists only with the engine
+  for (const [id, want] of Object.entries(FX_HOOKS)) {
+    const c = ch[id].html; if (!c) continue;
+    if (!new RegExp(`^<section\\b[^>]*\\bdata-fx="${want.fx}"`).test(c)) f.push(`fx: #${id} lost its data-fx="${want.fx}"`);
+    for (const [hook, n] of want.hooks) { const got = (c.match(new RegExp(`\\s${hook}(?=[\\s=>])`, 'g')) ?? []).length; if (got !== n) f.push(`fx: #${id} has ${got} ${hook}, the effect needs ${n}`); }
+  }
+  {
+    const beats = ch.c02.html.split(/\sdata-beat=/).slice(1);
+    for (const [i, b] of beats.entries()) for (const hook of ['data-type', 'data-tag']) if ((b.match(new RegExp(`\\s${hook}(?=[\\s=>])`, 'g')) ?? []).length !== 1) f.push(`fx: #c02 beat ${i + 1} does not carry exactly one ${hook}`);
+  }
+  for (const r of rules) for (const sel of r.sel.split(',').map((x) => x.trim())) {
+    if (FX_ONLY.test(sel) && !/\bhtml\.fxl\b/.test(sel)) f.push(`fx: "${sel}" styles a part that only an effect adds, but is not keyed to html.fxl`);
+    if (FX_COPY.test(sel) && FX_HIDES.test(r.body) && !(/\bhtml\.fxl\b/.test(sel) && /\[data-fx-/.test(sel))) f.push(`fx: "${sel}" hides the copy of an effect chapter by default (only html.fxl [data-fx-…], an attribute the armed effect sets, may)`);
+  }
 
   // chapter 04 ends with its last tab: no closing line that points at specimens now living in chapter 08, and a scroll length the engine's
   // timeline is scaled for (llm.ts: GIVEN). A mismatch would change the pacing of every beat without any error.
@@ -362,6 +391,18 @@ function mutants(html, lang) {
     ['a fake loading counter back in the ignition', html.replace('<button class="iskip"', '<div class="pct">000</div><button class="iskip"'), /boot: the ignition shows a loading counter/],
     ['the stale closing line back in chapter 04', inChapter('cL', (c) => c.replace('</section>', `<div class="lend copy2"><h3 class="head">${esc(P.espH2)}</h3></div></section>`)), /structure: chapter 04 closes on/],
     ['chapter 04 with a length the engine is not scaled for', html.replace('id="cL" style="--len:6.2"', 'id="cL" style="--len:6.4"'), /structure: chapter 04 is 6.4 screens/],
+    ['chapter 02 without its data-fx name', html.replace('data-fx="type-strike"', 'data-fx="x"'), /fx: #c02 lost its data-fx/],
+    ['a chapter 02 beat without its typed answer hook', html.replace(' data-type', ''), /fx: #c02 has 2 data-type|fx: #c02 beat 1 does not carry exactly one data-type/],
+    ['a chapter 02 beat without its lesson tag hook', inChapter('c02', (c) => c.replace(/ data-tag(?=[\s>])/, '')), /fx: #c02 has 2 data-tag/],
+    ['chapter 02 without its chat hook', html.replace(' data-chat', ''), /fx: #c02 has 0 data-chat/],
+    ['a chapter 02 beat gone', inChapter('c02', (c) => c.replace(/<div class="beat" data-beat="2">[\s\S]*?<\/div> <\/div>/, '')), /fx: #c02 has 2 data-beat/],
+    ['an effect class (.sk) styled without html.fxl', html.replace('html.fxl .sk{', '.sk{'), /fx: "\.sk" styles a part that only an effect adds/],
+    ['an effect attribute rule without html.fxl', html.replace('html.fxl [data-fx-s] .rp{', '[data-fx-s] .rp{'), /fx: "\[data-fx-s\] \.rp" styles a part that only an effect adds/],
+    ['the typed answer hidden by default', html.replace('html.fxl [data-fx-s="arm"] .rp,', '.rp,'), /fx: "\.rp" hides the copy of an effect chapter by default/],
+    ['the typed answer hidden under html.fxl without the armed attribute', html.replace('html.fxl [data-fx-s="arm"] .rp,', 'html.fxl .rp,'), /fx: "html\.fxl \.rp" hides the copy/],
+    ['a CSS rule that hides a lesson tag by default', html.replace('</head>', '<style>.tag{opacity:0}</style></head>'), /fx: "\.tag" hides the copy/],
+    ['a CSS rule that makes a figure transparent by default', html.replace('</head>', '<style>.clock .ctr b{color:transparent}</style></head>'), /fx: "\.clock \.ctr b" hides the copy/],
+    ['chapter 02 with the pin class in the markup', html.replace('<section id="c02" class="sec cx s02"', '<section id="c02" class="sec cx s02 pin"'), /layout: #c02 carries the effects' `pin` class/],
     ['no noindex', html.replace(/<meta name="robots"[^>]*>/, ''), /meta: no noindex/],
     ['a Meta Pixel', html.replace('</head>', '<script>fbq("init")</script></head>'), /meta: Meta Pixel/],
   ];
@@ -424,6 +465,14 @@ function engineBoot(src) {
   if (!/classList\.add\('eng-off'\)/.test(src)) f.push('it no longer marks a visit that has no engine (html.eng-off)');
   if (/classList\.remove\([^)]*'fx'/.test(src) || /classList\.add\(\s*'nogl'/.test(src)) f.push('it takes the layout away from the page (removes fx or adds nogl): that reflows a reader who is already scrolling');
   if (/\bscrollTo\(\s*0\s*,\s*0\s*\)/.test(src)) f.push('it scrolls the page to the top when it boots: that yanks a reader who has already moved');
+  // the chapters' effects (src/aegis/fx): built in the task that switches html.fxl on (so their layout and pre-states are there before the first tall frame), before the
+  // scroll starts, and undone with the layout when the engine fails after it
+  const iFxl = src.indexOf("classList.add('fxl')"), iFx = src.indexOf('.initFx('), iStart = src.indexOf('startScroll();');
+  if (iFx < 0) f.push("it no longer builds the chapters' effects (initFx)");
+  else if (iFx < iFxl || iStart < iFx) f.push('initFx() is not between the switch of html.fxl and startScroll(): an effect would arm before its layout exists, or after the reader can scroll');
+  const gb = src.match(/const giveBack = \(\) => \{([\s\S]*?)\n  \};/)?.[1] ?? '';
+  if (!/\bfx\.dispose\(\)/.test(gb)) f.push('giveBack() does not dispose the chapters\' effects: a failed engine would leave pre-hidden answers behind');
+  if (/\bawait\b[^;\n]*initFx|initFx\([^)]*\)\s*\.then/.test(src)) f.push('initFx() is awaited: an effect would arm after the tall layout was painted');
   return f;
 }
 function engineBootSelfTest(src) {
@@ -436,8 +485,57 @@ function engineBootSelfTest(src) {
     ['fx taken off when the engine fails', src.replace("release(); markOff('error');", "release(); de.classList.remove('fx', 'gl-on'); markOff('error');"), /takes the layout away/],
     ['nogl put on when the engine fails', src.replace("release(); markOff('error');", "release(); de.classList.add('nogl'); markOff('error');"), /takes the layout away/],
     ['a scrollTo(0, 0) at boot', src.replace('if (!A.fx) return;', 'if (!A.fx) return; scrollTo(0, 0);'), /scrolls the page to the top/],
+    ['no effects at all', src.replace('.initFx()', '.noFx()'), /no longer builds the chapters' effects/],
+    ['effects armed before html.fxl', src.replace("    fx = fxm ? fxm.initFx() : null;", '').replace("laid = true; de.classList.add('fxl');", "fx = fxm ? fxm.initFx() : null; laid = true; de.classList.add('fxl');"), /initFx\(\) is not between/],
+    ['effects armed after the scroll started', src.replace("    fx = fxm ? fxm.initFx() : null;", '').replace('    laid = false;  ', "    fx = fxm ? fxm.initFx() : null; laid = false;  "), /initFx\(\) is not between/],
+    ['effects not disposed when the engine fails', src.replace("if (fx) { try { fx.dispose(); }", "if (fx) { try { fx.disposed(); }"), /giveBack\(\) does not dispose/],
+    ['effects awaited', src.replace('fx = fxm ? fxm.initFx() : null;', 'fx = fxm ? await fxm.initFx() : null;'), /initFx\(\) is awaited/],
   ];
   for (const [what, m, expect] of cases) { const got = engineBoot(m); if (m === src || !got.some((g) => expect.test(g))) { console.error(`FAIL self-test: engineBoot does not catch "${what}" (got ${got.join(' | ') || 'nothing'})`); bad++; } }
+  return [bad, cases.length];
+}
+
+// ---------- the effect modules (src/aegis/fx/*.ts) ----------
+// The effects are code that touches a page whose copy is its own gate's business. They write no copy (text comes from the DOM), they animate only transform,
+// opacity, clip-path and filter (layout is CSS under html.fxl, decided once at attach), and an effect that pre-arms something (hides it, waiting) does it only to
+// what is below the fold. `files` is { 'c02.ts': source, ... }.
+const FX_PREARM = ['c02.ts'];                                        // modules that arm pre-states for play-once effects: they must ask belowFold() first
+const FX_MODULES = ['index.ts', 'common.ts', 'c02.ts'];
+const ANIMATED = new Set(['transform', 'opacity', 'clipPath', 'filter', 'willChange']);
+function fxSource(files) {
+  const f = [];
+  for (const name of FX_MODULES) if (typeof files[name] !== 'string') f.push(`${name}: the module is missing`);
+  for (const [name, src] of Object.entries(files)) {
+    const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`])\/\/.*$/gm, '$1');
+    if (/\.(?:textContent|innerText|innerHTML|outerHTML)\s*=\s*(?:'[^']|"[^"]|`)/.test(code)) f.push(`${name}: writes a string literal into the page (the copy is the HTML's; an effect only moves what is there)`);
+    if (/\b(?:createTextNode|insertAdjacentText|insertAdjacentHTML|document\.write)\s*\(/.test(code)) f.push(`${name}: writes text or markup into the page (an effect adds empty, aria-hidden parts only)`);
+    if (/\bel\(\s*['"][a-z0-9]+['"]\s*,\s*(?:['"][^'"]*['"]|undefined|null)\s*,\s*['"`]/.test(code)) f.push(`${name}: builds an element with literal content`);
+    for (const m of code.matchAll(/\.style\.(\w+)\s*=(?!=)/g)) if (!ANIMATED.has(m[1])) f.push(`${name}: sets style.${m[1]} (an effect changes transform, opacity, clip-path and filter; layout is CSS under html.fxl)`);
+    for (const m of code.matchAll(/\.style\.setProperty\(\s*['"`]([^'"`]*)/g)) if (!m[1].startsWith('--') && !['transform', 'opacity', 'clip-path', 'filter', 'will-change'].includes(m[1])) f.push(`${name}: sets the CSS property ${m[1]} (an effect changes transform, opacity, clip-path and filter)`);
+    if (/\bclassList\.(?:add|toggle)\(\s*['"](?:fx|fxl|ready|eng-off|nogl|rm)['"]/.test(code)) f.push(`${name}: switches an engine mode class (only main.ts decides the mode)`);
+  }
+  for (const name of FX_PREARM) if (typeof files[name] === 'string' && !/\bbelowFold\(/.test(files[name])) f.push(`${name}: arms a pre-state without asking belowFold() (a section in view or above must stay final)`);
+  if (typeof files['index.ts'] === 'string' && !/export function initFx\b/.test(files['index.ts'])) f.push('index.ts: initFx() is gone');
+  if (typeof files['common.ts'] === 'string' && !/export function effect\b[\s\S]*dispose\(\)/.test(files['common.ts'])) f.push('common.ts: effect() no longer undoes a half-built effect');
+  return f;
+}
+function fxSourceSelfTest(files) {
+  if (fxSource(files).length) return [0, 0];                         // the real files are judged by the run below
+  const cases = [
+    ['a copy literal written with textContent', { ...files, 'c02.ts': files['c02.ts'].replace('export function initC02', "const _x = document.body; _x.textContent = 'Hola';\nexport function initC02") }, /writes a string literal/],
+    ['a copy literal written with innerHTML', { ...files, 'c02.ts': files['c02.ts'].replace('export function initC02', "const _x = document.body; _x.innerHTML = '<b>Hola</b>';\nexport function initC02") }, /writes a string literal/],
+    ['a text node created', { ...files, 'c02.ts': files['c02.ts'].replace('export function initC02', "document.createTextNode('Hola');\nexport function initC02") }, /writes text or markup/],
+    ['an element built with literal content', { ...files, 'c02.ts': files['c02.ts'].replace("el('i', 'sk')", "el('i', 'sk', 'Hola')") }, /builds an element with literal content/],
+    ['a layout property animated (style.width)', { ...files, 'c02.ts': files['c02.ts'].replace('export function initC02', "document.body.style.width = '1px';\nexport function initC02") }, /sets style\.width/],
+    ['a layout property animated (style.top)', { ...files, 'c02.ts': files['c02.ts'].replace('export function initC02', "document.body.style.top = '1px';\nexport function initC02") }, /sets style\.top/],
+    ['a layout property set with setProperty', { ...files, 'c02.ts': files['c02.ts'].replace('export function initC02', "document.body.style.setProperty('height', '1px');\nexport function initC02") }, /sets the CSS property height/],
+    ['an engine mode class switched by an effect', { ...files, 'c02.ts': files['c02.ts'].replace('export function initC02', "document.documentElement.classList.add('nogl');\nexport function initC02") }, /switches an engine mode class/],
+    ['a pre-state armed without belowFold()', { ...files, 'c02.ts': files['c02.ts'].replace('if (!belowFold(b.el)) continue;', '') }, /arms a pre-state without asking belowFold/],
+    ['a module gone', { ...files, 'c02.ts': undefined }, /c02\.ts: the module is missing/],
+    ['effect() that stops undoing a half-built effect', { ...files, 'common.ts': files['common.ts'].replace(/dispose\(\);\s*throw e;/, 'throw e;').replace('const dispose = ', 'const disposeX = ') }, /effect\(\) no longer undoes/],
+  ];
+  let bad = 0;
+  for (const [what, m, expect] of cases) { const got = fxSource(Object.fromEntries(Object.entries(m).filter(([, v]) => v !== undefined))); if (!got.some((g) => expect.test(g))) { console.error(`FAIL self-test: fxSource does not catch "${what}" (got ${got.join(' | ') || 'nothing'})`); bad++; } }
   return [bad, cases.length];
 }
 
@@ -455,6 +553,9 @@ let fail = 0, mutantCount = 0;
 const mainSrc = readFileSync(new URL('../src/aegis/main.ts', import.meta.url), 'utf8');
 { const [bad, n] = engineBootSelfTest(mainSrc); fail += bad; mutantCount += n; }
 for (const m of engineBoot(mainSrc)) { console.error(`FAIL main.ts: ${m}`); fail++; }
+const fxFiles = Object.fromEntries(FX_MODULES.map((n) => { try { return [n, readFileSync(new URL(`../src/aegis/fx/${n}`, import.meta.url), 'utf8')]; } catch { return [n, undefined]; } }));
+{ const [bad, n] = fxSourceSelfTest(fxFiles); fail += bad; mutantCount += n; }
+for (const m of fxSource(fxFiles)) { console.error(`FAIL fx: ${m}`); fail++; }
 for (const lang of LANGS) {
   const html = pages.get(`${lang}/none`);
   fail += selfTest(html, lang) + deltaSelfTest(html, lang);

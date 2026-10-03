@@ -7,13 +7,15 @@
 // chapter 04 6.2) is turned on here, in the same task that builds the engine, and only if the page has not been scrolled at all: everything that
 // changes is then below the fold and the hero does not move. A reader who has already scrolled keeps the static layout for the whole visit (console
 // warning, html.eng-off): changing the height of the chapters under somebody who is moving through them is a jump, and a pinned stage that
-// nothing animates is dead scroll. The head script's 15 s watchdog follows the same rule (it marks eng-off and changes no layout), so nothing
+// nothing animates is dead scroll. The motion of the chapters in between (src/aegis/fx) is built in that same task, after the layout it hangs on, and
+// undone with it. The head script's 15 s watchdog follows the same rule (it marks eng-off and changes no layout), so nothing
 // moves anyone after the first paint; whatever is still loading then stays detached (see `gone`).
 import { A } from './state';
 import { measure, startScroll, tick } from './core';
 import { makeLog, watchHeads } from './hud';
 import { mountSpecimens } from './specimens';
 import { $ } from './util';
+import type { Fx } from './fx/common';
 
 export async function boot() {
   const de = document.documentElement;
@@ -35,6 +37,7 @@ export async function boot() {
     markOff('scrolled'); return true;
   };
   let laid = false;                                    // html.fxl is on and the engine is not live yet
+  let fx: Fx | null = null;                            // the chapters' effects (src/aegis/fx): built in the task that switches html.fxl on, undone with it
   /** An engine that was built and will not run gives its GPU context back. */
   const release = () => {
     const g = A.gl; A.gl = null; A.log = null; if (!g) return;
@@ -42,6 +45,7 @@ export async function boot() {
   };
   /** The engine threw after it switched the layout on. All of it ran in one task, so no frame was painted with the tall layout: back to the static one. */
   const giveBack = () => {
+    if (fx) { try { fx.dispose(); } catch (x) { console.warn('[v3] effects cleanup failed:', x); } fx = null; }
     de.classList.remove('fxl', 'ready', 'gl-on', 'foot-on'); de.removeAttribute('data-ch');
     for (const c of A.chapters) if (c.layAdded) c.el.classList.remove('lay');
     A.chapters.length = 0; for (const k of Object.keys(A.byId)) delete A.byId[k];
@@ -52,6 +56,8 @@ export async function boot() {
   await new Promise<void>(r => requestAnimationFrame(() => setTimeout(r, 0)));
   if (gone()) return;                                  // already scrolled: it does not even download three
   try {
+    // the chapters' effects load beside three; a chunk that does not arrive leaves those chapters static, it does not take the engine down
+    const fxMod = import('./fx').catch((x) => { console.warn('[v3] chapter effects off (their chunk did not load):', x); return null; });
     const [THREE, { createEngine }] = await Promise.all([import('three'), import('./engine')]);
     if (gone()) return;
     const cv = document.getElementById('gl') as HTMLCanvasElement;
@@ -59,10 +65,11 @@ export async function boot() {
     if (!gl) throw new Error('no webgl2');
     A.gl = gl;
     A.log = makeLog($('#log')!);
-    const [{ initC01 }, { initLLM }] = await Promise.all([import('./c01'), import('./llm')]);
+    const [{ initC01 }, { initLLM }, fxm] = await Promise.all([import('./c01'), import('./llm'), fxMod]);
     if (gone()) { release(); return; }                 // the last look. From here to `startScroll()` nothing awaits, so nobody can scroll in between
     laid = true; de.classList.add('fxl');              // the tall layout, now that an engine is about to drive it (register() hands each chapter its `lay`)
     const c1 = initC01(); initLLM(gl);
+    fx = fxm ? fxm.initFx() : null;                    // same task: the effects' layout and pre-states are there before the first tall frame is painted
     de.classList.add('ready', 'gl-on');
     watchHeads(); measure(); A.chapters.forEach(c => c.resize && c.resize());
     c1 && c1.warm && c1.warm();

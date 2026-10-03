@@ -94,3 +94,5 @@ export const scrollToY = (y: number) => { if (A.lenis) A.lenis.scrollTo(y, { imm
   const y = p > 1 ? ch.top + ch.span + (p - 1) * A.H : ch.top + p * ch.span;
   scrollToY(y); tick(performance.now(), true); tick(performance.now() + 16, true); return y;
 };
+// Same, by scroll position (chapters the engine does not register: the effects of src/aegis/fx).
+(globalThis as any).__v3Y = (y: number) => { scrollToY(y); tick(performance.now(), true); tick(performance.now() + 16, true); return y; };

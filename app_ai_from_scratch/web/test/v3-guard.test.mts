@@ -413,3 +413,19 @@ test('the unscrolled hero cannot be stretched by its buttons: the phone grid tra
   // the rule can fail
   assert.notEqual(track('@media (max-width:900px){#c01 .stage{grid-template-columns:1fr}.pstat{grid-column:1}'), 'minmax(0,1fr)');
 });
+
+test('chapter 06 on a 320-359px phone: the struck words are sized to their cell (the widest is 140px at 26px, the cell held 106px)', () => {
+  const css = readFileSync(new URL('../src/aegis/v3.css', import.meta.url), 'utf8');
+  const rule = (t: string) => /@media \(max-width:359px\)\{\.nots li\{padding:24px (\d+)px\}\.nots s\{font-size:clamp\((\d+)px,([\d.]+)vw,(\d+)px\)\}\}/.exec(t)?.slice(1).map(Number);
+  const r = rule(css);
+  assert.ok(r, 'the phone rule of the struck words is in v3.css');
+  // measured in Chromium at 26px with the shipped fonts: «computador» 139.9px, «background» 137.1, «experiencia» 130.5; no word of either list is longer than 11 letters
+  const WIDEST_AT_26 = 139.9;
+  for (const lang of ['es', 'en'] as const) for (const phrase of STR[lang].pub.v3.s3Palabras) for (const w of phrase.split(' ')) assert.ok(w.length <= 11, `«${w}» is longer than the words this rule was measured with: measure it again`);
+  const fits = ([pad, lo, vw, hi]: number[]) => [320, 340, 359].every((w) => {
+    const cell = (w - 2 * 16 - 1) / 2 - 2 * pad - 1, size = Math.min(hi, Math.max(lo, (vw * w) / 100));   // the plate's gutters, the list's left border, the cell's padding and right border
+    return (WIDEST_AT_26 * size) / 26 <= cell;
+  });
+  assert.ok(fits(r!), 'the widest struck word is wider than its cell at some width between 320 and 359');
+  assert.ok(!fits([18, 26, 6.6, 26]), 'the rule can fail: the old size (26px) and padding (18px) do not fit at 320');
+});

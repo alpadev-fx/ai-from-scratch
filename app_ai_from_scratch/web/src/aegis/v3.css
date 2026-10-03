@@ -624,6 +624,9 @@ html[data-ch="cL"] .cue{display:none}
   .hx.xl{max-width:none}
   .meta{line-height:1.55}
 }
+/* below 360 the longest struck words («computador», «background») are 140px at 26px in a cell 106px wide: they ran under the next cell. Less padding and a size that follows the
+   width (21px at 320, 24px at 359) keep every word inside its own cell */
+@media (max-width:359px){.nots li{padding:24px 12px}.nots s{font-size:clamp(18px,6.6vw,26px)}}
 
 /* ---------- the end of the page: a BLACK plate in every theme (paper, auto-light and dark alike). Its tokens are the dark ones of theme-css.ts, scoped to it by v3.astro (.endp{--bg:#000;--l1:…}),
    so its text and hairlines are the light ones and nothing in it follows the page's theme. A straight cut at the top (no gradient, no corners). It holds the brand row, the legal line and the wordmark ---------- */

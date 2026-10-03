@@ -13,6 +13,8 @@ export interface ChipSources {
   price: string;
   /** specimen B's context: the first sentence of P.bD (specimens.ts ctxOf) */
   ctx: string;
+  /** the candidates of chapter 04's next-token card (data/landing.ts candidatos), in order: the chip that shows the sampled one is the FIRST token of its name after the context */
+  cands: ReadonlyArray<{ name: string }>;
 }
 
 export interface ChipString { id: string; text: string }
@@ -27,6 +29,8 @@ export function chipStrings(S: ChipSources): ChipString[] {
   (S.V.s10Si as string[]).forEach((x, i) => out.push({ id: `c13.yes.${i + 1}`, text: x }));
   (S.V.s10No as string[]).forEach((x, i) => out.push({ id: `c13.no.${i + 1}`, text: x }));
   out.push({ id: 'c14.price', text: S.price }, { id: 'c16.head', text: S.V.cierreH });
+  // chapter 04's predicted chip: after «…perro.» a name is a token WITH its leading space (« Max», not «Max»), so the string that is cut is the name behind a space
+  S.cands.forEach((c, i) => out.push({ id: `c04.next.${i + 1}`, text: ' ' + c.name }));
   for (const c of out) if (typeof c.text !== 'string' || !c.text) throw new Error(`v3 token strings: ${c.id} is empty`);
   return out;
 }

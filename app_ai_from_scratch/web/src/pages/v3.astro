@@ -81,9 +81,9 @@ const illusToks = tokenize(sentence);
 const ctx = ctxOf(P.bD);                     // «Le pediste un nombre para tu perro.»
 // Real tokens (o200k_base, GPT-4o). A string that is shown as chips and is not in the committed file stops the render (the page answers 500), like a stale price does.
 const TOK = (TOKEN_FILE as any)[lang] as Record<string, Array<[string, ...number[]]>>;
-const chipText = chipStrings({ P, V, mods, price: precioBig, ctx });
+const chipText = chipStrings({ P, V, mods, price: precioBig, ctx, cands });
 const PIECES = Object.fromEntries(chipText.map((c) => [c.text, piecesOf(TOK, c.text)]));   // what the effects read from the page (#v3-tokens); not TOKENS: that is the theme's CSS tokens (theme-css.ts)
-const realA = piecesOf(TOK, sentence), realB = piecesOf(TOK, ctx), realBw = wordsOf(realB);   // chapter 04: row A, and the dog context with the word each piece belongs to
+const realA = piecesOf(TOK, sentence), realB = piecesOf(TOK, ctx), realBw = wordsOf(realB), realNext = piecesOf(TOK, ' ' + cands[0].name)[0][0];   // chapter 04: row A, and the dog context with the word each piece belongs to
 const sym = [
   { lbl: P.s1Lbl, lec: P.s1Lec, h: P.s1H, d: P.s1D, c: P.s1C },
   { lbl: P.s2Lbl, lec: P.s2Lec, h: P.s2H, d: P.s2D, c: P.s2C },
@@ -297,7 +297,7 @@ setTimeout(function(){
     <p class="tokref">{V.tokReal}</p>
     <div class="chips ctx" aria-hidden="true">
       {realB.map((p, i) => (<div class="tk cw" data-w={realBw[i]}><b>{show(p[0])}</b></div>))}
-      <div class="tk ans"><b>{cands[0].name}</b></div>
+      <div class="tk ans"><b>{show(realNext)}</b></div>
     </div>
     <aside class="pcard" aria-label={V.cand}>
       <div class="hd"><span>{steps[1].h}</span><b><i class="dot"></i><em>{V.ilus}</em></b></div>

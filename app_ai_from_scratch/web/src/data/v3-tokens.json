@@ -30,7 +30,13 @@
     "Buscas que la IA decida por ti: es una herramienta, no decide.": [["Bus",16573],["cas",14617],[" que",661],[" la",557],[" IA",59199],[" dec",1885],["ida",2261],[" por",1382],[" ti",2919],[":",25],[" es",878],[" una",1969],[" herramienta",72857],[",",11],[" no",860],[" decide",13001],[".",13]],
     "Quieres prompts mágicos sin entender por qué funcionan.": [["Quieres",182764],[" prompts",79007],[" mág",121176],["icos",6302],[" sin",2187],[" entender",37412],[" por",1382],[" qué",18998],[" funcionan",167162],[".",13]],
     "$39.990": [["$",3],["39",3255],[".",13],["990",29590]],
-    "La IA no se va a ir.": [["La",4579],[" IA",59199],[" no",860],[" se",458],[" va",3423],[" a",261],[" ir",3288],[".",13]]
+    "La IA no se va a ir.": [["La",4579],[" IA",59199],[" no",860],[" se",458],[" va",3423],[" a",261],[" ir",3288],[".",13]],
+    " Max": [[" Max",10093]],
+    " Luna": [[" Luna",66278]],
+    " Rocky": [[" Rocky",70400]],
+    " Coco": [[" Coco",76192]],
+    " Sr. Mostacho": [[" Sr",36013],[".",13],[" Most",8887],["acho",47349]],
+    " Nube": [[" N",478],["ube",4502]]
   },
   "en": {
     "Cartagena is beautiful": [["Cart",13670],["agena",150871],[" is",382],[" beautiful",6107]],
@@ -61,6 +67,12 @@
     "You want AI to decide for you: it's a tool, it doesn't decide.": [["You",3575],[" want",1682],[" AI",20837],[" to",316],[" decide",13001],[" for",395],[" you",481],[":",25],[" it's",4275],[" a",261],[" tool",4584],[",",11],[" it",480],[" doesn't",8740],[" decide",13001],[".",13]],
     "You want magic prompts without understanding why they work.": [["You",3575],[" want",1682],[" magic",19745],[" prompts",79007],[" without",2935],[" understanding",10335],[" why",4436],[" they",1023],[" work",1101],[".",13]],
     "39,990 COP": [["39",3255],[",",11],["990",29590],[" COP",72442]],
-    "AI is not going away.": [["AI",17527],[" is",382],[" not",625],[" going",2966],[" away",4194],[".",13]]
+    "AI is not going away.": [["AI",17527],[" is",382],[" not",625],[" going",2966],[" away",4194],[".",13]],
+    " Max": [[" Max",10093]],
+    " Luna": [[" Luna",66278]],
+    " Rocky": [[" Rocky",70400]],
+    " Coco": [[" Coco",76192]],
+    " Mr. Whiskers": [[" Mr",9655],[".",13],[" Wh",1656],["isk",3295],["ers",409]],
+    " Cloud": [[" Cloud",17831]]
   }
 }

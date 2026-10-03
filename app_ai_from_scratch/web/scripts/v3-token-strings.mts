@@ -3,13 +3,13 @@
 //   node --experimental-strip-types scripts/v3-token-strings.mts
 import { STR } from '../src/lib/i18n.ts';
 import { PRECIO_VISUAL } from '../src/lib/price.ts';
-import { modulos } from '../src/data/landing.ts';
+import { candidatos, modulos } from '../src/data/landing.ts';
 import { ctxOf } from '../src/aegis/specimens.ts';
 import { chipStrings } from '../src/aegis/token-strings.ts';
 
 const out: Record<string, Array<{ id: string; text: string }>> = {};
 for (const lang of ['es', 'en'] as const) {
   const P = STR[lang].pub.land, V = STR[lang].pub.v3;
-  out[lang] = chipStrings({ P, V, mods: modulos(lang), price: PRECIO_VISUAL[lang], ctx: ctxOf(P.bD) });
+  out[lang] = chipStrings({ P, V, mods: modulos(lang), price: PRECIO_VISUAL[lang], ctx: ctxOf(P.bD), cands: candidatos(lang) });
 }
 process.stdout.write(JSON.stringify(out));

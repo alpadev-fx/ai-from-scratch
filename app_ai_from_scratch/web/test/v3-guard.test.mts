@@ -226,7 +226,7 @@ test('the dial\'s fixed draw only ever lands on a published candidate, and tempe
 // web/scripts/v3-tokens.py and committed in src/data/v3-tokens.json (pieces and ids, ES and EN). Node cannot run tiktoken, so what this proves is that the file is IN SYNC with the
 // strings: a copy change without a regenerated file is red, and a chip consumer that goes back to the heuristic is red. The pieces themselves are real because that script made them.
 const TOKENS = JSON.parse(readFileSync(new URL('../src/data/v3-tokens.json', import.meta.url), 'utf8')) as TokenFile;
-const chipSources = (lang: 'es' | 'en'): ChipSources => ({ P: STR[lang].pub.land, V: STR[lang].pub.v3, mods: modulos(lang), price: PRECIO_VISUAL[lang], ctx: ctxOf(STR[lang].pub.land.bD) });
+const chipSources = (lang: 'es' | 'en'): ChipSources => ({ P: STR[lang].pub.land, V: STR[lang].pub.v3, mods: modulos(lang), price: PRECIO_VISUAL[lang], ctx: ctxOf(STR[lang].pub.land.bD), cands: candidatos(lang) });
 test('every string shown as a chip has its real o200k tokens in v3-tokens.json, the pieces join back into it, and the file holds nothing else', () => {
   assert.equal(TOKENS.encoding, 'o200k_base');
   assert.match(TOKENS.library, /^tiktoken \d/);
@@ -268,6 +268,25 @@ test('chapter 04 row A is the real cut of the example sentence, and the heuristi
   assert.deepEqual(tokenize(STR.es.pub.land.aEjemplo), ['Carta', 'gena', 'es', 'hermo', 'sa']);
   assert.notDeepEqual(tokenize(STR.es.pub.land.aEjemplo).map((t) => t), es.map((t) => t.trim()));
   assert.deepEqual(tokenize('x '.repeat(40)).length, 26);                               // the heuristic's own 26-piece cap, unchanged
+});
+test('chapter 04: the predicted chip is a real o200k token with its leading space marked («·Max»), whichever candidate the dial picks, and neither the page nor the dial prints a bare name', () => {
+  for (const lang of ['es', 'en'] as const) {
+    const file = TOKENS[lang], cands = candidatos(lang);
+    const chip = (name: string) => show(piecesOf(file, ' ' + name)[0][0]);       // what the page and llm.ts print: the FIRST token of the name behind the context
+    assert.equal(chip(cands[0].name), '·Max', `${lang}: the chip the page renders before the dial moves`);
+    for (const c of cands) {
+      const first = piecesOf(file, ' ' + c.name)[0][0];
+      assert.ok(first.startsWith(' ') && first.length > 1, `${lang} «${c.name}»: after the context the next token carries its leading space`);
+      assert.ok(chip(c.name).startsWith('·') && !chip(c.name).includes(' '), `${lang} «${c.name}»: the chip marks that space with «·», like every chip of the row`);
+      assert.ok(' ' + c.name === piecesOf(file, ' ' + c.name).map((x) => x[0]).join(''), `${lang} «${c.name}»: its pieces join back into the string`);
+    }
+  }
+  const page = readFileSync(new URL('../src/pages/v3.astro', import.meta.url), 'utf8'), llm = readFileSync(new URL('../src/aegis/llm.ts', import.meta.url), 'utf8');
+  const bare = (p: string, l: string) => /<b>\{cands\[0\]\.name\}<\/b>/.test(p) || /\.textContent = cands\[win\]\.name/.test(l);
+  assert.ok(!bare(page, llm), 'the predicted chip prints a candidate\'s bare name: it is a token, and a token after the context starts with a space');
+  // the rule can fail
+  assert.ok(bare('<div class="tk ans"><b>{cands[0].name}</b></div>', ''));
+  assert.ok(bare('', "b.textContent = cands[win].name; }"));
 });
 // Nothing that shows chips may cut text by the heuristic. The ONLY caller allowed is specimens.ts itself (the free-typing box of chapter 08) and the one line of v3.astro that
 // renders that box's first picture, marked ILLUSTRATIVE.

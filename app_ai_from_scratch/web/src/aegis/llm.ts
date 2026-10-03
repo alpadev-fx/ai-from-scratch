@@ -12,6 +12,7 @@ import { A } from './state';
 import { register } from './core';
 import { card as _c, headline } from './hud';
 import { softmax, pctText } from './specimens';
+import { piecesOf, show, tokensFromPage } from './tokens';
 import type { GL } from './engine';
 import { $, $$, clamp, eio, eo, lerp, rng, seg, ss } from './util';
 
@@ -39,6 +40,9 @@ export function initLLM(gl: GL) {
   const nW = wd[NB];                                    // number of words in the context = index of the new word
   const logA = toks.join(' | '), logB = elB.slice(0, NB).map((e) => e.textContent || '').join(' | ');   // each row's tokens, for the HUD log
   const cands = D.candidatos as Array<{ name: string; logit: number }>;
+  // the chip that shows the sampled next token is what the vocabulary says comes after «…perro.»: the FIRST token of the name WITH its leading space («·Max»), read from the
+  // page's real tokens (a name that is several tokens shows its first: the panel lists names, the model emits tokens)
+  const TOKS = tokensFromPage(), nextTxt = cands.map((c) => show(piecesOf(TOKS, ' ' + c.name)[0][0]));
   const candRows = $$('.crow', pCard);
   const dial = $('.dial', pCard) as HTMLElement | null, dialV = $('.dialv', pCard);
   const steps = $$('li', panel);
@@ -165,7 +169,7 @@ export function initLLM(gl: GL) {
   // sampled next token at temperature T (fixed uniform draw so it is repeatable)
   const U0 = 0.62;
   const sample = (T: number) => { const pr = softmax(cands, T); let c = 0; for (let i = 0; i < pr.length; i++) { c += pr[i]; if (U0 <= c) return i; } return 0; };
-  const winChars = (() => { let m = 0; for (let T = 0.3; T <= 1.6001; T += 0.05) m = Math.max(m, cands[sample(T)].name.length); return m; })();
+  const winChars = (() => { let m = 0; for (let T = 0.3; T <= 1.6001; T += 0.05) m = Math.max(m, nextTxt[sample(T)].length); return m; })();
 
   let paperPrev: boolean | null = null, tShown = -1, winShown = -1;
   function theme() {
@@ -308,7 +312,7 @@ export function initLLM(gl: GL) {
       c.style.transform = `translate3d(${tmp.x.toFixed(1)}px,${tmp.y.toFixed(1)}px,0) translate(-50%,-50%) scale(${(clamp(12 / Math.max(1, tmp.d), 0.7, 1.12) * kB).toFixed(3)})`;
       c.style.opacity = (o * (1 - 0.78 * dim)).toFixed(3); c.style.visibility = o > 0.005 ? 'visible' : 'hidden';
       c.classList.toggle('on', true); c.classList.toggle('f', isF); c.classList.toggle('h', !!key); c.classList.toggle('nw', i === NB && p > 0.5 && p < 0.58);
-      if (i === NB && winShown !== win) { winShown = win; const b = $('b', c)!; b.textContent = cands[win].name; }
+      if (i === NB && winShown !== win) { winShown = win; const b = $('b', c)!; b.textContent = nextTxt[win]; }
     });
     // glow sprite-less: the engine's bloom does the halo; tab/steps text handled by CSS classes
     // ----- probability card (stages 2 and 4)

@@ -28,7 +28,7 @@ import { SANCTIONED, guard, violations, assertPriced } from '../src/aegis/copy-g
 
 // The committed real tokens (o200k_base, cut with tiktoken by web/scripts/v3-tokens.py): every chip on the page must be one of these pieces.
 const TOKEN_FILE = JSON.parse(readFileSync(new URL('../src/data/v3-tokens.json', import.meta.url), 'utf8'));
-const chipSources = (lang) => ({ P: STR[lang].pub.land, V: STR[lang].pub.v3, mods: modulos(lang), price: PRECIO_VISUAL[lang], ctx: ctxOf(STR[lang].pub.land.bD) });
+const chipSources = (lang) => ({ P: STR[lang].pub.land, V: STR[lang].pub.v3, mods: modulos(lang), price: PRECIO_VISUAL[lang], ctx: ctxOf(STR[lang].pub.land.bD), cands: candidatos(lang) });
 
 const BASE = process.env.BASE ?? 'http://127.0.0.1:4321';
 // The narrative changes with the visitor's market, so every market is fetched: a city that only shows for one market is the
@@ -152,6 +152,11 @@ function deltaRule(html, lang) {
   const ans = (html.match(/class="tk ans"/g) ?? []).length;
   if (ans !== 1) out.push(`${ans} candidate chips on the page, expected exactly 1 (after the context row)`);
   else if (html.indexOf('class="tk ans"') < html.indexOf('<div class="chips ctx"')) out.push('the candidate chip comes before the context row');
+  // the predicted chip is the next token of the vocabulary after the context: the first piece of «<space>Name», its leading space shown as «·» like every chip of the row («·Max», not «Max»)
+  if (ans === 1) {
+    const gotAns = html.match(/<div class="tk ans"><b>([^<]*)<\/b><\/div>/)?.[1], wantAns = show(piecesOf(TOKEN_FILE[lang], ' ' + candidatos(lang)[0].name)[0][0]);
+    if (gotAns === undefined || decode(gotAns) !== wantAns) out.push(`the predicted chip is «${gotAns === undefined ? '(unreadable)' : decode(gotAns)}», expected «${wantAns}» (the first real token after the context, its leading space marked)`);
+  }
   const pc = sec.match(/<p class="pctx">([\s\S]*?)<\/p>/);
   if (!pc || norm(pc[1]) !== norm(ctx)) out.push(`the card context line is "${pc ? norm(pc[1]) : '(missing)'}", expected "${ctx}"`);
   // the factual source of the chips, once, under row A (NUEVO, pending the owner's approval: pub.v3.tokReal)
@@ -702,6 +707,8 @@ function deltaSelfTest(html, lang) {
     'the leading space of a token shown as a space, not as a middle dot': html.replace(/(<div class="tk cw" data-w="\d+"><b>)·/, '$1 '),
     'the context row cut into whole words (not by the tokenizer)': html.replace(/(<div class="chips ctx"[^>]*>)[\s\S]*?(<div class="tk ans">)/, (_m, a, c) => a + ctx.split(/\s+/).map((w, i) => `<div class="tk cw" data-w="${i}"><b>${w}</b></div>`).join('') + c),
     'a context chip with the wrong word index': html.replace(/(<div class="tk cw" data-w=")(\d+)("><b>[^<]*<\/b><\/div>)(?![\s\S]*<div class="tk cw")/, '$19$3'),
+    'the predicted chip shown without its leading-space marker (the name, not the token)': html.replace(/(<div class="tk ans"><b>)·/, '$1'),
+    'the predicted chip is the whole multi-word name, not one token': html.replace(/(<div class="tk ans"><b>)[^<]*/, '$1·Sr. Mostacho'),
     'the source label of the chips gone': html.replace(/<p class="tokref">[\s\S]*?<\/p>/, ''),
     'the source label of the chips said twice': html.replace('<div class="chips ctx"', '<p class="tokref">x</p><div class="chips ctx"'),
   };

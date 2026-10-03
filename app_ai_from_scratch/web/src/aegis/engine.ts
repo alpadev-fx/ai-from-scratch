@@ -140,7 +140,7 @@ export function createEngine(THREE: T, cv: HTMLCanvasElement): GL | null {
 
   // ---- finishing ---------------------------------------------------------------------------------
   const MF = mk(HEAD + `uniform sampler2D tBase, tB4, tB8, tSt; uniform vec2 res; uniform vec3 bg;
-    uniform float time, ca, mb, grain, vign, bloom, streak, paper, fade;
+    uniform float ca, mb, grain, vign, bloom, streak, paper, fade;
     ${NOISE}
     vec3 samp(vec2 u){ vec2 o = (u - 0.5) * ca; return vec3(texture(tBase, u + o).r, texture(tBase, u).g, texture(tBase, u - o).b); }
     void main(){
@@ -153,12 +153,12 @@ export function createEngine(THREE: T, cv: HTMLCanvasElement): GL | null {
       float v = length((vUv - 0.5) * vec2(asp, 1.0) * 0.92);
       float vg = vign * smoothstep(0.42, 1.02, v);
       c = paper > 0.5 ? mix(c, c * 0.82, vg) : c * (1.0 - vg);
-      float g = (h21(vUv * res * 1.31 + fract(time * 13.37) * 173.0) - 0.5) * grain * (paper > 0.5 ? 0.55 : 1.0);
+      float g = (h21(vUv * res * 1.31) - 0.5) * grain * (paper > 0.5 ? 0.55 : 1.0);   // the same grain on every frame: grain that is re-drawn each frame shimmers on a still picture
       c += g;
       gl_FragColor = vec4(c * fade, 1.0);
     }`, {
     tBase: { value: null }, tB4: { value: null }, tB8: { value: null }, tSt: { value: null }, res: { value: V2(1, 1) }, bg: { value: V3() },
-    time: { value: 0 }, ca: { value: 0.0015 }, mb: { value: 0 }, grain: { value: 0.05 }, vign: { value: 0.38 }, bloom: { value: 0.8 }, streak: { value: 0.35 }, paper: { value: 0 }, fade: { value: 1 },
+    ca: { value: 0.0015 }, mb: { value: 0 }, grain: { value: 0.05 }, vign: { value: 0.38 }, bloom: { value: 0.8 }, streak: { value: 0.35 }, paper: { value: 0 }, fade: { value: 1 },
   });
 
   // ---- footage textures: small LRU pool per sequence, <= 2 uploads per frame ---------------------
@@ -241,7 +241,7 @@ export function createEngine(THREE: T, cv: HTMLCanvasElement): GL | null {
     vS += (Math.abs(A.st.v) - vS) * Math.min(1, dt * 8);
     const pulse = type === 2 ? Math.sin(Math.PI * t) : 0;
     f.tBase.value = rt.base.texture; f.tB4.value = rt.b4b.texture; f.tB8.value = rt.b8b.texture; f.tSt.value = rt.s8b.texture;
-    f.time.value = now; f.paper.value = paper; (f.bg.value as ThreeNS.Vector3).set(r, g, b);
+    f.paper.value = paper; (f.bg.value as ThreeNS.Vector3).set(r, g, b);
     f.mb.value = A.rm ? 0 : Math.min(0.024, vS / 110000) * P.mb;
     f.ca.value = P.ca + Math.min(0.006, vS / 700000) + pulse * 0.006;
     f.grain.value = P.grain; f.vign.value = P.vign; f.bloom.value = P.bloom; f.streak.value = P.streak;

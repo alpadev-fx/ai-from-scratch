@@ -46,6 +46,7 @@ html.gl-on #log{display:block;position:fixed;left:var(--gut);bottom:24px;z-index
 #log .ln{white-space:nowrap;display:flex;gap:10px}#log .ln::before{content:'›';color:var(--l3)}#log .ln.new{color:var(--l1)}
 html[data-ch="cL"] #log{opacity:0}
 html:not([data-ch="c01"]) #log{opacity:0}
+html.fx #log{transition:opacity .3s ease}      /* the bar and the lines come and go with a fade, not in one frame */
 
 /* ---------- ignition (chapter 00) ----------
    Pure CSS, 1.0 s, no module and no gsap: nothing it waits for can be late or hang. The head script in v3.astro ENDS it (the animationend of
@@ -329,8 +330,9 @@ html[data-ch="cL"] .cue{display:none}
   html.fxl .steps .h,html.fxl .steps .d{display:none!important}
   html.fxl .steps li.on .h{display:block!important;grid-row:1;grid-column:1/-1;font-size:14px;padding-bottom:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   html.fxl .tk,html.fxl .sent{font-size:14.5px}
-  html.fx #log{left:0;right:0;bottom:0;min-width:0;box-sizing:border-box;height:104px;padding:30px var(--gut) 0;color:var(--l1);text-shadow:none;background:linear-gradient(0deg,color-mix(in srgb,var(--bg) 92%,transparent) 0,color-mix(in srgb,var(--bg) 78%,transparent) 62%,transparent 100%)}
-  html.fx #log:empty{background:none}
+  html.fx #log{left:0;right:0;bottom:0;min-width:0;box-sizing:border-box;height:104px;padding:30px var(--gut) 0;color:var(--l1);text-shadow:none}
+  html.fx #log::before{content:'';position:absolute;inset:0;z-index:-1;background:linear-gradient(0deg,color-mix(in srgb,var(--bg) 92%,transparent) 0,color-mix(in srgb,var(--bg) 78%,transparent) 62%,transparent 100%);transition:opacity .35s ease}
+  html.fx #log:empty::before{opacity:0}
 }
 @media (prefers-reduced-motion:reduce){html.fx *{animation:none!important}}
 /* very small phones (320): the nowrap buttons may wrap instead of being clipped by the stage */

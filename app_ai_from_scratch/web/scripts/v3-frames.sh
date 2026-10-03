@@ -6,6 +6,12 @@
 # and web/public/v3/still/<id>.webp (the static frame the no-motion page shows).
 # Needs ffmpeg + cwebp (brew install ffmpeg webp). Fails if either is missing.
 #
+#   FROM=1.875 FPS_D=12 N_D=56 FPS_M=12 N_M=56 sh web/scripts/v3-frames.sh n2 <N2.mp4>
+# cuts a window out of the clip instead of its first seconds (every one is optional; the defaults are the packs the hero shipped with):
+#   FROM  second of the source the pack starts at (0)         FPS_D  desktop frames per second (9)   N_D  desktop frames (72)
+#                                                             FPS_M  mobile frames per second (6)    N_M  mobile frames (48)
+# A rate that divides the source's own (24 fps: 12, 8, 6) takes every 2nd, 3rd, 4th frame, evenly; any other rate takes uneven steps. The old pack is cleared first.
+#
 #   LENS=1 sh web/scripts/v3-frames.sh <id> <source.mp4>
 # builds instead the chapter-03 lens pack (src/aegis/fx/c03.ts): ONE grayscale WebP sprite of LENS_N square frames (row-major, LENS_COLS wide), cut from a
 # centred square of the clip, written to web/public/v3/lens/<id>.webp. It is a few dozen KB where a scrubbed pack is hundreds.
@@ -15,7 +21,8 @@ set -eu
 command -v ffmpeg >/dev/null || { echo "ffmpeg missing" >&2; exit 1; }
 command -v cwebp  >/dev/null || { echo "cwebp missing"  >&2; exit 1; }
 id="$1"; src="$2"; here="$(cd "$(dirname "$0")/.." && pwd)"; out="$here/public/v3"
-tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
+tmp="$(mktemp -d)"; trap 'rm -rf "${tmp:?}"' EXIT
+FROM="${FROM:-0}"; FPS_D="${FPS_D:-9}"; N_D="${N_D:-72}"; FPS_M="${FPS_M:-6}"; N_M="${N_M:-48}"
 GRADE="eq=contrast=1.12,format=gray,format=rgb24"
 if [ "${LENS:-}" = "1" ]; then
   n="${LENS_N:-12}"; cols="${LENS_COLS:-3}"; px="${LENS_PX:-288}"; rows=$(( (n + cols - 1) / cols ))
@@ -26,14 +33,15 @@ if [ "${LENS:-}" = "1" ]; then
   exit 0
 fi
 mkdir -p "$out/seq/$id/d" "$out/seq/$id/m" "$out/poster" "$out/still"
-# desktop: source is 720x1280 portrait, no upscaling. 72 frames over 8 s.
-ffmpeg -v error -y -i "$src" -vf "fps=9,$GRADE" -frames:v 72 "$tmp/d%04d.png"
+rm -f "${out:?}/seq/${id:?}/d/"*.webp "${out:?}/seq/${id:?}/m/"*.webp          # a shorter pack must not leave the tail of the old one behind
+# desktop: source is 720x1280 portrait, no upscaling. N_D frames at FPS_D from second FROM (default: 72 frames over 8 s).
+ffmpeg -v error -y -ss "$FROM" -i "$src" -vf "fps=$FPS_D,$GRADE" -frames:v "$N_D" "$tmp/d%04d.png"
 for f in "$tmp"/d*.png; do b=$(basename "$f" .png); cwebp -quiet -q 74 -m 6 -sharp_yuv "$f" -o "$out/seq/$id/d/${b#d}.webp"; done
-# mobile: 540 wide, 48 frames
-ffmpeg -v error -y -i "$src" -vf "fps=6,scale=540:-2:flags=lanczos,$GRADE" -frames:v 48 "$tmp/m%04d.png"
+# mobile: 540 wide, N_M frames at FPS_M (default 48)
+ffmpeg -v error -y -ss "$FROM" -i "$src" -vf "fps=$FPS_M,scale=540:-2:flags=lanczos,$GRADE" -frames:v "$N_M" "$tmp/m%04d.png"
 for f in "$tmp"/m*.png; do b=$(basename "$f" .png); cwebp -quiet -q 68 -m 6 "$f" -o "$out/seq/$id/m/${b#m}.webp"; done
-# poster: 48 px wide first frame (CSS blurs and stretches it)
-ffmpeg -v error -y -i "$src" -vf "scale=48:-2,$GRADE" -frames:v 1 "$tmp/p.png"
+# poster: 48 px wide first frame of the pack (CSS blurs and stretches it)
+ffmpeg -v error -y -ss "$FROM" -i "$src" -vf "scale=48:-2,$GRADE" -frames:v 1 "$tmp/p.png"
 cwebp -quiet -q 40 "$tmp/p.png" -o "$out/poster/$id.webp"
 # still: static composed frame for no-motion / no-WebGL (frame at STILL_T seconds)
 ffmpeg -v error -y -ss "${STILL_T:-3.5}" -i "$src" -vf "scale=540:-2:flags=lanczos,$GRADE" -frames:v 1 "$tmp/s.png"

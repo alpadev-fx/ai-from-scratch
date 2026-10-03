@@ -1,5 +1,7 @@
 // 01 · SÍNTOMA. N1 (the printed figure shatters) then N2 (the signature) scrubbed
 // by scroll inside a framed plate. HUD brackets follow the number.
+// The two clips meet in one dissolve (the last frame of N1 into the first of N2, a plain cross-fade of two adjacent frames of the pack). N2's pack is the signing shot ONLY
+// (v3-frames.sh, FROM=1.875: the source clip opens on a window that is bright for its first 1.6 s and ends on a hard cut to a different shot; both read as a flash).
 import { A } from './state';
 import { register } from './core';
 import { Bracket, card, headline } from './hud';
@@ -13,7 +15,9 @@ const NUM: Array<[number, Box]> = [
   [2.5, [.20, .54, .80, .65]], [3, [.16, .55, .86, .68]], [3.5, [.16, .57, .84, .72]], [4, [.08, .63, .82, .73]], [4.5, [.08, .73, .94, .83]],
   [5, [.08, .78, .94, .91]], [5.5, [.08, .87, .94, .98]],
 ];
-const SIG: Box = [.10, .63, .62, .79]; // N2: the signature line
+const SIG: Box = [.11, .56, .64, .76]; // N2: the signature (in the final frame its loop starts at x 15 %, its tail ends at 59 %, and it spans y 59-73 % of the plate; a few % of margin on every side)
+// Frames in each clip's pack. N1: the packs the hero shipped with (72 desktop, 48 mobile). N2: 56 on both, 12 fps from second 1.875 of the source to its second 6.458.
+const N2_FRAMES = 56;
 function boxAt(t: number): Box {
   let i = 0; while (i < NUM.length - 2 && t > NUM[i + 1][0]) i++;
   const a = NUM[i], b = NUM[i + 1], u = clamp((t - a[0]) / (b[0] - a[0]));
@@ -26,8 +30,8 @@ export function initC01() {
   const D = A.copy;
   const head = headline(copy), cd = card(cardEl);
   const variant: 'd' | 'm' = A.mobile ? 'm' : 'd';
-  const per = variant === 'm' ? 48 : 72;
-  const seq = new Seq([['n1', per], ['n2', per]], variant);
+  const len1 = variant === 'm' ? 48 : 72, len2 = N2_FRAMES, last = len1 + len2 - 1;
+  const seq = new Seq([['n1', len1], ['n2', len2]], variant);
   (ch as any).seq = seq;
   const bNum = new Bracket(st, [D.cifra, D.fuente], D.ilus), bSig = new Bracket(st, [D.s1Lec, D.s1C]);
   ch.warm = () => seq.warm();
@@ -45,19 +49,19 @@ export function initC01() {
   ch.resize = () => layout(ch.p);
   ch.frame = (p, dt, t) => {
     layout(p);
-    // global frame index over both clips
-    const nAll = 2 * 72, join = 0.55;
+    // the pack's frame index (both clips end to end): N1 runs to the middle of the pin, one dissolve takes the last frame of N1 to the first of N2 (the shader blends the two
+    // ADJACENT frames, so the dissolve is nothing but the fraction between them), N2 runs to 93 %
     let fi: number;
     if (p < 0.06) fi = 0;
-    else if (p < 0.5) fi = lerp(0, 71, (p - 0.06) / 0.44);
-    else if (p < join + 0.05) fi = lerp(71, 72, seg(p, 0.5, 0.6));
-    else if (p < 0.93) fi = lerp(72, 143, (p - 0.6) / 0.33);
-    else fi = 143;
-    fi = clamp(fi, 0, 143) * (seq.n - 1) / (nAll - 1);
-    const inN1 = fi < (seq.n / 2);
-    const tClip = (inN1 ? fi / (seq.n / 2 - 1) : (fi - seq.n / 2) / (seq.n / 2 - 1)) * 7.9;
+    else if (p < 0.5) fi = lerp(0, len1 - 1, (p - 0.06) / 0.44);
+    else if (p < 0.6) fi = lerp(len1 - 1, len1, ss(seg(p, 0.5, 0.6)));
+    else if (p < 0.93) fi = lerp(len1, last, (p - 0.6) / 0.33);
+    else fi = last;
+    fi = clamp(fi, 0, last);
+    const inN1 = fi < len1;
+    const tClip = (fi / (len1 - 1)) * 7.9;           // N1's clip second (the number's HUD box is keyed to it; it is only used while the footage is N1)
     const shatter = Math.sin(Math.PI * seg(p, 0.24, 0.4));
-    const joinB = Math.sin(Math.PI * seg(p, 0.46, 0.62));
+    const joinB = Math.sin(Math.PI * seg(p, 0.46, 0.62)) ** 2;       // the focus dip across the dissolve: eased at both ends (sin^2 has no slope there), so the picture never snaps back into focus
     const out = seg(p, 0.9, 0.97);
     // plate frame (DOM) and brackets
     const bk = base.map(v => v.toFixed(0)).join(',');
@@ -80,9 +84,9 @@ export function initC01() {
     }
     A.gl && A.foot && A.gl.set('c01', {                 // no layer until the footage is decoded: the poster stays, and GL never draws a black plate
       kind: 'foot', seq, f: fi, plate, fill: A.mobile ? 0 : 1,
-      focus: (0.25 + 0.75 * eio(seg(p, 0, 0.12))) * (1 - 0.7 * joinB) * (1 - 0.4 * seg(p, 0.93, 1)),
+      focus: (0.25 + 0.75 * eio(seg(p, 0, 0.12))) * (1 - 0.7 * joinB) * (1 - 0.4 * ss(seg(p, 0.93, 1))),
       exp: 0.78 + 0.22 * seg(p, 0, 0.1),
-      glitch: 0.55 * shatter + 1.0 * joinB,
+      glitch: 0.55 * shatter,                           // the shatter's own bands; the join is a plain dissolve
       post: { bloom: 0.55 + 0.7 * shatter, streak: 0.12, ca: 0.0016 + 0.003 * shatter, grain: 0.06, vign: 0.42, thr: 0.5, mb: 1.4 },
     });
   };

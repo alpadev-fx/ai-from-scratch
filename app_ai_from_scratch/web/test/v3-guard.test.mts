@@ -7,7 +7,7 @@ import { ctxChips, ctxOf, draw, softmax, tokenize } from '../src/aegis/specimens
 import { candidatos, modulos } from '../src/data/landing.ts';
 import { WORDMARK } from '../src/aegis/wordmark.ts';
 import { KU, LAP, lap, lit } from '../src/aegis/fx/wordmark-phase.ts';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 
 test('guard throws on a city, on plural courses, and lets the tokenizer sentence through', () => {
   assert.throws(() => guard('t', 'Hecho en Medellín'), /forbidden/);
@@ -331,4 +331,28 @@ test('the wordmark names its font and its OFL licence, the file header says the 
   const gen = readFileSync(new URL('../scripts/v3-wordmark.py', import.meta.url), 'utf8');
   assert.ok(gen.includes(f.sha256) && gen.includes(f.commit), 'the generator pins the same font (commit and sha256)');
   assert.ok(/got = hashlib\.sha256\(data\)\.hexdigest\(\)\s+if got != FONT\['sha256'\]:\s+die\(f"the font is not the pinned one/.test(gen), 'the generator fails closed on a font that is not the pinned one');
+});
+
+// ---------- the hero's footage (c01): the packs on disk are the packs the code counts, and what made it flicker stays out ----------
+test('the hero frame packs on disk are exactly the ones c01.ts counts (a short pack leaves the scrub on a stale frame, a long one is bytes nobody sees)', () => {
+  const src = readFileSync(new URL('../src/aegis/c01.ts', import.meta.url), 'utf8');
+  const n2 = Number(/const N2_FRAMES = (\d+)/.exec(src)?.[1]), len = /const len1 = variant === 'm' \? (\d+) : (\d+)/.exec(src);
+  assert.ok(n2 > 0 && len, 'c01.ts keeps its frame counts where this test looks for them');
+  const want: Array<[string, number]> = [['n1/d', Number(len![2])], ['n1/m', Number(len![1])], ['n2/d', n2], ['n2/m', n2]];
+  for (const [dir, n] of want) {
+    const files = readdirSync(new URL(`../public/v3/seq/${dir}/`, import.meta.url)).filter((f) => f.endsWith('.webp')).sort();
+    assert.equal(files.length, n, `${dir} has ${files.length} frames and c01.ts says ${n}`);
+    files.forEach((f, i) => assert.equal(f, String(i + 1).padStart(4, '0') + '.webp', `${dir}: the frames run 0001... without a gap (${f} at ${i})`));
+  }
+});
+
+test('the hero cannot flicker the way it did: the grain is the same on every frame, and the join between the two clips is a plain dissolve', () => {
+  const eng = readFileSync(new URL('../src/aegis/engine.ts', import.meta.url), 'utf8'), c01 = readFileSync(new URL('../src/aegis/c01.ts', import.meta.url), 'utf8');
+  const grain = (t: string) => /float g = \(h21\([^;]*;/.exec(t)?.[0] ?? '', glitch = (t: string) => /glitch:[^\n]*/.exec(t)?.[0] ?? '';
+  assert.ok(grain(eng), 'the finishing pass still has its grain line');
+  assert.ok(!/time/.test(grain(eng)), 'grain re-drawn on every frame shimmers on a picture that is not moving');
+  assert.ok(glitch(c01) && !/joinB/.test(glitch(c01)), 'a glitch on the join is a flash on the first frame of the second clip');
+  // the two rules can fail
+  assert.ok(/time/.test(grain('float g = (h21(vUv * res * 1.31 + fract(time * 13.37) * 173.0) - 0.5) * grain;')));
+  assert.ok(/joinB/.test(glitch('      glitch: 0.55 * shatter + 1.0 * joinB,')));
 });

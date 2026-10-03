@@ -129,6 +129,7 @@ html:not([data-theme="paper"]) .plate{box-shadow:0 0 70px rgba(10,132,255,.14);b
 /* The context row (specimen B words + the sampled token) only exists in engine mode; the static page shows the context inside the card, never next to the Cartagena tokens. */
 .chips.ctx{display:none}
 .sent{display:none}
+.tokref{margin:-14px 0 0;font:500 10px/1.4 var(--m);letter-spacing:.16em;color:var(--l3)}
 .tk{display:flex;align-items:center;justify-content:center;padding:14px 18px;border:1px solid var(--hair);font:400 clamp(20px,2.4vw,28px)/1 var(--m);white-space:nowrap;background:var(--panel)}
 .tk.ans{border-color:var(--ac);color:var(--ac)}
 .tk b{font-weight:400}
@@ -283,6 +284,7 @@ html.gl-on .sbk{display:none}
 html.fxl #cL .copy{top:calc(var(--hdr) + 12svh)}
 html.fxl .chips{position:absolute;inset:0;display:block;z-index:3;pointer-events:none}
 html.fxl .sent{display:block;position:absolute;left:0;top:0;z-index:3;opacity:0;font:400 clamp(17px,1.7vw,26px)/1 var(--m);white-space:nowrap;color:var(--l1);will-change:transform,opacity;pointer-events:none}
+html.fxl .tokref{position:absolute;left:0;top:0;z-index:3;margin:0;opacity:0;white-space:nowrap;font-size:10px;will-change:transform,opacity;pointer-events:none}
 html.fxl .tk{position:absolute;left:0;top:0;visibility:hidden;opacity:0;padding:calc(var(--pad,0px)*.75) var(--pad,0px);border:1px solid transparent;background:transparent;font:400 clamp(17px,1.7vw,26px)/1 var(--m);color:var(--l1);will-change:transform,opacity;transition:border-color .25s,background .25s,box-shadow .25s}
 html.fxl .tk.on{border-color:var(--l3)}
 html.fxl .tk.h{border-color:var(--l1)}

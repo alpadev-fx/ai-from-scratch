@@ -30,7 +30,10 @@ import { jsonSafe } from '../lib/json-safe';
 import PrefToggles from '../components/PrefToggles.astro';
 import V3Cta from '../components/V3Cta.astro';
 import { TOKENS } from '../lib/theme-css';
-import { tokenize, candRowsHTML, ctxOf, ctxChips } from '../aegis/specimens';
+import { tokenize, candRowsHTML, ctxOf } from '../aegis/specimens';
+import { show, wordsOf, piecesOf } from '../aegis/tokens';
+import { chipStrings } from '../aegis/token-strings';
+import TOKEN_FILE from '../data/v3-tokens.json';
 import { guard, guarded, withoutCity, assertPriced } from '../aegis/copy-guard';
 import { WORDMARK } from '../aegis/wordmark';
 import V3CSS from '../aegis/v3.css?raw';
@@ -70,11 +73,17 @@ const prueba = N.prueba.map((x, i) => guard(`narrative.prueba[${i}]`, withoutCit
 [N.garantiaTxt, N.moneda, N.pagoTit, N.pagoTxt, ...N.medios].forEach((x, i) => guard(`narrative[${i}]`, x));
 
 const sentence = P.aEjemplo;                 // «Cartagena es hermosa» — the example of specimen A (lesson 05)
-const toks = tokenize(sentence);
+// ILLUSTRATIVE: specimen A of chapter 08 is the free-typing box, cut by the page's own heuristic (specimens.ts tokenize), and it is labelled ILUSTRATIVO. It is the ONLY
+// caller of tokenize() left: every other chip on the page is a real o200k token (src/data/v3-tokens.json, cut by web/scripts/v3-tokens.py).
+const illusToks = tokenize(sentence);
 // The candidates (Max, Luna…) answer specimen B's context, not «Cartagena es hermosa»: chapter 04 shows them ONLY after
 // that sentence, which is the first sentence of P.bD (no new text). Chapter 08 uses the same line as its prompt.
 const ctx = ctxOf(P.bD);                     // «Le pediste un nombre para tu perro.»
-const ctxToks = ctxChips(ctx);               // same tokenizer as specimen A: «Le | pedis | te | un | nombr | e | para | tu | perro | .»
+// Real tokens (o200k_base, GPT-4o). A string that is shown as chips and is not in the committed file stops the render (the page answers 500), like a stale price does.
+const TOK = (TOKEN_FILE as any)[lang] as Record<string, Array<[string, ...number[]]>>;
+const chipText = chipStrings({ P, V, mods, price: precioBig, ctx });
+const PIECES = Object.fromEntries(chipText.map((c) => [c.text, piecesOf(TOK, c.text)]));   // what the effects read from the page (#v3-tokens); not TOKENS: that is the theme's CSS tokens (theme-css.ts)
+const realA = piecesOf(TOK, sentence), realB = piecesOf(TOK, ctx), realBw = wordsOf(realB);   // chapter 04: row A, and the dog context with the word each piece belongs to
 const sym = [
   { lbl: P.s1Lbl, lec: P.s1Lec, h: P.s1H, d: P.s1D, c: P.s1C },
   { lbl: P.s2Lbl, lec: P.s2Lec, h: P.s2H, d: P.s2D, c: P.s2C },
@@ -283,10 +292,11 @@ setTimeout(function(){
     </div>
     <div class="sent" aria-hidden="true">{sentence}</div>
     <div class="chips" aria-label={sentence}>
-      {toks.map((tk) => (<div class="tk"><b>{tk}</b></div>))}
+      {realA.map((p) => (<div class="tk"><b>{show(p[0])}</b></div>))}
     </div>
+    <p class="tokref">{V.tokReal}</p>
     <div class="chips ctx" aria-hidden="true">
-      {ctxToks.map((c) => (<div class="tk cw" data-w={c.w}><b>{c.t}</b></div>))}
+      {realB.map((p, i) => (<div class="tk cw" data-w={realBw[i]}><b>{show(p[0])}</b></div>))}
       <div class="tk ans"><b>{cands[0].name}</b></div>
     </div>
     <aside class="pcard" aria-label={V.cand}>
@@ -383,9 +393,10 @@ setTimeout(function(){
       <div class="meta"><span>{P.aLbl}</span><span class="ac">{P.espInter}</span></div>
       <h3>{P.aH}</h3><p>{P.aD}</p>
       <input id="tokin" class="tokin" type="text" value={P.aEjemplo} maxlength="46" aria-label={P.aH}>
-      <div id="tokens" class="toks">{toks.map((tk) => (<div class="tokc">{tk}</div>))}</div>
+      <div class="ph">{V.ilus}</div>
+      <div id="tokens" class="toks">{illusToks.map((tk) => (<div class="tokc">{tk}</div>))}</div>
       <div class="stats">
-        <div><b id="tokenCount" class="ac">{toks.length}</b><span>{P.aTokens}</span></div>
+        <div><b id="tokenCount" class="ac">{illusToks.length}</b><span>{P.aTokens}</span></div>
         <div><b id="wordCount">{sentence.split(/\s+/).length}</b><span>{P.aPalabras}</span></div>
         <div><b id="charCount">{sentence.replace(/\s/g, '').length}</b><span>{P.aLetras}</span></div>
       </div>
@@ -531,6 +542,7 @@ setTimeout(function(){
 </main>
 
 <script type="application/json" id="v3-data" is:inline set:html={jsonSafe(DATA)}></script>
+<script type="application/json" id="v3-tokens" is:inline set:html={jsonSafe(PIECES)}></script>
 <script>
   import { boot } from '../aegis/main';
   boot();

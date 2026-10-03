@@ -1,8 +1,8 @@
 // Δ · CÓMO PIENSA — port of AEGIS llm.js, rebuilt around the course's own example.
-// "Cartagena es hermosa" splits into the five tokens the real tokenizer prints
-// (imported from specimens.ts, the same function the specimen uses) and they become
-// vectors (lesson 05). From the next-token step on (lessons 06, 08, 09) the context
-// is specimen B's own, the dog, cut by the SAME tokenizer (Le | pedis | te | un | nombr | e ...): layers carry those pieces, the candidates (ILUSTRATIVO)
+// "Cartagena es hermosa" splits into the tokens o200k_base (GPT-4o's vocabulary) really cuts it into, and they become
+// vectors (lesson 05). The page renders those chips from src/data/v3-tokens.json (cut with tiktoken by web/scripts/v3-tokens.py), so nothing here cuts text
+// by a heuristic of its own: this file reads the chips from the DOM. From the next-token step on (lessons 06, 08, 09) the context
+// is specimen B's own, the dog, in real tokens too (Le | ·ped | iste | ·un | ·nombre | ...; «·» is a leading space): layers carry those pieces, the candidates (ILUSTRATIVO)
 // answer THAT context, attention looks BACK only across it, the loop appends the
 // sampled token to it and temperature then reshuffles the pick. A candidate name is
 // never shown next to the Cartagena tokens: they are two rows that never overlap.
@@ -11,7 +11,7 @@ import type * as ThreeNS from 'three';
 import { A } from './state';
 import { register } from './core';
 import { card as _c, headline } from './hud';
-import { softmax, pctText, tokenize } from './specimens';
+import { softmax, pctText } from './specimens';
 import type { GL } from './engine';
 import { $, $$, clamp, eio, eo, lerp, rng, seg, ss } from './util';
 
@@ -27,17 +27,17 @@ export function initLLM(gl: GL) {
   const copy = $('.copy', st)!, chipsA = $('.chips:not(.ctx)', st)!, chipsB = $('.chips.ctx', st)!, panel = $('.steps-wrap', st)!, pCard = $('.pcard', st)!;
   const head = headline(copy);
   void _c;
-  const sentence: string = D.sentence, toks = tokenize(sentence);
-  if (toks.length !== 5) console.warn('[v3] expected 5 tokens, got', toks.length);
-  const NQ = toks.length;                              // row A: the Cartagena tokens (lesson 05)
-  const elA = $$('.tk', chipsA).slice(0, NQ), elB = $$('.tk', chipsB), sentEl = $('.sent', st) as HTMLElement;
+  const elA = $$('.tk', chipsA), elB = $$('.tk', chipsB), sentEl = $('.sent', st) as HTMLElement, refEl = $('.tokref', st) as HTMLElement | null;
+  const toks = elA.map((c) => c.textContent || '');    // row A: the Cartagena tokens (lesson 05), as many as the vocabulary cuts the sentence into
+  const NQ = toks.length;
+  if (NQ < 2) console.warn('[v3] row A has', NQ, 'chips');
   if (elB.length < 3) console.warn('[v3] context row has', elB.length, 'chips');
   const NB = Math.max(1, elB.length - 1), NT = NB + 1;  // row B: NB context pieces (tokens), then the sampled next token
   // word each piece came from (data-w, written by the page from the same tokenizer); the sampled token starts the next word
   const wd = elB.map((c, i) => (c.dataset.w != null ? +c.dataset.w : i)); wd[NB] = wd[NB - 1] + 1;
   const lastOf = (w: number) => { for (let i = NB; i >= 0; i--) if (wd[i] === w) return i; return -1; };
   const nW = wd[NB];                                    // number of words in the context = index of the new word
-  const logA = toks.join(' · '), logB = elB.slice(0, NB).map((e) => e.textContent || '').join(' · ');   // each row's tokens, for the HUD log
+  const logA = toks.join(' | '), logB = elB.slice(0, NB).map((e) => e.textContent || '').join(' | ');   // each row's tokens, for the HUD log
   const cands = D.candidatos as Array<{ name: string; logit: number }>;
   const candRows = $$('.crow', pCard);
   const dial = $('.dial', pCard) as HTMLElement | null, dialV = $('.dialv', pCard);
@@ -283,6 +283,13 @@ export function initLLM(gl: GL) {
       _ea.set(ancB[a.i].x, ancB[a.i].y + lift, 0); _eb.set(ancB[a.j].x, ancB[a.j].y + lift, 0);
       bez(_ea, _eb, h, tt, _q); pulseP.set([_q.x, _q.y, _q.z], k * 3); pulseA[k] = env * on * Math.min(visB(a.i), visB(a.j)) * Math.min(1, w * 3) * 0.9; });
     (pulseGeo.attributes.position as ThreeNS.BufferAttribute).needsUpdate = true; (pulseGeo.attributes.aA as ThreeNS.BufferAttribute).needsUpdate = true;
+    // ----- the factual label of the chips (real o200k tokens) rides under whichever row is on screen
+    if (refEl) {
+      const oA = visV * outA, oB = visB(0), onA = oA >= oB, rowP = onA ? posA : posB, n = onA ? NQ : NB;
+      let cxr = 0, my = 0; for (let i = 0; i < n; i++) { cxr += rowP[i].x; my = Math.max(my, rowP[i].y); } cxr /= Math.max(1, n);
+      refEl.style.transform = `translate3d(${cxr.toFixed(1)}px,${(my + (mob ? 30 : 44)).toFixed(1)}px,0) translate(-50%,0)`;
+      refEl.style.opacity = Math.max(oA, oB).toFixed(3);
+    }
     // ----- DOM chips over their 3D anchors
     elA.forEach((c, i) => {                       // row A: the Cartagena tokens, gone before the context arrives
       let o = visV * outA; if (p < 0.02 + i * 0.008) o = 0;

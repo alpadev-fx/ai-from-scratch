@@ -552,6 +552,8 @@ export const STR = {
         tabTok: 'TOKENS', tabNext: 'SIGUIENTE TOKEN', tabCtx: 'CONTEXTO', tabTemp: 'TEMPERATURA', lec: 'LECCIÓN',
         logVec: 'VECTORES', logAtt: 'ATENCIÓN · SOLO HACIA ATRÁS', logLay: 'CAPAS', logNext: 'SIGUIENTE TOKEN', logLoop: 'BUCLE',
         cand: 'CANDIDATOS', scroll: 'DESLIZA',
+        // — NUEVO, a la espera del visto bueno del dueño: la fuente factual de los chips (tokens reales de o200k_base, el vocabulario de GPT-4o, cortados con tiktoken) —
+        tokReal: 'TOKENS REALES · o200k (GPT-4o)',
         // — variantes de prod sin el plural «cursos» ni la ciudad —
         vivoV: 'El curso no se queda quieto: cuando la IA cambia, reescribo lo que quedó viejo. Se van sumando tutoriales, labs y actualizaciones, incluidos mientras tu acceso esté activo. Aplican términos y condiciones.',
         preWhy3V: 'Esto lo hace una persona, no una empresa con equipo de ventas. Y lo que voy aprendiendo lo voy subiendo: tutoriales, labs y actualizaciones, incluidos en tu suscripción.',
@@ -1266,6 +1268,8 @@ export const STR = {
         tabTok: 'TOKENS', tabNext: 'NEXT TOKEN', tabCtx: 'CONTEXT', tabTemp: 'TEMPERATURE', lec: 'LESSON',
         logVec: 'VECTORS', logAtt: 'ATTENTION · LOOKS BACK ONLY', logLay: 'LAYERS', logNext: 'NEXT TOKEN', logLoop: 'LOOP',
         cand: 'CANDIDATES', scroll: 'SCROLL',
+        // — NUEVO, pending the owner's approval: the factual source of the chips (real o200k_base tokens, GPT-4o's vocabulary, cut with tiktoken) —
+        tokReal: 'REAL TOKENS · o200k (GPT-4o)',
         // — variantes de prod sin el plural «cursos» ni la ciudad —
         vivoV: 'The course does not stand still: when AI changes, I rewrite what went stale. Tutorials, labs and updates keep getting added, included while your access is active. Terms and conditions apply.',
         preWhy3V: 'One person runs this, not a company with a sales team. And what I keep learning, I keep uploading: new tutorials, labs and updates, included in your subscription.',

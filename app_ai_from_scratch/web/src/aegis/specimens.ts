@@ -1,10 +1,12 @@
 // The two interactive specimens, exactly as index.astro runs them (same
 // tokenizer, same softmax, same markup per row). Pure functions + a mount() for
-// the browser, so the Δ chapter and the SSR page share ONE tokenizer: the five
-// tokens the chapter animates are the five the specimen prints.
+// the browser.
+// `tokenize` is index.astro's heuristic (cuts of 5 and then 4 letters), NOT a real tokenizer: it only runs the free-typing box of chapter 08
+// (specimen A), which says so (ILUSTRATIVO). Every other chip on /v3 is a real o200k token: see tokens.ts. Nothing else may call it
+// (web/test/v3-guard.test.mts fails if chapter 04 or an effect does).
 import type { Candidate } from '../data/landing';
 
-/** index.astro's tokenizer, verbatim. */
+/** index.astro's tokenizer, verbatim. ILLUSTRATIVE: a heuristic, used only by chapter 08's free-typing specimen. */
 export function tokenize(s: string): string[] {
   const out: string[] = [];
   (s || '').trim().split(/\s+/).filter(Boolean).forEach((w) => {
@@ -21,17 +23,6 @@ export function tokenize(s: string): string[] {
 export function ctxOf(s: string): string {
   const t = (s || '').trim(), i = t.indexOf('. ');
   return i > 0 ? t.slice(0, i + 1) : t;
-}
-
-/** The Δ context row. It is cut with the SAME tokenizer as specimen A and the interactive tokenizer, so lesson 05's
- *  «ve trozos» holds for the dog sentence too: `t` is exactly `tokenize(s)`. `w` is the index of the whitespace-separated
- *  word each piece came from (attention treats the pieces of one word as one unit); concatenating the pieces of every
- *  word and joining the words with a space gives the sentence back. */
-export function ctxChips(s: string): Array<{ t: string; w: number }> {
-  const words = (s || '').trim().split(/\s+/).filter(Boolean), out: Array<{ t: string; w: number }> = [];
-  let w = 0, acc = '';
-  for (const t of tokenize(s)) { out.push({ t, w }); acc += t; if (acc === words[w]) { w++; acc = ''; } }
-  return out;
 }
 
 /** Probabilities (0..1) of every candidate at temperature T (slider/100). */

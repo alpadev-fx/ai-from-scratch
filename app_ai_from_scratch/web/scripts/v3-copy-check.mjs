@@ -21,8 +21,14 @@ import { existsSync, readFileSync } from 'node:fs';
 import { STR } from '../src/lib/i18n.ts';
 import { PRECIO_VISUAL, PRECIO_TEXTO } from '../src/lib/price.ts';
 import { preguntas, modulos, candidatos } from '../src/data/landing.ts';
-import { ctxOf, tokenize } from '../src/aegis/specimens.ts';
+import { ctxOf } from '../src/aegis/specimens.ts';
+import { piecesOf, show, wordsOf } from '../src/aegis/tokens.ts';
+import { chipStrings } from '../src/aegis/token-strings.ts';
 import { SANCTIONED, guard, violations, assertPriced } from '../src/aegis/copy-guard.ts';
+
+// The committed real tokens (o200k_base, cut with tiktoken by web/scripts/v3-tokens.py): every chip on the page must be one of these pieces.
+const TOKEN_FILE = JSON.parse(readFileSync(new URL('../src/data/v3-tokens.json', import.meta.url), 'utf8'));
+const chipSources = (lang) => ({ P: STR[lang].pub.land, V: STR[lang].pub.v3, mods: modulos(lang), price: PRECIO_VISUAL[lang], ctx: ctxOf(STR[lang].pub.land.bD) });
 
 const BASE = process.env.BASE ?? 'http://127.0.0.1:4321';
 // The narrative changes with the visitor's market, so every market is fetched: a city that only shows for one market is the
@@ -49,7 +55,8 @@ const FX_COPY = /\.(?:rp|tag|you|ia|who|shout|bt|beat|chat|trio|tri|figs|fig|big
 const FX_HIDES = /(?:^|;)\s*(?:opacity\s*:\s*0(?![.\d])|visibility\s*:\s*hidden|display\s*:\s*none|clip-path\s*:|color\s*:\s*transparent|font-size\s*:\s*0\b|transform\s*:\s*scale\(0\b)/;
 const CTA_CHAPTERS = ['c03', 'c07', 'c10', 'c11'];       // CTA rows with the price label + the guarantee line; c14 has its in-card button; c16 closes
 const ALLOWED_NUM = new Set(['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '14', '16', '23', '24', '30', '31', '36', '40', '94', '100', '100.000', '100,000',
-  '39.990', '39,990', '70.000.000.000', '70,000,000,000', '18,615', '0.30', '0', '000', '1.1', '18', '20', '70', '83', ...Array.from({ length: 16 }, (_, i) => String(i + 1).padStart(2, '0'))]);
+  '39.990', '39,990', '70.000.000.000', '70,000,000,000', '18,615', '0.30', '0', '000', '1.1', '18', '20', '70', '83', '200',    // 200: «o200k», the vocabulary's own name in the chips' source label
+  ...Array.from({ length: 16 }, (_, i) => String(i + 1).padStart(2, '0'))]);
 
 // A currency amount is a number touching a currency mark, on either side («$39.990», «39.990 COP», «COP 39.990», «US$10», «10 dólares»). The page may print
 // exactly one: the published price (PRECIO_VISUAL, or its «N COP» form).
@@ -125,28 +132,57 @@ function required(lang) {
 // the Cartagena tokens, not even in the server-rendered markup the no-JS / reduced-motion / no-WebGL visitor gets. The string is
 // a cut of bD (ctxOf), so there is no new copy; this reads the STRUCTURE of the Δ chapter.
 function deltaRule(html, lang) {
-  const out = [], ctx = ctxOf(STR[lang].pub.land.bD), names = candidatos(lang).map((c) => c.name);
+  const out = [], ctx = ctxOf(STR[lang].pub.land.bD), names = candidatos(lang).map((c) => c.name), P = STR[lang].pub.land, V = STR[lang].pub.v3;
   const sec = (html.match(/<section class="ch" id="cL"[\s\S]*?<\/section>/) ?? [''])[0];
   const iA = sec.indexOf('<div class="chips"'), iB = sec.indexOf('<div class="chips ctx"');
   if (!sec || iA < 0 || iB < iA) return ['chapter or its two chip rows missing / out of order'];
   const rowA = sec.slice(iA, iB), rowB = sec.slice(iB, sec.indexOf('<aside', iB));
-  const nA = (rowA.match(/class="tk"/g) ?? []).length;
-  if (nA !== 5) out.push(`the Cartagena row has ${nA} chips, expected 5`);
+  // the chips are REAL tokens (o200k_base): row A is the cut of the example sentence, row B the cut of the dog context, piece for piece, a leading space shown as «·»
+  const realA = piecesOf(TOKEN_FILE[lang], P.aEjemplo), realB = piecesOf(TOKEN_FILE[lang], ctx);
+  const gotA = [...rowA.matchAll(/<div class="tk"><b>([^<]*)<\/b><\/div>/g)].map((m) => decode(m[1]));
+  if (gotA.join('|') !== realA.map((p) => show(p[0])).join('|')) out.push(`the Cartagena row is [${gotA.join(' | ')}], expected the real tokens [${realA.map((p) => show(p[0])).join(' | ')}]`);
+  if (((rowA.match(/class="tk"/g) ?? []).length) !== gotA.length) out.push('a Cartagena chip has an unexpected shape');
   if (/class="[^"]*\bans\b[^"]*"/.test(rowA)) out.push('a candidate chip (.ans) is inside the Cartagena row');
   const textA = norm(rowA.replace(/<[^>]+>/g, ' '));
   for (const n of names) if (textA.includes(n)) out.push(`candidate name "${n}" is in the Cartagena row`);
-  // the context row is cut by the SAME tokenizer as the Cartagena row (lesson 05: «no ve palabras, ve trozos»), never by spaces
   const chips = [...rowB.matchAll(/<div class="tk cw" data-w="(\d+)"><b>([^<]*)<\/b><\/div>/g)].map((m) => ({ w: +m[1], t: decode(m[2]) }));
-  const want = tokenize(ctx), got = chips.map((c) => c.t);
-  if (got.length !== want.length || got.some((t, i) => t !== want[i])) out.push(`context row chips are [${got.join(' | ')}], expected tokenize(ctx) = [${want.join(' | ')}]`);
+  if (chips.map((c) => c.t).join('|') !== realB.map((p) => show(p[0])).join('|')) out.push(`context row chips are [${chips.map((c) => c.t).join(' | ')}], expected the real tokens [${realB.map((p) => show(p[0])).join(' | ')}]`);
+  if (chips.map((c) => c.w).join() !== wordsOf(realB).join()) out.push(`context chips carry the word indexes [${chips.map((c) => c.w)}], expected [${wordsOf(realB)}]`);
   if (((rowB.match(/class="tk cw"/g) ?? []).length) !== chips.length) out.push('a context chip has no data-w word index');
-  const regroup = []; for (const c of chips) regroup[c.w] = (regroup[c.w] ?? '') + c.t;
-  if (norm(regroup.join(' ')) !== norm(ctx)) out.push(`the context chips regroup into "${regroup.join(' ')}", expected "${ctx}"`);
   const ans = (html.match(/class="tk ans"/g) ?? []).length;
   if (ans !== 1) out.push(`${ans} candidate chips on the page, expected exactly 1 (after the context row)`);
   else if (html.indexOf('class="tk ans"') < html.indexOf('<div class="chips ctx"')) out.push('the candidate chip comes before the context row');
   const pc = sec.match(/<p class="pctx">([\s\S]*?)<\/p>/);
   if (!pc || norm(pc[1]) !== norm(ctx)) out.push(`the card context line is "${pc ? norm(pc[1]) : '(missing)'}", expected "${ctx}"`);
+  // the factual source of the chips, once, under row A (NUEVO, pending the owner's approval: pub.v3.tokReal)
+  const refs = [...sec.matchAll(/<p class="tokref">([\s\S]*?)<\/p>/g)].map((m) => norm(m[1]));
+  if (refs.length !== 1 || refs[0] !== norm(V.tokReal)) out.push(`the source label of the chips is [${refs.join(' | ')}], expected exactly one «${V.tokReal}»`);
+  else if (sec.indexOf('<p class="tokref">') < iA || sec.indexOf('<p class="tokref">') > iB) out.push('the source label is not between the two chip rows');
+  return out;
+}
+
+// ---------- real tokens: what the page ships for the effects (#v3-tokens) ----------
+// Every string that is a chip must be in the committed file (the page answers 500 otherwise), the page must ship exactly the pieces of that file, those pieces must join back into
+// the strings, and every one of those strings must be on the page: a copy change with a stale file, or a file edited by hand into something that is not a cut, is red here and in
+// web/test/v3-guard.test.mts. The ILUSTRATIVO tag stays on the free-typing specimen, the only heuristic cut left.
+function tokensRule(html, lang) {
+  const out = [], V = STR[lang].pub.v3;
+  const m = html.match(/<script type="application\/json" id="v3-tokens"[^>]*>([\s\S]*?)<\/script>/g) ?? [];
+  if (m.length !== 1) return [`the page ships ${m.length} #v3-tokens blocks, expected 1`];
+  let shipped; try { shipped = JSON.parse(m[0].replace(/^<script[^>]*>/, '').replace(/<\/script>$/, '')); } catch (e) { return [`#v3-tokens is not JSON (${e.message})`]; }
+  const want = chipStrings(chipSources(lang)), texts = [...new Set(want.map((c) => c.text))], text = textOf(html);
+  const keys = Object.keys(shipped);
+  for (const t of texts) if (!(t in shipped)) out.push(`#v3-tokens has no entry for «${t.slice(0, 40)}»`);
+  for (const k of keys) if (!texts.includes(k)) out.push(`#v3-tokens has an entry that is not a chip string: «${k.slice(0, 40)}»`);
+  for (const t of texts) if (t in shipped) {
+    const p = shipped[t];
+    if (!Array.isArray(p) || !p.length || p.map((x) => x[0]).join('') !== t) out.push(`the pieces of «${t.slice(0, 40)}» do not join back into it`);
+    else if (JSON.stringify(p) !== JSON.stringify(TOKEN_FILE[lang][t])) out.push(`the pieces of «${t.slice(0, 40)}» are not the ones in v3-tokens.json`);
+    if (!text.includes(norm(t))) out.push(`the chip string «${t.slice(0, 40)}» is not on the page (a stale token file)`);
+  }
+  // specimen A of chapter 08 (the free-typing box) is the one illustrative cut left, and says so right above its chips
+  const c08 = (html.match(/<section id="c08"[\s\S]*?<\/section>/) ?? [''])[0];
+  if (!new RegExp(`<div class="ph">${V.ilus}</div>\\s*<div id="tokens"`).test(c08)) out.push(`chapter 08's free-typing specimen does not carry its «${V.ilus}» tag right above its chips`);
   return out;
 }
 
@@ -341,6 +377,7 @@ function judge(html, lang) {
 
   for (const m of deltaRule(html, lang)) f.push(`delta: ${m}`);
   for (const m of wordmarkRule(html)) f.push(`wordmark: ${m}`);
+  for (const m of tokensRule(html, lang)) f.push(`tokens: ${m}`);
   return f;
 }
 
@@ -652,18 +689,44 @@ function selfTest(html, lang) {
 }
 // A gate that cannot fail proves nothing: each way the Δ defect can come back must be caught by deltaRule.
 function deltaSelfTest(html, lang) {
-  const ctx = ctxOf(STR[lang].pub.land.bD), splits = tokenize(ctx).join(' ') !== ctx;
+  const ctx = ctxOf(STR[lang].pub.land.bD), realA = piecesOf(TOKEN_FILE[lang], STR[lang].pub.land.aEjemplo), first = show(realA[0][0]);
+  const heur = lang === 'es' ? ['Carta', 'gena', 'es', 'hermo', 'sa'] : ['Carta', 'gena', 'is', 'beaut', 'iful'];   // the page's old heuristic cut of the example sentence
+  const rowAhtml = (parts) => parts.map((t) => `<div class="tk"><b>${t}</b></div>`).join('');
   const mut = {
     'candidate chip back in the Cartagena row': html.replace('<div class="chips ctx"', '<div class="tk ans"><b>Max</b></div><div class="chips ctx"'),
     'card context line removed': html.replace(/<p class="pctx">[\s\S]*?<\/p>/, ''),
-    'candidate name typed into row A': html.replace('<div class="tk"><b>Carta</b></div>', '<div class="tk"><b>Max</b></div>'),
+    'candidate name typed into row A': html.replace(`<div class="tk"><b>${first}</b></div>`, '<div class="tk"><b>Max</b></div>'),
     'a context piece dropped': html.replace(/<div class="tk cw" data-w="\d+"><b>[^<]*<\/b><\/div>/, ''),
-    ...(splits ? { 'context row cut into whole words (not by the tokenizer)': html.replace(/(<div class="chips ctx"[^>]*>)[\s\S]*?(<div class="tk ans">)/, (_m, a, c) => a + ctx.split(/\s+/).map((w, i) => `<div class="tk cw" data-w="${i}"><b>${w}</b></div>`).join('') + c) } : {}),
+    'a real token of row A changed': html.replace(`<div class="tk"><b>${first}</b></div>`, `<div class="tk"><b>${first}x</b></div>`),
+    'row A cut by the page\'s heuristic again (Carta | gena | ...)': html.replace(/(<div class="chips" aria-label="[^"]*">)[\s\S]*?(<\/div>\s*<p class="tokref">)/, (_m, a, c) => a + rowAhtml(heur) + c),
+    'the leading space of a token shown as a space, not as a middle dot': html.replace(/(<div class="tk cw" data-w="\d+"><b>)·/, '$1 '),
+    'the context row cut into whole words (not by the tokenizer)': html.replace(/(<div class="chips ctx"[^>]*>)[\s\S]*?(<div class="tk ans">)/, (_m, a, c) => a + ctx.split(/\s+/).map((w, i) => `<div class="tk cw" data-w="${i}"><b>${w}</b></div>`).join('') + c),
+    'a context chip with the wrong word index': html.replace(/(<div class="tk cw" data-w=")(\d+)("><b>[^<]*<\/b><\/div>)(?![\s\S]*<div class="tk cw")/, '$19$3'),
+    'the source label of the chips gone': html.replace(/<p class="tokref">[\s\S]*?<\/p>/, ''),
+    'the source label of the chips said twice': html.replace('<div class="chips ctx"', '<p class="tokref">x</p><div class="chips ctx"'),
   };
   let bad = 0;
-  if (deltaRule(html, lang).length) return 0;                      // the real page is judged by the loop below
+  if (deltaRule(html, lang).length) return [0, 0];                 // the real page is judged by the loop below
   for (const [what, m] of Object.entries(mut)) if (m === html || !deltaRule(m, lang).length) { console.error(`FAIL self-test: deltaRule does not catch "${what}"`); bad++; }
-  return bad;
+  return [bad, Object.keys(mut).length];
+}
+// The same for the tokens the page ships to the effects.
+function tokensSelfTest(html, lang) {
+  if (tokensRule(html, lang).length) return [0, 0];
+  const edit = (fn) => html.replace(/(<script type="application\/json" id="v3-tokens"[^>]*>)([\s\S]*?)(<\/script>)/, (_m, a, b, c) => { const o = JSON.parse(b); fn(o); return a + JSON.stringify(o) + c; });
+  const k0 = Object.keys(JSON.parse(html.match(/id="v3-tokens"[^>]*>([\s\S]*?)<\/script>/)[1]))[2];
+  const mut = {
+    'the token data gone': html.replace(/<script type="application\/json" id="v3-tokens"[\s\S]*?<\/script>/, ''),
+    'an entry missing from the token data': edit((o) => { delete o[k0]; }),
+    'an entry that is not a chip string': edit((o) => { o['Una frase que ya no es un chip'] = [['Una', 1], [' frase', 2]]; }),
+    'pieces that do not join back into their string': edit((o) => { o[k0][0][0] += 'x'; }),
+    'pieces that are not the ones of the committed file': edit((o) => { const p = o[k0]; if (p.length > 1) { p[0][0] += p[1][0]; p.splice(1, 1); } else p[0][1] += 1; }),
+    'a chip string that is not on the page (a stale token file)': html.split(norm(STR[lang].pub.v3.cierreH)).join('Otra frase').replace(/(id="v3-tokens"[^>]*>)/, '$1'),
+    'chapter 08\'s free-typing specimen without its tag': html.replace(/<div class="ph">[^<]*<\/div>(\s*<div id="tokens")/, '$1'),
+  };
+  let bad = 0;
+  for (const [what, m] of Object.entries(mut)) if (m === html || !tokensRule(m, lang).length) { console.error(`FAIL self-test: tokensRule does not catch "${what}"`); bad++; }
+  return [bad, Object.keys(mut).length];
 }
 
 // ---------- the engine's boot (src/aegis/main.ts) ----------
@@ -818,8 +881,8 @@ const fxFiles = Object.fromEntries(FX_MODULES.map((n) => { try { return [n, read
 for (const m of fxSource(fxFiles)) { console.error(`FAIL fx: ${m}`); fail++; }
 for (const lang of LANGS) {
   const html = pages.get(`${lang}/none`);
-  fail += selfTest(html, lang) + deltaSelfTest(html, lang);
-  mutantCount += mutants(html, lang).length;
+  fail += selfTest(html, lang); mutantCount += mutants(html, lang).length;
+  for (const t of [deltaSelfTest, tokensSelfTest]) { const [bad, n] = t(html, lang); fail += bad; mutantCount += n; }
 }
 for (const lang of LANGS) for (const cc of MARKETS) {
   const tag = `${lang}/${cc ?? 'none'}`, html = pages.get(tag);

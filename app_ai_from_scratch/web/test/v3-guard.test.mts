@@ -3,11 +3,13 @@ import assert from 'node:assert/strict';
 import { assertPriced, guard, guarded, violations, withoutCity } from '../src/aegis/copy-guard.ts';
 import { STR } from '../src/lib/i18n.ts';
 import { PRECIO_VISUAL } from '../src/lib/price.ts';
-import { ctxChips, ctxOf, draw, softmax, tokenize } from '../src/aegis/specimens.ts';
+import { ctxOf, draw, softmax, tokenize } from '../src/aegis/specimens.ts';
 import { candidatos, modulos } from '../src/data/landing.ts';
 import { WORDMARK } from '../src/aegis/wordmark.ts';
 import { KU, LAP, lap, lit } from '../src/aegis/fx/wordmark-phase.ts';
-import { readFileSync, readdirSync } from 'node:fs';
+import { chipStrings, type ChipSources } from '../src/aegis/token-strings.ts';
+import { piecesOf, show, wordsOf, type TokenFile } from '../src/aegis/tokens.ts';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
 
 test('guard throws on a city, on plural courses, and lets the tokenizer sentence through', () => {
   assert.throws(() => guard('t', 'Hecho en Medellín'), /forbidden/);
@@ -199,15 +201,13 @@ test('ctxOf cuts the first sentence of specimen B out of the published string', 
   }
 });
 
-test('the candidate context is not the Cartagena sentence, and the sentence still tokenizes to the five chips of row A', () => {
+test('the candidate context is not the Cartagena sentence', () => {
   for (const lang of ['es', 'en'] as const) {
     const P = STR[lang].pub.land, c = ctxOf(P.bD);
     assert.notEqual(c, P.aEjemplo);
     assert.ok(!c.includes('Cartagena') && !P.aEjemplo.includes(c));
-    assert.equal(tokenize(P.aEjemplo).length, 5);                       // llm.ts and v3.astro both assume row A has 5 chips
     assert.ok(c.split(/\s+/).filter(Boolean).length >= 3);              // the context row needs words to carry attention
   }
-  assert.deepEqual(tokenize(STR.es.pub.land.aEjemplo), ['Carta', 'gena', 'es', 'hermo', 'sa']);
 });
 
 test('the dial\'s fixed draw only ever lands on a published candidate, and temperature moves it down the list', () => {
@@ -221,28 +221,74 @@ test('the dial\'s fixed draw only ever lands on a published candidate, and tempe
   }
 });
 
-// Lesson 05 («No ve palabras ni letras: ve trozos») cuts «Cartagena es hermosa» into Carta | gena | es | hermo | sa. The dog
-// context that follows is the same kind of input, so it is cut by the SAME tokenizer, never by spaces.
-test('the context row is the specimen tokenizer\'s output, and regroups into the sentence', () => {
+// ---------- real tokens (o200k_base, GPT-4o): every chip on /v3 ----------
+// Chapter 04's rows and the chips the stage-2B effects move are NOT cut by the page's heuristic: they are the tokens the vocabulary really gives, cut once with tiktoken by
+// web/scripts/v3-tokens.py and committed in src/data/v3-tokens.json (pieces and ids, ES and EN). Node cannot run tiktoken, so what this proves is that the file is IN SYNC with the
+// strings: a copy change without a regenerated file is red, and a chip consumer that goes back to the heuristic is red. The pieces themselves are real because that script made them.
+const TOKENS = JSON.parse(readFileSync(new URL('../src/data/v3-tokens.json', import.meta.url), 'utf8')) as TokenFile;
+const chipSources = (lang: 'es' | 'en'): ChipSources => ({ P: STR[lang].pub.land, V: STR[lang].pub.v3, mods: modulos(lang), price: PRECIO_VISUAL[lang], ctx: ctxOf(STR[lang].pub.land.bD) });
+test('every string shown as a chip has its real o200k tokens in v3-tokens.json, the pieces join back into it, and the file holds nothing else', () => {
+  assert.equal(TOKENS.encoding, 'o200k_base');
+  assert.match(TOKENS.library, /^tiktoken \d/);
   for (const lang of ['es', 'en'] as const) {
-    const c = ctxOf(STR[lang].pub.land.bD), chips = ctxChips(c);
-    assert.deepEqual(chips.map((x) => x.t), tokenize(c));                              // exactly what the interactive tokenizer prints
-    const words: string[] = []; chips.forEach((x) => { words[x.w] = (words[x.w] ?? '') + x.t; });
-    assert.equal(words.join(' '), c.replace(/\s+/g, ' ').trim());                      // pieces of a word joined, words with one space
-    assert.deepEqual([...new Set(chips.map((x) => x.w))], words.map((_, i) => i));      // word indexes run 0..n-1 with no gap
+    const want = chipStrings(chipSources(lang));
+    assert.ok(want.length >= 29, `${lang}: the list of chip strings shrank to ${want.length}`);
+    for (const { id, text } of want) {
+      const p = TOKENS[lang][text];
+      assert.ok(p && p.length, `${lang} ${id}: «${text}» has no real tokens: run  uv run --with tiktoken python3 web/scripts/v3-tokens.py`);
+      assert.equal(p.map((x) => x[0]).join(''), text, `${lang} ${id}: the pieces do not join back into the string (it changed: regenerate the file)`);
+      for (const [t, ...ids] of p) { assert.ok(t.length > 0, `${lang} ${id}: an empty piece`); assert.ok(ids.length >= 1 && ids.every((n) => Number.isInteger(n) && n >= 0), `${lang} ${id}: a piece without a token id`); }
+      assert.doesNotThrow(() => piecesOf(TOKENS[lang], text));
+    }
+    assert.deepEqual(Object.keys(TOKENS[lang]).sort(), [...new Set(want.map((c) => c.text))].sort(), `${lang}: the file has entries for strings that are not chips any more (regenerate it)`);
   }
-  // pinned on purpose: a change to the tokenizer must be a conscious decision for this page
-  assert.deepEqual(tokenize(ctxOf(STR.es.pub.land.bD)), ['Le', 'pedis', 'te', 'un', 'nombr', 'e', 'para', 'tu', 'perro', '.']);
-  assert.deepEqual(tokenize(ctxOf(STR.en.pub.land.bD)), ['You', 'asked', 'it', 'to', 'name', 'your', 'dog.']);   // EN words are all <= 5 chars: one piece each
-  const es = ctxOf(STR.es.pub.land.bD);
-  assert.ok(ctxChips(es).length > es.split(/\s+/).length);                             // the ES context shows words broken into pieces
 });
-
-test('ctxChips groups pieces by word and follows tokenize at the edges', () => {
-  assert.deepEqual(ctxChips(''), []);
-  assert.deepEqual(ctxChips('Hola mundo'), [{ t: 'Hola', w: 0 }, { t: 'mundo', w: 1 }]);
-  assert.deepEqual(ctxChips('abcdefghij k'), [{ t: 'abcde', w: 0 }, { t: 'fghi', w: 0 }, { t: 'j', w: 0 }, { t: 'k', w: 1 }]);
-  assert.equal(ctxChips('x '.repeat(40)).length, tokenize('x '.repeat(40)).length);        // the same 26-piece cap
+test('piecesOf fails closed: a string that is not in the file, or pieces that no longer join into it, throws', () => {
+  const m = TOKENS.es;
+  assert.throws(() => piecesOf(m, 'Una frase que no es un chip'), /no real tokens/);
+  assert.throws(() => piecesOf({ 'Hola mundo': [['Hola', 1], [' mund', 2]] }, 'Hola mundo'), /do not join back/);
+  assert.throws(() => piecesOf({ x: [] }, 'x'), /no real tokens/);
+  assert.equal(piecesOf(m, 'Cartagena es hermosa').length, 4);
+});
+test('show() writes a middle dot for a leading space, and wordsOf() numbers the words of a cut', () => {
+  assert.equal(show(' es'), '·es'); assert.equal(show('Cart'), 'Cart'); assert.equal(show('.'), '.'); assert.equal(show(' '), '·');
+  const p = piecesOf(TOKENS.es, 'Le pediste un nombre para tu perro.');
+  assert.deepEqual(p.map((x) => x[0]), ['Le', ' ped', 'iste', ' un', ' nombre', ' para', ' tu', ' perro', '.']);   // real o200k pieces, pinned: a different vocabulary is a decision for this page
+  assert.deepEqual(wordsOf(p), [0, 1, 1, 2, 3, 4, 5, 6, 6]);
+  assert.equal(Math.max(...wordsOf(p)) + 1, STR.es.pub.land.bD.split('. ')[0].split(/\s+/).length);   // as many words as the context has
+  assert.deepEqual(wordsOf([]), []);
+  const e = piecesOf(TOKENS.en, 'You asked it to name your dog.');
+  assert.equal(Math.max(...wordsOf(e)) + 1, 7);
+});
+test('chapter 04 row A is the real cut of the example sentence, and the heuristic is gone from the c04 data path', () => {
+  const es = piecesOf(TOKENS.es, STR.es.pub.land.aEjemplo).map((x) => x[0]), en = piecesOf(TOKENS.en, STR.en.pub.land.aEjemplo).map((x) => x[0]);
+  assert.deepEqual(es, ['Cart', 'agena', ' es', ' hermosa']);
+  assert.deepEqual(en, ['Cart', 'agena', ' is', ' beautiful']);
+  // the free-typing box of chapter 08 keeps its heuristic, and says so: its cut is NOT the real one (it is labelled ILUSTRATIVO)
+  assert.deepEqual(tokenize(STR.es.pub.land.aEjemplo), ['Carta', 'gena', 'es', 'hermo', 'sa']);
+  assert.notDeepEqual(tokenize(STR.es.pub.land.aEjemplo).map((t) => t), es.map((t) => t.trim()));
+  assert.deepEqual(tokenize('x '.repeat(40)).length, 26);                               // the heuristic's own 26-piece cap, unchanged
+});
+// Nothing that shows chips may cut text by the heuristic. The ONLY caller allowed is specimens.ts itself (the free-typing box of chapter 08) and the one line of v3.astro that
+// renders that box's first picture, marked ILLUSTRATIVE.
+const walkFiles = (dir: URL, out: URL[] = []): URL[] => { for (const n of readdirSync(dir)) { const u = new URL(n + (statSync(new URL(n, dir)).isDirectory() ? '/' : ''), dir); if (n.endsWith('/')) continue; if (statSync(u).isDirectory()) walkFiles(u, out); else if (/\.(ts|astro)$/.test(n)) out.push(u); } return out; };
+const noComments = (src: string) => src.replace(/(^|[^:'"`])\/\/.*$/gm, '$1').replace(/\/\*[\s\S]*?\*\//g, '');   // line comments first: «src/aegis/*» inside one is not the start of a block
+test('no chip consumer calls tokenize(): only the free-typing specimen of chapter 08 does (and chapter 04 reads the real tokens)', () => {
+  const root = new URL('../src/', import.meta.url);
+  const files = [...walkFiles(new URL('aegis/', root)), new URL('pages/v3.astro', root)];
+  const callers = files.filter((u) => /\btokenize\s*\(/.test(noComments(readFileSync(u, 'utf8')))).map((u) => u.pathname.split('/src/')[1]).sort();
+  assert.deepEqual(callers, ['aegis/specimens.ts', 'pages/v3.astro'], `tokenize() is called from: ${callers.join(', ')}`);
+  const page = readFileSync(new URL('pages/v3.astro', root), 'utf8');
+  const lines = page.split('\n').filter((l) => /\btokenize\s*\(/.test(noComments(l)));
+  assert.equal(lines.length, 1, 'v3.astro calls tokenize() once');
+  assert.match(lines[0], /illusToks/, 'and that call is the illustrative first picture of specimen A');
+  assert.ok(!files.some((u) => /\bctxChips\b/.test(readFileSync(u, 'utf8'))), 'ctxChips (the heuristic context row) is gone');
+  assert.match(page, /<div class="ph">\{V\.ilus\}<\/div>\s*<div id="tokens"/, 'specimen A carries the ILUSTRATIVO tag right above its chips');
+});
+test('the factual source label of the chips is in both languages and says what they are', () => {
+  assert.equal(STR.es.pub.v3.tokReal, 'TOKENS REALES · o200k (GPT-4o)');
+  assert.equal(STR.en.pub.v3.tokReal, 'REAL TOKENS · o200k (GPT-4o)');
+  for (const lang of ['es', 'en'] as const) assert.doesNotThrow(() => guard(`${lang}.tokReal`, STR[lang].pub.v3.tokReal));
 });
 
 // ---------- the footer wordmark: the outlines of «AI FROM SCRATCH» (web/scripts/v3-wordmark.py writes src/aegis/wordmark.ts) ----------

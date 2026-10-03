@@ -40,9 +40,10 @@ const FX_HOOKS = {
   c03: { fx: 'lens', hooks: [['data-lens', 3]] },
   c05: { fx: 'track', hooks: [['data-track', 1], ['data-fig', 6], ['data-cifra', 6]], stage: true },
   c06: { fx: 'implode', hooks: [['data-nots', 1], ['data-word', 6], ['data-final', 1]], stage: true },
+  c07: { fx: 'ring', hooks: [['data-ring', 1], ['data-ring-stroke', 1], ['data-tick', 12], ['data-count', 5], ['data-specs', 1], ['data-spec', 4]] },
 };
 // the parts that exist only because an effect added them (they must hang on html.fxl) · the selectors that name the copy of an effect chapter · what hides it
-const FX_ONLY = /\.(?:sk|ty|sp|lens|lc|lr|pin|rail|imp)\b|\[data-fx-/;
+const FX_ONLY = /\.(?:sk|ty|sp|lens|lc|lr|pin|rail|imp|pen|num)\b|\[data-fx-/;
 const FX_COPY = /\.(?:rp|tag|you|ia|who|shout|bt|beat|chat|trio|tri|figs|fig|big|cap|ie|nots|hx|ctr|specs|srow|tcopy|lede|clock)\b|\bs\[data-word\]|\bdt\b|\bdd\b|#c0[2-7]\b/;
 const FX_HIDES = /(?:^|;)\s*(?:opacity\s*:\s*0(?![.\d])|visibility\s*:\s*hidden|display\s*:\s*none|clip-path\s*:|color\s*:\s*transparent|font-size\s*:\s*0\b|transform\s*:\s*scale\(0\b)/;
 const CTA_CHAPTERS = ['c03', 'c07', 'c10', 'c11'];       // CTA rows with the price label + the guarantee line; c14 has its in-card button; c16 closes
@@ -454,6 +455,18 @@ function mutants(html, lang) {
     ['the chapter 06 length on the page\'s own --len', html.replace('html.fxl #c06.pin{--fx-len:', 'html.fxl #c06.pin{--len:'), /fx: "html\.fxl #c06\.pin" declares --len/],
     ['the particle canvas styled without html.fxl', html.replace('html.fxl .imp{', '.imp{'), /fx: "\.imp" styles a part that only an effect adds/],
     ['a stage-2B rule on the closing line itself (it would outlive dispose)', html.replace('html.fxl #c06.pin .hx{', 'html.fxl .hx{'), /fx: "html\.fxl \.hx" is in the stage-2B block but styles an element no effect owns/],
+    ['chapter 07 without its data-fx name', html.replace('data-fx="ring"', 'data-fx="x"'), /fx: #c07 lost its data-fx/],
+    ['chapter 07 without its clock hook', inChapter('c07', (c) => c.replace(' data-ring aria-hidden', ' aria-hidden')), /fx: #c07 has 0 data-ring,/],
+    ['a chapter 07 tick without its hook', inChapter('c07', (c) => c.replace(' data-tick', '')), /fx: #c07 has 11 data-tick/],
+    ['a chapter 07 figure without its count hook', inChapter('c07', (c) => c.replace(' data-count="12"', '')), /fx: #c07 has 4 data-count/],
+    ['chapter 07 without its figures hook', inChapter('c07', (c) => c.replace(' data-specs', '')), /fx: #c07 has 0 data-specs/],
+    ['a chapter 07 figure row without its hook', inChapter('c07', (c) => c.replace(' data-spec>', '>')), /fx: #c07 has 3 data-spec,/],
+    ['chapter 07 with the pin class in the markup', html.replace('<section id="c07" class="sec cx"', '<section id="c07" class="sec cx pin"'), /layout: #c07 carries the effects' `pin` class/],
+    ['the clock ticks styled without html.fxl', html.replace('html.fxl .clock[data-fx-s] .tick{', '.clock[data-fx-s] .tick{'), /fx: "\.clock\[data-fx-s\] \.tick" styles a part that only an effect adds/],
+    ['the counter overlay styled without html.fxl', html.replace('html.fxl .num{', '.num{'), /fx: "\.num" styles a part that only an effect adds/],
+    ['the pen styled without html.fxl', html.replace('html.fxl .pen{', '.pen{'), /fx: "\.pen" styles a part that only an effect adds/],
+    ['the real numbers made transparent for good (not only while an effect runs)', html.replace('html.fxl [data-fx-s] [data-count]{', '[data-count]{'), /fx: "\[data-count\]" is in the stage-2B block but styles an element no effect owns/],
+    ['the counter overlay hidden by default', html.replace('</head>', '<style>.clock .ctr b{opacity:0}</style></head>'), /fx: "\.clock \.ctr b" hides the copy/],
     ['the closing line of chapter 06 hidden by default', html.replace('</head>', '<style>.hx{opacity:0}</style></head>'), /fx: "\.hx" hides the copy/],
     ['the struck words hidden by default', html.replace('</head>', '<style>s[data-word]{color:transparent}</style></head>'), /fx: "s\[data-word\]" hides the copy/],
     ['a stage-2B rule on a plain element (it would outlive dispose)', html.replace('html.fxl [data-fx-s] .ia{position:relative}', 'html.fxl .ia{position:relative}'), /fx: "html\.fxl \.ia" is in the stage-2B block but styles an element no effect owns/],
@@ -555,8 +568,8 @@ function engineBootSelfTest(src) {
 // The effects are code that touches a page whose copy is its own gate's business. They write no copy (text comes from the DOM), they animate only transform,
 // opacity, clip-path and filter (layout is CSS under html.fxl, decided once at attach), and an effect that pre-arms something (hides it, waiting) does it only to
 // what is below the fold. `files` is { 'c02.ts': source, ... }.
-const FX_PREARM = ['c02.ts', 'c03.ts'];                              // modules that arm pre-states for play-once effects: they must ask belowFold() first (a scrubbed one is a function of the scroll position and arms nothing)
-const FX_MODULES = ['index.ts', 'common.ts', 'c02.ts', 'c03.ts', 'c05.ts', 'c06.ts'];
+const FX_PREARM = ['c02.ts', 'c03.ts', 'c07.ts'];                              // modules that arm pre-states for play-once effects: they must ask belowFold() first (a scrubbed one is a function of the scroll position and arms nothing)
+const FX_MODULES = ['index.ts', 'common.ts', 'c02.ts', 'c03.ts', 'c05.ts', 'c06.ts', 'c07.ts'];
 const ANIMATED = new Set(['transform', 'opacity', 'clipPath', 'filter', 'willChange']);
 function fxSource(files) {
   const f = [];
@@ -593,6 +606,9 @@ function fxSourceSelfTest(files) {
     ['a pre-state armed without belowFold() (chapter 03)', { ...files, 'c03.ts': files['c03.ts'].replace('l.armed = belowFold(l.tri);', 'l.armed = true;') }, /c03\.ts: arms a pre-state without asking belowFold/],
     ['an engine mode class switched by an effect', { ...files, 'c02.ts': files['c02.ts'].replace('export function initC02', "document.documentElement.classList.add('nogl');\nexport function initC02") }, /switches an engine mode class/],
     ['a pre-state armed without belowFold()', { ...files, 'c02.ts': files['c02.ts'].replace('if (!belowFold(b.el)) continue;', '') }, /arms a pre-state without asking belowFold/],
+    ['a pre-state armed without belowFold() (chapter 07)', { ...files, 'c07.ts': files['c07.ts'].replaceAll('belowFold(', 'Boolean(') }, /c07\.ts: arms a pre-state without asking belowFold/],
+    ['a counter that writes a literal (chapter 07)', { ...files, 'c07.ts': files['c07.ts'].replace('n.ov.textContent = String(k)', "n.ov.textContent = 'x'") }, /c07\.ts: writes a string literal/],
+    ['a layout property animated (chapter 07, style.width)', { ...files, 'c07.ts': files['c07.ts'].replace('export function initC07', "document.body.style.width = '1px';\nexport function initC07") }, /c07\.ts: sets style\.width/],
     ['a module gone', { ...files, 'c02.ts': undefined }, /c02\.ts: the module is missing/],
     ['effect() that stops undoing a half-built effect', { ...files, 'common.ts': files['common.ts'].replace(/dispose\(\);\s*throw e;/, 'throw e;').replace('const dispose = ', 'const disposeX = ') }, /effect\(\) no longer undoes/],
   ];

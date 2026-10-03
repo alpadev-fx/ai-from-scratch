@@ -224,9 +224,9 @@ html.fxl .s02{padding-top:max(110px,22svh);padding-bottom:86px;min-height:100svh
 .lede.big{margin-top:28px;font:400 clamp(18px,1.7vw,24px)/1.45 var(--f);max-width:40ch;padding-bottom:0}
 .n3-hook{display:none}
 .bio{position:relative;border:1px solid var(--hair);background:var(--panel);padding:44px 40px;display:grid;grid-template-columns:1fr 1fr;gap:36px 48px}
-.bio .c,.cw .c{position:absolute;width:16px;height:16px;border:0 solid var(--ac)}
-.bio .tl,.cw .tl{left:-1px;top:-1px;border-left-width:2px;border-top-width:2px}.bio .tr,.cw .tr{right:-1px;top:-1px;border-right-width:2px;border-top-width:2px}
-.bio .bl,.cw .bl{left:-1px;bottom:-1px;border-left-width:2px;border-bottom-width:2px}.bio .br,.cw .br{right:-1px;bottom:-1px;border-right-width:2px;border-bottom-width:2px}
+.bio .c,.cw .c,.sharp .c{position:absolute;width:16px;height:16px;border:0 solid var(--ac)}
+.bio .tl,.cw .tl,.sharp .tl{left:-1px;top:-1px;border-left-width:2px;border-top-width:2px}.bio .tr,.cw .tr,.sharp .tr{right:-1px;top:-1px;border-right-width:2px;border-top-width:2px}
+.bio .bl,.cw .bl,.sharp .bl{left:-1px;bottom:-1px;border-left-width:2px;border-bottom-width:2px}.bio .br,.cw .br,.sharp .br{right:-1px;bottom:-1px;border-right-width:2px;border-bottom-width:2px}
 @media (max-width:900px){.bio{grid-template-columns:1fr;padding:28px 22px}.s02{padding-top:72px}html.fxl .s02{padding-top:max(86px,20svh)}}
 
 /* ---------- ENGINE MODE: tall chapters, sticky stage, WebGL behind ----------
@@ -502,13 +502,29 @@ html[data-ch="cL"] .cue{display:none}
 .shout{margin-top:46px;max-width:22ch;font:700 clamp(26px,3.4vw,50px)/1.06 var(--f);letter-spacing:-.04em;text-wrap:balance}
 @media (max-width:1099px){.cases{grid-template-columns:minmax(0,1fr);max-width:640px}}
 
-/* 03 · qué cambia: three plates, one word each */
+/* 03 · qué cambia: ONE display headline (the h2). Under it a drawing of the process the chapter is about (the request as its real tokens, the three things it lacked as accent chips, the
+   distribution over the next word going from flat to one winner: ILUSTRATIVO), then three plates whose title is a mono label, not a second headline. Square, flat, hairline: no round shapes. */
+.sharp{position:relative;display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);margin:40px 0 0;padding:34px 36px;border:1px solid var(--hair);background:var(--panel)}
+.spl{display:flex;flex-direction:column;align-items:flex-start;gap:14px;min-width:0;padding-right:40px}
+.spr{display:flex;flex-direction:column;gap:20px;min-width:0;padding-left:40px;border-left:1px solid var(--hair2)}
+.sq,.sl{display:flex;flex-wrap:wrap;gap:8px}
+.sl{margin-top:18px}
+.sk{display:inline-flex;align-items:center;min-height:42px;padding:0 14px;border:1px solid var(--hair);background:var(--bg);font:400 clamp(15px,1.5vw,20px)/1 var(--m);color:var(--l1);white-space:nowrap}
+.sk.ask{border-color:var(--ac);color:var(--ac);font:600 clamp(11px,1vw,12px)/1 var(--m);letter-spacing:.16em}
+.src{margin:0;font:500 10px/1.4 var(--m);letter-spacing:.16em;color:var(--l3)}
+.ilt{margin:0;display:flex;align-items:center;gap:8px;font:500 10px/1 var(--m);letter-spacing:.18em;color:var(--ac)}
+.ilt em{font-style:normal}
+.sb{position:relative;display:flex;align-items:flex-end;justify-content:space-between;gap:6px;height:clamp(124px,13vw,176px);border-bottom:1px solid var(--hair)}
+.sb .flat{position:absolute;left:0;right:0;bottom:calc(var(--u)*100%);border-top:1px dashed var(--hair);pointer-events:none}
+.bw{flex:1 1 0;min-width:0;max-width:40px;height:100%;display:flex;align-items:flex-end}
+.bw i{display:block;width:100%;height:100%;background:var(--l3);transform-origin:50% 100%;transform:scaleY(var(--v))}
+.bw i.hi{background:var(--ac)}
 .trio{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin-top:48px;border-top:1px solid var(--hair)}
-.tri{padding:28px 32px 36px 0}
+.tri{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:baseline;column-gap:14px;align-content:start;padding:26px 32px 36px 0}
 .tri + .tri{padding-left:32px;border-left:1px solid var(--hair2)}
 .tri .no{font:600 11px/1 var(--m);letter-spacing:.2em;color:var(--ac)}
-.tri h3{margin-top:30px;font:700 clamp(28px,3vw,44px)/1 var(--f);letter-spacing:-.05em;overflow-wrap:anywhere}
-.tri p{margin-top:20px;max-width:34ch;font:400 16px/1.5 var(--f);color:var(--l2)}
+.tri h3{margin:0;font:600 12px/1.3 var(--m);letter-spacing:.2em;text-transform:uppercase;color:var(--l1);overflow-wrap:anywhere}
+.tri p{grid-column:1/-1;margin:16px 0 0;max-width:36ch;font:400 clamp(16px,1.3vw,18px)/1.55 var(--f);color:var(--l2)}
 
 /* 05 · cifras: six figures. The size of each comes from its container, so «70.000.000.000» never leaves its plate */
 .figs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-top:1px solid var(--hair);border-left:1px solid var(--hair)}
@@ -611,10 +627,13 @@ html[data-ch="cL"] .cue{display:none}
 @media (max-width:900px){
   .cx .sh{padding-bottom:20px}
   .cwh{padding:14px 14px 0}.cwb{padding:12px 14px 22px}.cwc{margin:0 10px 10px}
+  .sharp{grid-template-columns:minmax(0,1fr);margin-top:30px;padding:26px 20px}
+  .spl{padding-right:0}
+  .spr{padding:24px 0 0;margin-top:26px;border-left:0;border-top:1px solid var(--hair2)}
+  .sb{height:124px}
   .trio{grid-template-columns:1fr;margin-top:34px}
-  .tri,.tri + .tri{padding:26px 0 30px;border-left:0;border-top:1px solid var(--hair2)}
+  .tri,.tri + .tri{padding:24px 0 28px;border-left:0;border-top:1px solid var(--hair2)}
   .tri:first-child{border-top:0}
-  .tri h3{margin-top:22px}
   .time,.gar{grid-template-columns:1fr;gap:34px}
   .clock{max-width:260px}
   .seal{width:min(100%,300px)}
@@ -673,16 +692,11 @@ html.fxl .ty .off{color:transparent}
 html.fxl .ty .cur{position:absolute;left:0;top:0;width:0;height:0;will-change:transform}
 html.fxl .ty .cur::after{content:'';position:absolute;left:3px;top:-.3em;width:.6em;height:.6em;border-radius:50%;background:var(--l1);animation:fx-dot .9s ease-in-out infinite}
 html.fxl .gh{position:absolute;left:16px;top:var(--fx-t);width:var(--fx-w);height:30px;border-radius:15px;background:var(--fill);pointer-events:none}
-/* 03: a square lens above each card's text (a decoration: aria-hidden, added with the engine). The footage is a canvas; the ring and the four ticks are CSS */
-html.fxl{--fx-glow:drop-shadow(0 0 20px color-mix(in srgb,var(--ac) 32%,transparent))}
-html.fxl[data-theme="paper"]{--fx-glow:drop-shadow(0 8px 20px rgba(0,0,0,.2))}
-@media (prefers-color-scheme:light){html.fxl[data-theme="auto"]{--fx-glow:drop-shadow(0 8px 20px rgba(0,0,0,.2))}}
-html.fxl .tri .lens{position:relative;width:min(100%,188px);aspect-ratio:1;margin:0 0 28px;filter:var(--fx-glow)}
-html.fxl .lc{display:block;width:100%;height:100%;border-radius:50%;background:#000}
-html.fxl .lr{position:absolute;inset:-1px;border:1px solid var(--l1);border-radius:50%;pointer-events:none}
-html.fxl .lens::after{content:'';position:absolute;inset:-8px;pointer-events:none;background:linear-gradient(var(--l1),var(--l1)) 50% 0/1px 9px no-repeat,linear-gradient(var(--l1),var(--l1)) 50% 100%/1px 9px no-repeat,linear-gradient(var(--l1),var(--l1)) 0 50%/9px 1px no-repeat,linear-gradient(var(--l1),var(--l1)) 100% 50%/9px 1px no-repeat}
-@media (max-width:900px){html.fxl .tri .lens{width:120px;margin-bottom:22px}}
-@media (max-width:420px){html.fxl .tri .lens{width:104px}}
+/* 03: the panel is drawn by the effect once (arm, run, clear); while it plays its chips and bars are promoted. The winner's bar lights up with the distribution: its accent is an overlay
+   whose opacity is the effect's --fx-s (an opacity is cheap to animate, a colour is not). Everything else the effect writes is a transform or an opacity. */
+html.fxl [data-sharp][data-fx-s="run"] .sk,html.fxl [data-sharp][data-fx-s="run"] .bw i{will-change:transform,opacity}
+html.fxl [data-sharp][data-fx-s] .bw i.hi{position:relative;background:var(--l3)}
+html.fxl [data-sharp][data-fx-s] .bw i.hi::after{content:'';position:absolute;inset:0;background:var(--ac);opacity:var(--fx-s,0)}
 /* the pinned stage (05 and 06): the section is tall and its stage pins; `pin` is added with the engine, only if everything in the stage fits the viewport's height */
 html.fxl .pin{padding:0}
 html.fxl .pin .pstage{position:sticky;top:0;height:100svh;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-start;justify-content:safe center;padding:calc(var(--hdr) + 18px) 0 40px}

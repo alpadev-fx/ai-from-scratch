@@ -554,6 +554,8 @@ export const STR = {
         cand: 'CANDIDATOS', scroll: 'DESLIZA',
         // — NUEVO, a la espera del visto bueno del dueño: la fuente factual de los chips (tokens reales de o200k_base, el vocabulario de GPT-4o, cortados con tiktoken) —
         tokReal: 'TOKENS REALES · o200k (GPT-4o)',
+        // — NUEVO, a la espera del visto bueno del dueño: las tres cosas que el capítulo 03 le suma al pedido, en este orden; son las mismas que nombra la etiqueta del caso 3 del capítulo 02 («NO LE DIJISTE QUÉ, PARA QUIÉN NI CÓMO») —
+        askSlots: ['QUÉ', 'PARA QUIÉN', 'CÓMO'],
         // — variantes de prod sin el plural «cursos» ni la ciudad —
         vivoV: 'El curso no se queda quieto: cuando la IA cambia, reescribo lo que quedó viejo. Se van sumando tutoriales, labs y actualizaciones, incluidos mientras tu acceso esté activo. Aplican términos y condiciones.',
         preWhy3V: 'Esto lo hace una persona, no una empresa con equipo de ventas. Y lo que voy aprendiendo lo voy subiendo: tutoriales, labs y actualizaciones, incluidos en tu suscripción.',
@@ -1270,6 +1272,8 @@ export const STR = {
         cand: 'CANDIDATES', scroll: 'SCROLL',
         // — NUEVO, pending the owner's approval: the factual source of the chips (real o200k_base tokens, GPT-4o's vocabulary, cut with tiktoken) —
         tokReal: 'REAL TOKENS · o200k (GPT-4o)',
+        // — NUEVO, pending the owner's approval: the three things chapter 03 adds to the request, in this order; they are the ones chapter 02's third tag names («YOU NEVER SAID WHAT, FOR WHOM, OR HOW») —
+        askSlots: ['WHAT', 'FOR WHOM', 'HOW'],
         // — variantes de prod sin el plural «cursos» ni la ciudad —
         vivoV: 'The course does not stand still: when AI changes, I rewrite what went stale. Tutorials, labs and updates keep getting added, included while your access is active. Terms and conditions apply.',
         preWhy3V: 'One person runs this, not a company with a sales team. And what I keep learning, I keep uploading: new tutorials, labs and updates, included in your subscription.',

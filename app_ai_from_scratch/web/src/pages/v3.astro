@@ -84,6 +84,14 @@ const TOK = (TOKEN_FILE as any)[lang] as Record<string, Array<[string, ...number
 const chipText = chipStrings({ P, V, mods, price: precioBig, ctx, cands });
 const PIECES = Object.fromEntries(chipText.map((c) => [c.text, piecesOf(TOK, c.text)]));   // what the effects read from the page (#v3-tokens); not TOKENS: that is the theme's CSS tokens (theme-css.ts)
 const realA = piecesOf(TOK, sentence), realB = piecesOf(TOK, ctx), realBw = wordsOf(realB), realNext = piecesOf(TOK, ' ' + cands[0].name)[0][0];   // chapter 04: row A, and the dog context with the word each piece belongs to
+// 03 · the request of chapter 02's third case (the one that came back generic) as the real tokens it is, and the distribution over the next word that saying what, for whom and how moves.
+// The bars are a DRAWING of that process (every word about as likely, then one clear winner), not a measurement: the panel carries ILUSTRATIVO. Both lists sum to 1 and are drawn on the same
+// scale (the winner's height is the whole chart); `u` is where a uniform distribution (1 in 10) stands on it.
+const askP = piecesOf(TOK, V.s1Beats[2].tu);
+const SHARP = [0.46, 0.17, 0.11, 0.08, 0.06, 0.04, 0.03, 0.025, 0.015, 0.01];
+const FLAT = [0.108, 0.104, 0.102, 0.101, 0.1, 0.099, 0.098, 0.097, 0.096, 0.095];
+const bars = SHARP.map((v, k) => ({ v: +(v / SHARP[0]).toFixed(3), f: +(FLAT[k] / SHARP[0]).toFixed(3) }));
+const flatU = +(0.1 / SHARP[0]).toFixed(3);
 const sym = [
   { lbl: P.s1Lbl, lec: P.s1Lec, h: P.s1H, d: P.s1D, c: P.s1C },
   { lbl: P.s2Lbl, lec: P.s2Lec, h: P.s2H, d: P.s2D, c: P.s2C },
@@ -293,13 +301,34 @@ setTimeout(function(){
   <div class="n3-hook" data-seq="n3" aria-hidden="true"></div>
 </section>
 
-<!-- ===== 03 · QUÉ CAMBIA (prod l1–l3) + CTA. Stage 2B: a circular lens reveals the footage packs named in data-lens. ===== -->
-<section id="c03" class="sec cx" aria-labelledby="c03h" data-fx="lens">
+<!-- ===== 03 · QUÉ CAMBIA (prod l1–l3) + CTA. One display headline; the three benefits are mono labels. Above them a drawing of the process the chapter is about: the request of case 3 of
+     chapter 02 as its real tokens, the three things it lacked (what, for whom, how: the ones that case's tag names) added as chips, the distribution over the next word going from flat to one
+     winner (ILUSTRATIVO). The panel is a decoration (aria-hidden): the chapter reads without it. Stage 2B plays it once. ===== -->
+<section id="c03" class="sec cx" aria-labelledby="c03h" data-fx="sharpen">
   <div class="sh"><div class="sn">■ {label('03', V.ch03)}</div><div class="sx">{cnt('03')}</div></div>
   <h2 id="c03h" class="hx">{P.llevasH2}</h2>
+  <figure class="sharp" data-sharp aria-hidden="true">
+    <i class="c tl"></i><i class="c tr"></i><i class="c bl"></i><i class="c br"></i>
+    <div class="spl">
+      <div class="sq" data-prompt>
+        {askP.map((p) => (<span class="sk">{show(p[0])}</span>))}
+      </div>
+      <p class="src">{V.tokReal}</p>
+      <div class="sl">
+        {V.askSlots.map((w) => (<span class="sk ask" data-slot>{w}</span>))}
+      </div>
+    </div>
+    <div class="spr">
+      <p class="ilt"><i class="dot"></i><em>{V.ilus}</em></p>
+      <div class="sb" style={`--u:${flatU}`}>
+        <i class="flat"></i>
+        {bars.map((b, k) => (<span class="bw"><i class={k === 0 ? 'hi' : undefined} data-bar={b.v} data-flat={b.f} style={`--v:${b.v}`}></i></span>))}
+      </div>
+    </div>
+  </figure>
   <div class="trio">
-    {[[P.l1H, P.l1D, 'v1'], [P.l2H, P.l2D, 'v2'], [P.l3H, P.l3D, 'n5']].map(([h, d, pack], i) => (
-      <article class="tri" data-lens={pack}><span class="no">0{i + 1}</span><h3>{h}</h3><p>{d}</p></article>
+    {[[P.l1H, P.l1D], [P.l2H, P.l2D], [P.l3H, P.l3D]].map(([h, d], i) => (
+      <article class="tri"><span class="no">0{i + 1}</span><h3>{h}</h3><p>{d}</p></article>
     ))}
   </div>
   <V3Cta label={P.preCta} micro={P.heroGar} />

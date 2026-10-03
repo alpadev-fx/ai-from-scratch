@@ -449,6 +449,87 @@ test('chapter 06 on a 320-359px phone: the struck words are sized to their cell 
   assert.ok(!fits([18, 26, 6.6, 26]), 'the rule can fail: the old size (26px) and padding (18px) do not fit at 320');
 });
 
+// ---------- chapter 03: the sharpening drawing ----------
+test('chapter 03: the request is the REAL tokens of case 3, the added chips are the words case 3\'s own tag names, and the bars are one distribution drawn flat, then sharp', () => {
+  const page = readFileSync(new URL('../src/pages/v3.astro', import.meta.url), 'utf8');
+  assert.ok(/const askP = piecesOf\(TOK, V\.s1Beats\[2\]\.tu\);/.test(page), 'the request row is the cut of case 3\'s pill in the committed token file');
+  for (const lang of ['es', 'en'] as const) {
+    const V = STR[lang].pub.v3, tag = V.s1Beats[2].tag;
+    assert.ok(piecesOf(TOKENS[lang], V.s1Beats[2].tu).length >= 6, `${lang}: the request has real pieces in the file`);
+    assert.equal(V.askSlots.length, 3, `${lang}: three things are added to the request`);
+    let at = 0;
+    for (const w of V.askSlots) { const k = tag.indexOf(w, at); assert.ok(k >= 0, `${lang}: «${w}» is in case 3's tag «${tag}», in order`); at = k + w.length; }
+  }
+  const nums = (name: string) => (new RegExp(`const ${name} = \\[([^\\]]*)\\];`).exec(page)?.[1] ?? '').split(',').map(Number);
+  const SHARP = nums('SHARP'), FLAT = nums('FLAT'), sum = (a: number[]) => a.reduce((x, y) => x + y, 0);
+  assert.equal(SHARP.length, 10); assert.equal(FLAT.length, 10);
+  assert.ok(Math.abs(sum(SHARP) - 1) < 1e-9 && Math.abs(sum(FLAT) - 1) < 1e-9, 'both pictures are a distribution: they add up to 1, on the same scale');
+  assert.ok(SHARP.every((x, k) => k === 0 || x < SHARP[k - 1]), 'the sharp picture is sorted, one winner first');
+  assert.ok(SHARP[0] >= 2 * SHARP[1], 'a clear winner: at least twice the runner-up');
+  assert.ok(Math.max(...FLAT) / Math.min(...FLAT) <= 1.2, 'the flat picture is flat: every word about as likely');
+  // the rule can fail
+  assert.ok(!(0.4 >= 2 * 0.3), 'a winner only a third taller than the runner-up is not clear');
+});
+
+test('chapter 03: the effect is done within 2.5 s, the flat picture is seen before the first chip lands, and it is only transform and opacity', () => {
+  const src = readFileSync(new URL('../src/aegis/fx/c03.ts', import.meta.url), 'utf8');
+  const one = (re: RegExp) => { const m = re.exec(src); assert.ok(m, `c03.ts keeps ${re} where this test looks for it`); return m!.slice(1).map(Number); };
+  const [CHIP_STEP, CHIP_DUR] = one(/const CHIP_STEP = ([\d.]+), CHIP_DUR = ([\d.]+);/);
+  const [RISE_AT, RISE_DUR, BAR_STEP] = one(/const RISE_AT = ([\d.]+), RISE_DUR = ([\d.]+), BAR_STEP = ([\d.]+);/);
+  const slotAt = /const SLOT_AT = \[([\d., ]+)\], SLOT_DUR = ([\d.]+);/.exec(src);
+  assert.ok(slotAt, 'c03.ts keeps SLOT_AT');
+  const SLOT_AT = slotAt![1].split(',').map(Number), SLOT_DUR = +slotAt![2];
+  const [SHARP_LAG, SHARP_DUR] = one(/const SHARP_LAG = ([\d.]+), SHARP_DUR = ([\d.]+);/);
+  assert.equal(SLOT_AT.length, 3, 'three slots land');
+  const END = SLOT_AT[2] + SHARP_LAG + SHARP_DUR;
+  assert.ok(END <= 2.5, `the drawing is done ${END.toFixed(2)} s after it came in`);
+  assert.ok(SLOT_AT[2] + SLOT_DUR <= END, 'the last chip lands before the end');
+  assert.ok(SLOT_AT.every((x, k) => k === 0 || x - SLOT_AT[k - 1] >= SHARP_LAG + 0.3), 'each slot gets a beat of its own');
+  assert.ok(RISE_AT + 9 * BAR_STEP + RISE_DUR <= SLOT_AT[0], 'the ten bars have all risen (flat) before the first context chip lands: the flat picture is seen');
+  assert.ok(9 * CHIP_STEP + CHIP_DUR <= SLOT_AT[0] + 0.1, 'the request has arrived by the time its first addition lands');
+  assert.ok(/once\(panel, undo/.test(src) && /belowFold|once\(/.test(src), 'a play-once effect that asks once() (belowFold) before it arms anything');
+  assert.ok(!/\.style\.(?!opacity\b|transform\b)\w+\s*=(?!=)/.test(src.replace(/\/\/.*$/gm, '')), 'c03.ts sets only style.opacity and style.transform');
+  assert.ok(!/canvas|drawImage|fetch\(|\.webp|\.gif|\.apng/i.test(src.replace(/\/\/.*$/gm, '')), 'no footage, no sprite, no animated image');
+  // the rule can fail
+  assert.ok(0.8 + 0.1 + 0.45 + 1.5 > 2.5);
+});
+
+test('chapter 03 is square: no rounded corner, no circle, and no footage lens left behind anywhere', () => {
+  const css = readFileSync(new URL('../src/aegis/v3.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  const C03 = /(?:^|[\s,>+~])(?:\.sharp|\.spl|\.spr|\.sq|\.sl|\.sk|\.src|\.ilt|\.sb|\.bw|\.trio|\.tri)(?![\w-])/;
+  const round = (body: string) => /border-radius\s*:\s*(?!0(?:px)?\s*(?:;|$))|clip-path\s*:\s*(?:circle|ellipse)/i.test(body);
+  const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ sel: m[1].trim(), body: m[2] }));
+  const mine = rules.filter((r) => r.sel.split(',').some((s) => C03.test(s)));
+  assert.ok(mine.length >= 12, `the chapter's rules are found (${mine.length})`);
+  for (const r of mine) assert.ok(!round(r.body), `«${r.sel}» is round: chapter 03 is square HUD geometry`);
+  assert.ok(!/\.lens\b|\.lc\b|\.lr\b|--fx-glow|data-lens/.test(css), 'the lens rules are gone from the stylesheet');
+  const page = readFileSync(new URL('../src/pages/v3.astro', import.meta.url), 'utf8'), frames = readFileSync(new URL('../scripts/v3-frames.sh', import.meta.url), 'utf8');
+  assert.ok(!/data-lens|\/v3\/lens/.test(page), 'the page names no lens pack');
+  assert.ok(!/LENS/.test(frames), 'the frame script no longer builds lens packs');
+  assert.throws(() => statSync(new URL('../public/v3/lens', import.meta.url)), 'public/v3/lens is gone');
+  // the rule can fail
+  assert.ok(round('border-radius:50%;width:1px') && round('border-radius:4px') && round('clip-path:circle(50%)') && !round('border-radius:0') && !round('border:1px solid red'));
+});
+
+test('chapter 03\'s class names are its own: no rule outside its block styles them (a `.pk` chip rule elsewhere once gave the winner bar a border and 14px of padding)', () => {
+  const css = readFileSync(new URL('../src/aegis/v3.css', import.meta.url), 'utf8').replace(/\/\*(?!!)[\s\S]*?\*\//g, '');
+  const a = css.indexOf('.sharp{position:relative'), b = css.indexOf('.trio{display:grid'), tail = css.indexOf('.tri p{', b);
+  assert.ok(a > 0 && b > a && tail > b, 'the chapter 03 block is where this test looks for it');
+  const end = css.indexOf('}', tail) + 1, outside = css.slice(0, a) + css.slice(end);
+  // the classes of the panel's own markup (the corner brackets and the dot are shared with other chapters): read from the page, so a class added later is covered too
+  const page = readFileSync(new URL('../src/pages/v3.astro', import.meta.url), 'utf8'), at = page.indexOf('<figure class="sharp"'), fig = page.slice(at, page.indexOf('</figure>', at));
+  const own = new Set([...fig.matchAll(/class="([^"]*)"/g)].flatMap((m) => m[1].split(/\s+/)).concat([...fig.matchAll(/class=\{([^}]*)\}/g)].flatMap((m) => [...m[1].matchAll(/'([\w-]+)'/g)].map((x) => x[1]))));
+  for (const shared of ['c', 'tl', 'tr', 'bl', 'br', 'dot']) own.delete(shared);
+  assert.ok(['sharp', 'spl', 'spr', 'sq', 'sl', 'sk', 'ask', 'src', 'ilt', 'sb', 'bw', 'hi', 'flat'].every((c) => own.has(c)), `the panel's classes are read from the markup (${[...own]})`);
+  const NAMES = new RegExp(`\\.(?:${[...own].join('|')})(?![\\w-])`);
+  const ALLOWED = new Set(['.sharp .c', '.sharp .tl', '.sharp .tr', '.sharp .bl', '.sharp .br', '.sharp', '.spl', '.spr', '.sb']);   // the corner brackets shared with the bio panel and the chat windows; the phone block
+  const stray = (text: string) => [...text.matchAll(/([^{}]+)\{([^{}]*)\}/g)].flatMap((m) => m[1].split(',').map((s) => s.trim())).filter((s) => NAMES.test(s) && !ALLOWED.has(s) && !/\[data-sharp\]/.test(s));
+  assert.deepEqual(stray(outside), [], 'a rule outside chapter 03\'s block styles one of its classes');
+  assert.ok(outside.includes('.sharp .c') && outside.includes('[data-sharp]'), 'the shared and the stage-2B rules are still found (the test is not vacuous)');
+  // the rule can fail
+  assert.deepEqual(stray('.pk{padding:8px 12px}.bw i.pk{x:1}.sk{border:1px solid red}'), ['.bw i.pk', '.sk']);
+});
+
 // ---------- chapter 02: the chat windows ----------
 test('chapter 02: every answer streams through the REAL pieces of its string and is done within 2.5 s of its window coming in', () => {
   const src = readFileSync(new URL('../src/aegis/fx/c02.ts', import.meta.url), 'utf8');

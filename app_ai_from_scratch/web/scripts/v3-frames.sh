@@ -11,12 +11,6 @@
 #   FROM  second of the source the pack starts at (0)         FPS_D  desktop frames per second (9)   N_D  desktop frames (72)
 #                                                             FPS_M  mobile frames per second (6)    N_M  mobile frames (48)
 # A rate that divides the source's own (24 fps: 12, 8, 6) takes every 2nd, 3rd, 4th frame, evenly; any other rate takes uneven steps. The old pack is cleared first.
-#
-#   LENS=1 sh web/scripts/v3-frames.sh <id> <source.mp4>
-# builds instead the chapter-03 lens pack (src/aegis/fx/c03.ts): ONE grayscale WebP sprite of LENS_N square frames (row-major, LENS_COLS wide), cut from a
-# centred square of the clip, written to web/public/v3/lens/<id>.webp. It is a few dozen KB where a scrubbed pack is hundreds.
-#   LENS_T  start second (2)    LENS_FPS  frames per second (6)    LENS_N  frames (12)    LENS_COLS  sprite columns (3)
-#   LENS_Y  top of the square in the 720x1280 source (300)    LENS_PX  frame size in px (288)    LENS_Q  WebP quality (58)
 set -eu
 command -v ffmpeg >/dev/null || { echo "ffmpeg missing" >&2; exit 1; }
 command -v cwebp  >/dev/null || { echo "cwebp missing"  >&2; exit 1; }
@@ -24,14 +18,6 @@ id="$1"; src="$2"; here="$(cd "$(dirname "$0")/.." && pwd)"; out="$here/public/v
 tmp="$(mktemp -d)"; trap 'rm -rf "${tmp:?}"' EXIT
 FROM="${FROM:-0}"; FPS_D="${FPS_D:-9}"; N_D="${N_D:-72}"; FPS_M="${FPS_M:-6}"; N_M="${N_M:-48}"
 GRADE="eq=contrast=1.12,format=gray,format=rgb24"
-if [ "${LENS:-}" = "1" ]; then
-  n="${LENS_N:-12}"; cols="${LENS_COLS:-3}"; px="${LENS_PX:-288}"; rows=$(( (n + cols - 1) / cols ))
-  mkdir -p "$out/lens"
-  ffmpeg -v error -y -ss "${LENS_T:-2}" -i "$src" -vf "fps=${LENS_FPS:-6},crop=720:720:0:${LENS_Y:-300},scale=${px}:${px}:flags=lanczos,$GRADE,tile=${cols}x${rows}" -frames:v 1 "$tmp/l.png"
-  cwebp -quiet -q "${LENS_Q:-58}" -m 6 "$tmp/l.png" -o "$out/lens/$id.webp"
-  echo "$id: lens sprite ${cols}x${rows} of ${px}px frames, $(wc -c < "$out/lens/$id.webp" | tr -d ' ') bytes"
-  exit 0
-fi
 mkdir -p "$out/seq/$id/d" "$out/seq/$id/m" "$out/poster" "$out/still"
 rm -f "${out:?}/seq/${id:?}/d/"*.webp "${out:?}/seq/${id:?}/m/"*.webp          # a shorter pack must not leave the tail of the old one behind
 # desktop: source is 720x1280 portrait, no upscaling. N_D frames at FPS_D from second FROM (default: 72 frames over 8 s).

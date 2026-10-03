@@ -43,14 +43,14 @@ const LEGACY = ['especimenes', 'indice', 'ventajas', 'quien', 'vivo', 'precio', 
 // goes missing makes its effect throw at attach (the chapter stays static, with a console warning): this catches it before it ships.
 const FX_HOOKS = {
   c02: { fx: 'chat-stream', hooks: [['data-chat', 1], ['data-beat', 3], ['data-win', 3], ['data-type', 3], ['data-tag', 3], ['data-ctx', 1]] },
-  c03: { fx: 'lens', hooks: [['data-lens', 3]] },
+  c03: { fx: 'sharpen', hooks: [['data-sharp', 1], ['data-prompt', 1], ['data-slot', 3], ['data-bar', 10], ['data-flat', 10]] },
   c05: { fx: 'track', hooks: [['data-track', 1], ['data-fig', 6], ['data-cifra', 6]], stage: true },
   c06: { fx: 'implode', hooks: [['data-nots', 1], ['data-word', 6], ['data-final', 1]], stage: true },
   c07: { fx: 'ring', hooks: [['data-ring', 1], ['data-ring-stroke', 1], ['data-tick', 12], ['data-count', 1]] },   // one counter only: the four figures under the ring never count
   c08: { fx: 'bars-once', hooks: [['data-bars', 1]] },
 };
 // the parts that exist only because an effect added them (they must hang on html.fxl) · the selectors that name the copy of an effect chapter · what hides it
-const FX_ONLY = /\.(?:ty|gh|lens|lc|lr|pin|rail|imp|pen|num|wrs?)\b|\[data-fx-/;
+const FX_ONLY = /\.(?:ty|gh|pin|rail|imp|pen|num|wrs?)\b|\[data-fx-/;
 const FX_COPY = /\.(?:rp|tag|you|ia|who|shout|bt|beat|chat|trio|tri|figs|fig|big|cap|ie|nots|hx|ctr|specs|srow|tcopy|lede|clock)\b|cb|cn|cp|crow|cands|spec|\bs\[data-word\]|\bdt\b|\bdd\b|#c(?:0[2-9]|1[0-6])\b/;
 const FX_HIDES = /(?:^|;)\s*(?:opacity\s*:\s*0(?![.\d])|visibility\s*:\s*hidden|display\s*:\s*none|clip-path\s*:|color\s*:\s*transparent|font-size\s*:\s*0\b|transform\s*:\s*scale\(0\b)/;
 const CTA_CHAPTERS = ['c03', 'c07', 'c10', 'c11'];       // CTA rows with the price label + the guarantee line; c14 has its in-card button; c16 closes
@@ -104,7 +104,8 @@ function required(lang) {
       ...[1, 2, 3].flatMap((i) => [[`symptom ${i} lesson`, P[`s${i}Lec`]], [`symptom ${i}`, P[`s${i}H`]], [`symptom ${i} cause`, P[`s${i}C`]]])],
     c02: [['label', lab('02', V.s1Eb)], ['h2', V.s1H], ...V.s1Beats.flatMap((b, i) => [[`beat ${i + 1} you`, b.tu], [`beat ${i + 1} ai`, b.ia], [`beat ${i + 1} tag`, b.tag]]),
       ['earlier', V.s1Earlier], ['gap', V.s1Gap], ['shout', V.s1Cierre], ['you', V.chatTu], ['ai', V.chatIa]],
-    c03: [['label', lab('03', V.ch03)], ['h2', P.llevasH2], ['l1', P.l1H], ['l1', P.l1D], ['l2', P.l2H], ['l2', P.l2D], ['l3', P.l3H], ['l3', P.l3D], ...cta],
+    c03: [['label', lab('03', V.ch03)], ['h2', P.llevasH2], ['chips source', V.tokReal], ...V.askSlots.map((w) => ['slot', w]), ['drawing label', V.ilus],
+      ['l1', P.l1H], ['l1', P.l1D], ['l2', P.l2H], ['l2', P.l2D], ['l3', P.l3H], ['l3', P.l3D], ...cta],
     cL: [['label', lab('04', V.ch04)], ['h2', V.adentroH], ['sub', P.aD], ['context', ctx], ['candidates', V.cand], ['dial', V.tabTemp],
       ...['05', '06', '08', '09'].flatMap((n) => [[`step ${n} lesson`, `${V.lec} ${n}`], [`step ${n} h`, mod(n).h], [`step ${n} d`, mod(n).d]])],
     c05: [['label', lab('05', V.ch05)], ...mods.slice(0, 6).flatMap((m) => [[`fig ${m.n} eyebrow`, m.eb], [`fig ${m.n} number`, m.k], [`fig ${m.n} caption`, m.kc]])],
@@ -214,6 +215,95 @@ function chatSelfTest(html, lang) {
   let bad = 0;
   for (const [what, m] of Object.entries(mut)) if (m === html || !chatRule(m, lang).length) { console.error(`FAIL self-test: chatRule does not catch "${what}"`); bad++; }
   return [bad, Object.keys(mut).length];
+}
+
+// ---------- chapter 03: a drawing of the process, in real tokens, square, honest ----------
+// The owner's brief: no circular footage lenses and no gears shot (they are gone), ONE display headline per chapter (the three benefits are mono labels), no round shape anywhere in the
+// chapter, and a process that is real or labelled ILUSTRATIVO. The panel draws chapter 02's third case again: its request as the real o200k tokens it is, the three things that case's tag says
+// it lacked as accent chips, and the distribution over the next word going from flat to one winner (a drawing: it says ILUSTRATIVO).
+const C03_CSS = /(?:^|[\s,>+~])(?:\.sharp|\.spl|\.spr|\.sq|\.sl|\.sk|\.src|\.ilt|\.sb|\.bw|\.trio|\.tri)(?![\w-])/;
+function sharpRule(html, lang) {
+  const out = [], V = STR[lang].pub.v3;
+  const c03 = (html.match(/<section id="c03"[\s\S]*?<\/section>/) ?? [''])[0];
+  if (!c03) return ['chapter 03 is missing'];
+  if (/<canvas\b|<img\b|<picture\b|<video\b|\bdata-lens\b|\/v3\/lens\//i.test(c03)) out.push('chapter 03 carries footage (a canvas, an image, a video or a lens pack): the circular lenses are gone, the chapter is a drawing');
+  const hx = (c03.match(/class="hx[\s"]/g) ?? []).length;
+  if (hx !== 1) out.push(`chapter 03 has ${hx} display headlines, expected exactly 1 (the three benefits are mono labels)`);
+  if ((c03.match(/<h3>/g) ?? []).length !== 3 || (c03.match(/<article class="tri">/g) ?? []).length !== 3) out.push('chapter 03 does not have its three benefit plates (<article class="tri"> with an <h3> label each)');
+  const panels = c03.match(/<figure class="sharp" data-sharp aria-hidden="true">[\s\S]*?<\/figure>/g) ?? [];
+  if (panels.length !== 1) return [...out, `chapter 03 has ${panels.length} aria-hidden drawing panels, expected 1`];
+  const pn = panels[0], tu = V.s1Beats[2].tu;
+  // the request: the real tokens of case 3's pill, piece for piece (a leading space shown as «·»)
+  const want = piecesOf(TOKEN_FILE[lang], tu).map((p) => show(p[0]));
+  const row = pn.match(/<div class="sq" data-prompt>([\s\S]*?)<\/div>/)?.[1] ?? '';
+  const got = [...row.matchAll(/<span class="sk">([^<]*)<\/span>/g)].map((m) => decode(m[1]));
+  if (got.join('|') !== want.join('|')) out.push(`the request row is [${got.join(' | ')}], expected the real tokens of «${tu}»: [${want.join(' | ')}]`);
+  if ((row.match(/<span class="sk">/g) ?? []).length !== got.length) out.push('a request chip has an unexpected shape');
+  // what it lacked: the words case 3's own tag names, in the order it names them
+  const slots = [...pn.matchAll(/<span class="sk ask" data-slot>([^<]*)<\/span>/g)].map((m) => decode(m[1]));
+  if (slots.join('|') !== V.askSlots.join('|')) out.push(`the context chips are [${slots.join(' | ')}], expected [${V.askSlots.join(' | ')}]`);
+  const tag = V.s1Beats[2].tag; let at = 0;
+  for (const w of slots) { const k = tag.indexOf(w, at); if (k < 0) { out.push(`the context chip «${w}» is not, in order, in the tag of chapter 02's third case («${tag}»): the three things the chapter adds are the ones that case says were missing`); break; } at = k + w.length; }
+  // the factual source of the request's chips between the request and the three chips; the drawing says ILUSTRATIVO
+  const src = [...pn.matchAll(/<p class="src">([\s\S]*?)<\/p>/g)].map((m) => norm(m[1]));
+  if (src.length !== 1 || src[0] !== norm(V.tokReal)) out.push(`the source label of the request chips is [${src.join(' | ')}], expected exactly one «${V.tokReal}»`);
+  else if (!(pn.indexOf('class="sq"') < pn.indexOf('class="src"') && pn.indexOf('class="src"') < pn.indexOf('class="sl"'))) out.push('the source label is not between the request chips and the context chips');
+  const ilt = [...pn.matchAll(/<p class="ilt"><i class="dot"><\/i><em>([^<]*)<\/em><\/p>/g)].map((m) => decode(m[1]));
+  if (ilt.length !== 1 || ilt[0] !== V.ilus) out.push(`the drawing carries [${ilt.join(' | ')}] as its label, expected exactly one «${V.ilus}»`);
+  // the distribution: ten bars on one scale, the first the winner (and the only accent one), a clear winner, a flat start (every word about as likely), both of the same mass
+  const bars = [...pn.matchAll(/<i\b([^>]*\bdata-bar="([^"]*)"[^>]*)>/g)].map((m) => ({ attrs: m[1], v: +m[2], f: +(/\bdata-flat="([^"]*)"/.exec(m[1])?.[1] ?? NaN), css: +(/style="--v:([\d.]+)"/.exec(m[1])?.[1] ?? NaN) }));
+  if (bars.length !== 10) out.push(`the drawing has ${bars.length} bars, expected 10`);
+  else {
+    if (bars.some((b) => !(b.v > 0 && b.v <= 1) || !(b.f > 0 && b.f <= 1) || b.css !== b.v)) out.push('a bar lacks its final height (data-bar, the same as its --v) or its flat height (data-flat), both between 0 and 1');
+    else {
+      const vs = bars.map((b) => b.v), fs = bars.map((b) => b.f);
+      if (vs[0] !== 1 || vs.slice(1).some((x, k) => !(x < vs[k]))) out.push(`the bars are [${vs}]: the first must be the winner (1) and each one after it lower`);
+      if (vs[1] > 0.5) out.push(`the runner-up is ${vs[1]} of the winner: a sharp picture has a clear winner (at most half)`);
+      if (Math.max(...fs) / Math.min(...fs) > 1.2) out.push(`the flat start is [${fs}]: every word must be about as likely (the tallest at most 1.2 times the shortest)`);
+      const sv = vs.reduce((x, y) => x + y, 0), sf = fs.reduce((x, y) => x + y, 0);
+      if (Math.abs(sv - sf) > 0.02) out.push(`the sharp bars add up to ${sv.toFixed(3)} and the flat ones to ${sf.toFixed(3)}: both are the same distribution on the same scale, they must weigh the same`);
+      const u = +(/<div class="sb" style="--u:([\d.]+)">/.exec(pn)?.[1] ?? NaN);
+      if (!(Math.abs(u - sf / 10) < 0.01)) out.push(`the uniform line is at ${u} but the flat bars average ${(sf / 10).toFixed(3)}`);
+    }
+    const hi = (pn.match(/<i class="hi"/g) ?? []).length;
+    if (hi !== 1 || !/<i class="hi" data-bar="1"/.test(pn)) out.push('the winner (the first bar) is not the only accent bar');
+  }
+  return out;
+}
+// A gate that cannot fail proves nothing: each way the chapter can go back to footage and rounded shapes, or lose what the owner asked for, must be caught.
+function sharpSelfTest(html, lang) {
+  if (sharpRule(html, lang).length) return [0, 0];                  // the real page is judged by the loop below
+  const inC03 = (fn) => { const at = html.indexOf('<section id="c03"'), end = html.indexOf('</section>', at); return html.slice(0, at) + fn(html.slice(at, end)) + html.slice(end); };
+  const V = STR[lang].pub.v3, first = piecesOf(TOKEN_FILE[lang], V.s1Beats[2].tu)[1][0];
+  const mut = {
+    'a lens pack named again': inC03((c) => c.replace('<article class="tri">', '<article class="tri" data-lens="v1">')),
+    'a canvas of footage back in the chapter': inC03((c) => c.replace('<figure class="sharp"', '<canvas></canvas><figure class="sharp"')),
+    'a second display headline': inC03((c) => c.replace('<article class="tri">', '<h2 class="hx">x</h2><article class="tri">')),
+    'a benefit plate gone': inC03((c) => c.replace(/<article class="tri">[\s\S]*?<\/article>/, '')),
+    'the drawing readable by a screen reader': inC03((c) => c.replace('data-sharp aria-hidden="true"', 'data-sharp')),
+    'a request chip that is not a token': inC03((c) => c.replace(`<span class="sk">${esc(show(first))}</span>`, '<span class="sk">xx</span>')),
+    'a request chip gone': inC03((c) => c.replace(/<span class="sk">[^<]*<\/span>/, '')),
+    'the context chips reordered': inC03((c) => c.replace(`>${esc(V.askSlots[0])}</span>`, '>__</span>').replace(`>${esc(V.askSlots[1])}</span>`, `>${esc(V.askSlots[0])}</span>`).replace('>__</span>', `>${esc(V.askSlots[1])}</span>`)),
+    'a context chip that case 3 never named': inC03((c) => c.replace(`>${esc(V.askSlots[2])}</span>`, '>CUÁNDO</span>')),
+    'the source label gone': inC03((c) => c.replace(/<p class="src">[\s\S]*?<\/p>/, '')),
+    'the ILUSTRATIVO label gone': inC03((c) => c.replace(/<p class="ilt">[\s\S]*?<\/p>/, '')),
+    'a ninth bar': inC03((c) => c.replace(/<span class="bw"><i data-bar="[^"]*" data-flat="[^"]*" style="[^"]*"><\/i><\/span>/, '')),
+    'a bar whose CSS height is not its data-bar': inC03((c) => c.replace(/style="--v:([\d.]+)"/, 'style="--v:.5"')),
+    'a winner that is not clear': inC03((c) => c.replace(/(<span class="bw"><i data-bar=")[^"]*(")/, '$10.8$2').replace(/style="--v:0\.\d+"/, 'style="--v:0.8"')),
+    'a flat start that is not flat': inC03((c) => c.replace(/data-flat="[^"]*"/, 'data-flat="0.9"')),
+    'a second accent bar': inC03((c) => c.replace('<span class="bw"><i data-bar', '<span class="bw"><i class="hi" data-bar')),
+    'the uniform line out of place': inC03((c) => c.replace(/<div class="sb" style="--u:[\d.]+">/, '<div class="sb" style="--u:.9">')),
+  };
+  const css = {
+    'a round chip (border-radius on .sk)': html.replace('.sk{display:inline-flex', '.sk{border-radius:50%;display:inline-flex'),
+    'a round bar (border-radius on .bw i)': html.replace('.bw i{display:block', '.bw i{border-radius:4px;display:block'),
+    'a circular clip on the panel': html.replace('.sharp{position:relative', '.sharp{clip-path:circle(50%);position:relative'),
+    'a rounded benefit plate': html.replace('.tri{display:grid', '.tri{border-radius:12px;display:grid'),
+  };
+  let bad = 0;
+  for (const [what, m] of Object.entries(mut)) if (m === html || !sharpRule(m, lang).length) { console.error(`FAIL self-test: sharpRule does not catch "${what}"`); bad++; }
+  for (const [what, m] of Object.entries(css)) if (m === html || !judge(m, lang).some((x) => /^round: /.test(x))) { console.error(`FAIL self-test: the round-shape rule does not catch "${what}"`); bad++; }
+  return [bad, Object.keys(mut).length + Object.keys(css).length];
 }
 
 // ---------- real tokens: what the page ships for the effects (#v3-tokens) ----------
@@ -406,10 +496,6 @@ function judge(html, lang) {
     const beats = ch.c02.html.split(/\sdata-beat=/).slice(1);
     for (const [i, b] of beats.entries()) for (const hook of ['data-type', 'data-tag']) if ((b.match(new RegExp(`\\s${hook}(?=[\\s=>])`, 'g')) ?? []).length !== 1) f.push(`fx: #c02 beat ${i + 1} does not carry exactly one ${hook}`);
   }
-  // each card names a footage pack that is really in public/v3/lens (a name with no file would be a lens that never opens, and nothing would say so)
-  const packs = [...ch.c03.html.matchAll(/\sdata-lens="([^"]*)"/g)].map((m) => m[1]);
-  if (packs.join() !== 'v1,v2,n5') f.push(`fx: #c03's lens packs are [${packs}], expected v1,v2,n5 (V1 the report, V2 the gears, N5 the knobs)`);
-  for (const id of packs) if (!existsSync(new URL(`../public/v3/lens/${id}.webp`, import.meta.url))) f.push(`fx: #c03 names the lens pack "${id}" but public/v3/lens/${id}.webp does not exist`);
   // the effects' custom properties live in their own namespace: a bare --lg (the logo size) once resized the header brand when an effect reused the name
   for (const r of rules) if (/\bhtml\.fxl\b/.test(r.sel)) for (const m of r.body.matchAll(/(?:^|;)\s*(--[\w-]+)\s*:/g)) if (!m[1].startsWith('--fx-')) f.push(`fx: "${r.sel}" declares ${m[1]}: a custom property of the effects must start with --fx- (it would collide with the page's own)`);
   // everything in the stage-2B block of v3.css must hang on a part that only an effect adds (a class it creates, an attribute it sets) or be a --fx- variable: a rule
@@ -423,6 +509,9 @@ function judge(html, lang) {
     if (FX_COPY.test(sel) && FX_HIDES.test(r.body) && !(/\bhtml\.fxl\b/.test(sel) && /\[data-fx-/.test(sel))) f.push(`fx: "${sel}" hides the copy of an effect chapter by default (only html.fxl [data-fx-…], an attribute the armed effect sets, may)`);
   }
 
+  // chapter 03 is square: no rule that styles one of its parts may round it or cut it into a circle (the circular lenses are gone and stay gone)
+  for (const r of rules) if (r.sel.split(',').some((sel) => C03_CSS.test(sel)) && /border-radius\s*:\s*(?!0(?:px)?\s*(?:;|$))|clip-path\s*:\s*(?:circle|ellipse)/i.test(r.body)) f.push(`round: "${r.sel}" makes a round shape in chapter 03 (square HUD geometry, no circles, no rounded corners)`);
+
   // chapter 04 ends with its last tab: no closing line that points at specimens now living in chapter 08, and a scroll length the engine's
   // timeline is scaled for (llm.ts: GIVEN). A mismatch would change the pacing of every beat without any error.
   if (textOf(html).includes(norm(P.espH2))) f.push(`structure: chapter 04 closes on «${norm(P.espH2)}» again (the specimens live in chapter 08)`);
@@ -434,6 +523,7 @@ function judge(html, lang) {
   for (const m of wordmarkRule(html)) f.push(`wordmark: ${m}`);
   for (const m of tokensRule(html, lang)) f.push(`tokens: ${m}`);
   for (const m of chatRule(html, lang)) f.push(`chat: ${m}`);
+  for (const m of sharpRule(html, lang)) f.push(`sharp: ${m}`);
   return f;
 }
 
@@ -634,10 +724,12 @@ function mutants(html, lang) {
     ['the typed answer hidden under html.fxl without the armed attribute', html.replace('html.fxl [data-fx-s="arm"] .rp,', 'html.fxl .rp,'), /fx: "html\.fxl \.rp" hides the copy/],
     ['a CSS rule that hides a lesson tag by default', html.replace('</head>', '<style>.tag{opacity:0}</style></head>'), /fx: "\.tag" hides the copy/],
     ['a CSS rule that makes a figure transparent by default', html.replace('</head>', '<style>.clock .ctr b{color:transparent}</style></head>'), /fx: "\.clock \.ctr b" hides the copy/],
-    ['chapter 03 without its data-fx name', html.replace('data-fx="lens"', 'data-fx="x"'), /fx: #c03 lost its data-fx/],
-    ['a chapter 03 card without its footage hook', html.replace(' data-lens="n5"', ''), /fx: #c03 has 2 data-lens|fx: #c03's lens packs/],
-    ['a chapter 03 card naming a pack that does not exist', html.replace('data-lens="n5"', 'data-lens="zz"'), /fx: #c03 names the lens pack "zz"/],
-    ['chapter 03 packs in another order', html.replace('data-lens="v1"', 'data-lens="__"').replace('data-lens="v2"', 'data-lens="v1"').replace('data-lens="__"', 'data-lens="v2"'), /fx: #c03's lens packs are \[v2,v1,n5\]/],
+    ['chapter 03 without its data-fx name', html.replace('data-fx="sharpen"', 'data-fx="x"'), /fx: #c03 lost its data-fx/],
+    ['chapter 03 without its panel hook', html.replace(' data-sharp', ''), /fx: #c03 has 0 data-sharp/],
+    ['chapter 03 without its request-row hook', html.replace(' data-prompt', ''), /fx: #c03 has 0 data-prompt/],
+    ['a chapter 03 context chip without its hook', inChapter('c03', (c) => c.replace(' data-slot', '')), /fx: #c03 has 2 data-slot/],
+    ['a chapter 03 bar without its final-height hook', inChapter('c03', (c) => c.replace(/ data-bar="/, ' data-x="')), /fx: #c03 has 9 data-bar/],
+    ['a chapter 03 bar without its flat-height hook', inChapter('c03', (c) => c.replace(/ data-flat="/, ' data-x="')), /fx: #c03 has 9 data-flat/],
     ['chapter 05 without its data-fx name', html.replace('data-fx="track"', 'data-fx="x"'), /fx: #c05 lost its data-fx/],
     ['chapter 05 without its track hook', inChapter('c05', (c) => c.replace(' data-track', '')), /fx: #c05 has 0 data-track/],
     ['a chapter 05 figure without its number hook', html.replace(' data-cifra', ''), /fx: #c05 has 5 data-cifra/],
@@ -647,7 +739,8 @@ function mutants(html, lang) {
     ['chapter 05 with the pin class in the markup', html.replace('<section id="c05" class="sec cx figs-sec"', '<section id="c05" class="sec cx figs-sec pin"'), /layout: #c05 carries the effects' `pin` class/],
     ['the pinned stage keyed to html.fx instead of html.fxl', html.replace('html.fxl .pin .pstage{', 'html.fx .pin .pstage{'), /fx: "html\.fx \.pin \.pstage" styles a part that only an effect adds/],
     ['the pinned section height without html.fxl', html.replace('html.fxl #c05.pin{--fx-cw', '#c05.pin{--fx-cw'), /fx: "#c05\.pin" styles a part that only an effect adds/],
-    ['the lens ring styled without html.fxl', html.replace('html.fxl .lr{', '.lr{'), /fx: "\.lr" styles a part that only an effect adds/],
+    ['the chapter 03 winner overlay without html.fxl', html.replace('html.fxl [data-sharp][data-fx-s] .bw i.hi::after{', '[data-sharp][data-fx-s] .bw i.hi::after{'), /fx: "\[data-sharp\]\[data-fx-s\] \.bw i\.hi::after" styles a part that only an effect adds/],
+    ['a stage-2B rule on a plain chapter 03 part (it would outlive dispose)', html.replace('html.fxl [data-sharp][data-fx-s] .bw i.hi{', 'html.fxl .bw i.hi{'), /fx: "html\.fxl \.bw i\.hi" is in the stage-2B block but styles an element no effect owns/],
     ['chapter 06 without its data-fx name', html.replace('data-fx="implode"', 'data-fx="x"'), /fx: #c06 lost its data-fx/],
     ['chapter 06 without its grid hook', inChapter('c06', (c) => c.replace(' data-nots', '')), /fx: #c06 has 0 data-nots/],
     ['a chapter 06 word without its hook', inChapter('c06', (c) => c.replace(' data-word', '')), /fx: #c06 has 5 data-word/],
@@ -678,7 +771,7 @@ function mutants(html, lang) {
     ['the chapter 08 bar pre-state styled without html.fxl', html.replace('html.fxl [data-fx-s] .cb i{', '[data-fx-s] .cb i{'), /fx: "\[data-fx-s\] \.cb i" styles a part that only an effect adds/],
     ['the chapter 08 bars hidden by default', html.replace('</head>', '<style>.cb i{opacity:0}</style></head>'), /fx: "\.cb i" hides the copy/],
     ['a stage-2B rule on a plain element (it would outlive dispose)', html.replace('html.fxl [data-fx-live] .caret{', 'html.fxl .caret{'), /fx: "html\.fxl \.caret" is in the stage-2B block but styles an element no effect owns/],
-    ['the lens glow back on the logo-size custom property', html.replace('html.fxl{--fx-glow:', 'html.fxl{--lg:'), /fx: "html\.fxl" declares --lg/],
+    ['a chapter 03 custom property on the page\'s own name', html.replace('html.fxl [data-sharp][data-fx-s] .bw i.hi{position:relative;', 'html.fxl [data-sharp][data-fx-s] .bw i.hi{--lg:1px;position:relative;'), /fx: "html\.fxl \[data-sharp\]\[data-fx-s\] \.bw i\.hi" declares --lg/],
     ['chapter 02 with the pin class in the markup', html.replace('<section id="c02" class="sec cx s02"', '<section id="c02" class="sec cx s02 pin"'), /layout: #c02 carries the effects' `pin` class/],
     ['the footer wordmark block gone', (() => { const at = /<div class="wmk"/.exec(html).index; return html.replace(balanced(html, at, 'div'), ''); })(), /wordmark: the footer wordmark block appears 0 times/],
     ['the footer wordmark twice', (() => { const at = /<div class="wmk"/.exec(html).index, b = balanced(html, at, 'div'); return html.replace(b, b + b); })(), /wordmark: the footer wordmark block appears 2 times/],
@@ -871,7 +964,10 @@ function fxSourceSelfTest(files) {
     ['a layout property set with setProperty', { ...files, 'c02.ts': files['c02.ts'].replace('export function initC02', "document.body.style.setProperty('height', '1px');\nexport function initC02") }, /sets the CSS property height/],
     ['a custom property of the page reused (--lg)', { ...files, 'c02.ts': files['c02.ts'].replace('export function initC02', "document.body.style.setProperty('--lg', '1px');\nexport function initC02") }, /sets the custom property --lg/],
     ['a template literal written into the page', { ...files, 'c03.ts': files['c03.ts'].replace('export function initC03', "document.body.innerHTML = `<b>${1}</b>`;\nexport function initC03") }, /writes a string literal/],
-    ['a pre-state armed without belowFold() (chapter 03)', { ...files, 'c03.ts': files['c03.ts'].replace('l.armed = belowFold(l.tri);', 'l.armed = true;') }, /c03\.ts: arms a pre-state without asking belowFold/],
+    ['a pre-state armed without once() or belowFold() (chapter 03)', { ...files, 'c03.ts': files['c03.ts'].replace('once(panel, undo', 'go(panel, undo') }, /c03\.ts: arms a pre-state without asking belowFold/],
+    ['a layout property animated (chapter 03, style.height)', { ...files, 'c03.ts': files['c03.ts'].replace('export function initC03', "document.body.style.height = '1px';\nexport function initC03") }, /c03\.ts: sets style\.height/],
+    ['a literal written by chapter 03', { ...files, 'c03.ts': files['c03.ts'].replace('export function initC03', "document.body.textContent = 'x';\nexport function initC03") }, /c03\.ts: writes a string literal/],
+    ['a custom property of the page reused by chapter 03 (--lg)', { ...files, 'c03.ts': files['c03.ts'].replace("panel.style.setProperty('--fx-s'", "panel.style.setProperty('--lg'") }, /c03\.ts: sets the custom property --lg/],
     ['an engine mode class switched by an effect', { ...files, 'c02.ts': files['c02.ts'].replace('export function initC02', "document.documentElement.classList.add('nogl');\nexport function initC02") }, /switches an engine mode class/],
     ['a pre-state armed without belowFold()', { ...files, 'c02.ts': files['c02.ts'].replace('if (!belowFold(w.el)) continue;', '') }, /arms a pre-state without asking belowFold/],
     ['a pre-state armed without belowFold() (chapter 07)', { ...files, 'c07.ts': files['c07.ts'].replaceAll('belowFold(', 'Boolean(') }, /c07\.ts: arms a pre-state without asking belowFold/],
@@ -942,7 +1038,7 @@ for (const m of fxSource(fxFiles)) { console.error(`FAIL fx: ${m}`); fail++; }
 for (const lang of LANGS) {
   const html = pages.get(`${lang}/none`);
   fail += selfTest(html, lang); mutantCount += mutants(html, lang).length;
-  for (const t of [deltaSelfTest, tokensSelfTest, chatSelfTest]) { const [bad, n] = t(html, lang); fail += bad; mutantCount += n; }
+  for (const t of [deltaSelfTest, tokensSelfTest, chatSelfTest, sharpSelfTest]) { const [bad, n] = t(html, lang); fail += bad; mutantCount += n; }
 }
 for (const lang of LANGS) for (const cc of MARKETS) {
   const tag = `${lang}/${cc ?? 'none'}`, html = pages.get(tag);

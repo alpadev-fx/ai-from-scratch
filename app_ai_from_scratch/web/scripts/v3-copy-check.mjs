@@ -24,6 +24,7 @@ import { preguntas, modulos, candidatos } from '../src/data/landing.ts';
 import { ctxOf } from '../src/aegis/specimens.ts';
 import { piecesOf, show, wordsOf } from '../src/aegis/tokens.ts';
 import { chipStrings } from '../src/aegis/token-strings.ts';
+import { CURVE, DIALS, WEIGHTS, ANSWERS, figureInts } from '../src/aegis/c05-data.ts';
 import { SANCTIONED, guard, violations, assertPriced } from '../src/aegis/copy-guard.ts';
 
 // The committed real tokens (o200k_base, cut with tiktoken by web/scripts/v3-tokens.py): every chip on the page must be one of these pieces.
@@ -44,13 +45,13 @@ const LEGACY = ['especimenes', 'indice', 'ventajas', 'quien', 'vivo', 'precio', 
 const FX_HOOKS = {
   c02: { fx: 'chat-stream', hooks: [['data-chat', 1], ['data-beat', 3], ['data-win', 3], ['data-type', 3], ['data-tag', 3], ['data-ctx', 1]] },
   c03: { fx: 'sharpen', hooks: [['data-sharp', 1], ['data-prompt', 1], ['data-slot', 3], ['data-bar', 10], ['data-flat', 10]] },
-  c05: { fx: 'track', hooks: [['data-track', 1], ['data-fig', 6], ['data-cifra', 6]], stage: true },
+  c05: { fx: 'track', hooks: [['data-track', 1], ['data-fig', 6], ['data-cifra', 6], ['data-viz', 5]], stage: true },
   c06: { fx: 'implode', hooks: [['data-nots', 1], ['data-word', 6], ['data-final', 1]], stage: true },
   c07: { fx: 'ring', hooks: [['data-ring', 1], ['data-ring-stroke', 1], ['data-tick', 12], ['data-count', 1]] },   // one counter only: the four figures under the ring never count
   c08: { fx: 'bars-once', hooks: [['data-bars', 1]] },
 };
 // the parts that exist only because an effect added them (they must hang on html.fxl) · the selectors that name the copy of an effect chapter · what hides it
-const FX_ONLY = /\.(?:ty|gh|pin|rail|imp|pen|num|wrs?)\b|\[data-fx-/;
+const FX_ONLY = /\.(?:ty|gh|pin|rail|imp|pen|num|wrs?|vx)\b|\[data-fx-/;
 const FX_COPY = /\.(?:rp|tag|you|ia|who|shout|bt|beat|chat|trio|tri|figs|fig|big|cap|ie|nots|hx|ctr|specs|srow|tcopy|lede|clock)\b|cb|cn|cp|crow|cands|spec|\bs\[data-word\]|\bdt\b|\bdd\b|#c(?:0[2-9]|1[0-6])\b/;
 const FX_HIDES = /(?:^|;)\s*(?:opacity\s*:\s*0(?![.\d])|visibility\s*:\s*hidden|display\s*:\s*none|clip-path\s*:|color\s*:\s*transparent|font-size\s*:\s*0\b|transform\s*:\s*scale\(0\b)/;
 const CTA_CHAPTERS = ['c03', 'c07', 'c10', 'c11'];       // CTA rows with the price label + the guarantee line; c14 has its in-card button; c16 closes
@@ -108,7 +109,7 @@ function required(lang) {
       ['l1', P.l1H], ['l1', P.l1D], ['l2', P.l2H], ['l2', P.l2D], ['l3', P.l3H], ['l3', P.l3D], ...cta],
     cL: [['label', lab('04', V.ch04)], ['h2', V.adentroH], ['sub', P.aD], ['context', ctx], ['candidates', V.cand], ['dial', V.tabTemp],
       ...['05', '06', '08', '09'].flatMap((n) => [[`step ${n} lesson`, `${V.lec} ${n}`], [`step ${n} h`, mod(n).h], [`step ${n} d`, mod(n).d]])],
-    c05: [['label', lab('05', V.ch05)], ...mods.slice(0, 6).flatMap((m) => [[`fig ${m.n} eyebrow`, m.eb], [`fig ${m.n} number`, m.k], [`fig ${m.n} caption`, m.kc]])],
+    c05: [['label', lab('05', V.ch05)], ...mods.slice(0, 6).flatMap((m) => [[`fig ${m.n} eyebrow`, m.eb], [`fig ${m.n} number`, m.k], [`fig ${m.n} caption`, m.kc]]), ['drawing label', V.ilus]],
     c06: [['label', lab('06', V.s3Eb)], ...V.s3Palabras.map((w) => ['struck word', w]), ['h2', V.s3H]],
     c07: [['label', lab('07', V.ch07)], ['h2', V.s4H], ['lede', V.s4Sub], ...V.specs.flatMap((s) => [['figure', String(s.k)], ['figure caption', s.d]]), ...cta],
     c08: [['label', lab('08', V.ch08)], ['h2', V.s5H], ['sub', V.s5Sub], ['specimen B', V.s5Eb], ['interactive', P.espInter], ['prompt', ctx], ['candidates', V.cand],
@@ -308,6 +309,100 @@ function sharpSelfTest(html, lang) {
   return [bad, Object.keys(mut).length + Object.keys(css).length];
 }
 
+// ---------- chapter 05: a drawing of the process under five of the six figures ----------
+// The owner's brief: the figures stop being only numbers: each card shows the process it measures, as a small motion graphic in the same square, flat, hairline language, and what is not
+// measured says ILUSTRATIVO. A drawing has no text of its own; every number it draws from its card (the curve's three values, the first segment of the stacked bar and the 100 it adds up to)
+// comes FROM the card's figure; nothing in it is round; and card 5 («3 palabras = 5 tokens») has none until the owner decides what it says: the real o200k tokens of its sentence are 4, not 5.
+const C05_KINDS = ['eg', 'curve', 'dials', 'freeze', null, 'stack'];
+const C05_CSS = /(?:^|[\s,>+~])(?:\.viz|\.fig|\.figs|\.big|\.cap|\.ie)(?![\w-])|\.vz-[\w-]+|\.vx(?![\w-])|\[data-viz/;
+function vizRule(html, lang) {
+  const out = [], V = STR[lang].pub.v3, mods = modulos(lang).slice(0, 6);
+  const c05 = (html.match(/<section id="c05"[\s\S]*?<\/section>/) ?? [''])[0];
+  if (!c05) return ['chapter 05 is missing'];
+  const cards = c05.split('<article class="fig" data-fig>').slice(1);
+  if (cards.length !== 6) return [`chapter 05 has ${cards.length} cards, expected 6`];
+  cards.forEach((c, i) => {
+    const n = i + 1, kind = C05_KINDS[i], at = c.indexOf('<div class="viz"'), k = mods[i].k;
+    if (!kind) { if (at >= 0 || /data-viz/.test(c)) out.push(`card ${n} («${k}») carries a drawing: it has none until the owner decides what it says`); return; }
+    if (at < 0) { out.push(`card ${n} has no drawing (expected «${kind}»)`); return; }
+    const viz = balanced(c, at, 'div');
+    if (!/^<div class="viz" aria-hidden="true">/.test(viz)) out.push(`card ${n}'s drawing is readable by a screen reader (it is a decoration: aria-hidden)`);
+    const text = norm(viz.replace(/<[^>]+>/g, ' '));
+    if (text !== V.ilus) out.push(`card ${n}'s drawing carries the text «${text}», expected only «${V.ilus}» (a drawing has no copy of its own, and says it is a drawing)`);
+    if (!viz.includes(`<p class="vz-tag"><i class="dot"></i><em>${V.ilus}</em></p>`)) out.push(`card ${n}'s drawing does not carry its «${V.ilus}» tag`);
+    if (!(c.indexOf('class="big') < at && at < c.indexOf('class="cap"'))) out.push(`card ${n}'s drawing is not between its figure and its caption`);
+    if (/<img\b|<canvas\b|<video\b|<picture\b|<circle\b|<ellipse\b|\brx=|border-radius/i.test(viz)) out.push(`card ${n}'s drawing carries an image, a canvas, a video or a round shape`);
+    if ((viz.match(/\sdata-viz="([^"]*)"/g) ?? []).join() !== ` data-viz="${kind}"`) out.push(`card ${n}'s drawing is not named «${kind}» (its hook): ${(viz.match(/\sdata-viz="[^"]*"/g) ?? []).join(' ') || 'none'}`);
+    const all = (re) => [...viz.matchAll(re)];
+    if (kind === 'eg') {
+      if (all(/<i class="vz-t" style="--a:\d+%;--b:\d+%">/g).length !== 4 || all(/class="vz-s"/g).length !== 1 || all(/class="vz-f"/g).length !== 1) out.push(`card ${n}: the examples drawing is not 4 waiting tiles, one slot and one fill`);
+    } else if (kind === 'curve') {
+      const want = figureInts(k), marks = all(/<i class="vz-m" data-x="([\d.]+)" data-v="(\d+)" style="left:([\d.]+)%;top:([\d.]+)%">/g).map((m) => ({ x: +m[1], v: +m[2], left: +m[3], top: +m[4] }));
+      if (marks.map((m) => m.v).join() !== want.join()) out.push(`card ${n}: the points of the curve are [${marks.map((m) => m.v)}], expected the figure's own values [${want}] (the drawing is read from «${k}»)`);
+      else for (const m of marks) {
+        const y = ((CURVE.top + (1 - m.v / 100) * (CURVE.base - CURVE.top)) / CURVE.h) * 100;      // 100 at the top of the drawing, 0 on its axis
+        if (Math.abs(m.top - y) > 0.05) out.push(`card ${n}: the point of ${m.v} is drawn at ${m.top}% of the height, it belongs at ${y.toFixed(2)}%`);
+        if (Math.abs(m.left - m.x * 100) > 0.01) out.push(`card ${n}: a point of the curve is at ${m.left}% but says data-x ${m.x}`);
+      }
+      const d = viz.match(/<path class="vz-ln" d="([^"]+)"/)?.[1] ?? '', nums = d.match(/-?\d+(?:\.\d+)?/g)?.map(Number) ?? [], first = marks[0], last = marks[marks.length - 1];
+      if (!d || nums.length < 4 || !first || !last || Math.abs(nums[1] - (first.top / 100) * CURVE.h) > 0.1 || Math.abs(nums[nums.length - 1] - (last.top / 100) * CURVE.h) > 0.1) out.push(`card ${n}: the curve does not run from its first point to its last`);
+    } else if (kind === 'dials') {
+      const cells = all(/<i data-r="(-?\d+)" style="--r:(-?\d+)deg">/g).map((m) => [+m[1], +m[2]]);
+      if (cells.length !== DIALS.cols * DIALS.rows || !new RegExp(`style="--cols:${DIALS.cols}"`).test(viz)) out.push(`card ${n}: ${cells.length} dials, expected ${DIALS.cols * DIALS.rows} in ${DIALS.cols} columns`);
+      if (cells.some(([a, b]) => a !== b || Math.abs(a) > 130)) out.push(`card ${n}: a dial rests at an angle that is not its own data-r, or outside ±130°`);
+    } else if (kind === 'freeze') {
+      const bars = all(/<i data-h="([\d.]+)" style="--h:([\d.]+)">/g).map((m) => [+m[1], +m[2]]);
+      if (bars.length !== WEIGHTS || bars.some(([a, b]) => a !== b || a < 0.3 || a > 1)) out.push(`card ${n}: ${bars.length} weights, expected ${WEIGHTS}, each frozen at a height between 0.3 and 1 that is its own data-h`);
+      if (all(/<b><\/b>/g).length !== ANSWERS) out.push(`card ${n}: the answers going by are not ${ANSWERS}`);
+    } else if (kind === 'stack') {
+      const segs = all(/<i data-w="(\d+)" style="--w:(\d+)">/g).map((m) => [+m[1], +m[2]]), w = segs.map((x) => x[0]), want = figureInts(k);
+      if (want.length !== 2 || want[1] !== 100) out.push(`card ${n}: the figure «${k}» is not «N of 100»`);
+      else {
+        if (w.length !== 8 || segs.some(([a, b]) => a !== b || a < 1)) out.push(`card ${n}: the stacked bar has ${w.length} segments, expected 8, each at least 1 and its own data-w`);
+        if (w.reduce((x, y) => x + y, 0) !== 100) out.push(`card ${n}: the segments are [${w}] and add up to ${w.reduce((x, y) => x + y, 0)}, not the 100 of the figure`);
+        if (w[0] !== want[0]) out.push(`card ${n}: the first segment is ${w[0]}, the figure says ${want[0]}`);
+      }
+      if (all(/<div class="vz-r"><i><\/i>/g).length !== 1 || (viz.match(/<div class="vz-r">([\s\S]*?)<\/div>/)?.[1].match(/<i>/g) ?? []).length !== 11) out.push(`card ${n}: the ruler is not 11 ticks (0 to 100 by 10)`);
+    }
+  });
+  return out;
+}
+// A gate that cannot fail proves nothing: each way a drawing can start to say something the card does not, carry copy, or turn round, must be caught.
+function vizSelfTest(html, lang) {
+  if (vizRule(html, lang).length) return [0, 0];                    // the real page is judged by the loop below
+  const inC05 = (fn) => { const at = html.indexOf('<section id="c05"'), end = html.indexOf('</section>', at); return html.slice(0, at) + fn(html.slice(at, end)) + html.slice(end); };
+  const V = STR[lang].pub.v3, nth = (s, sub, k, to) => { let i = -1; for (let j = 0; j <= k; j++) i = s.indexOf(sub, i + 1); return i < 0 ? s : s.slice(0, i) + to + s.slice(i + sub.length); };
+  const mut = {
+    'text inside a drawing': inC05((c) => c.replace('<p class="vz-tag">', '<p>100</p><p class="vz-tag">')),
+    'a drawing readable by a screen reader': inC05((c) => c.replace('<div class="viz" aria-hidden="true">', '<div class="viz">')),
+    'a drawing without its ILUSTRATIVO tag': inC05((c) => c.replace(/<p class="vz-tag">[\s\S]*?<\/p>/, '')),
+    'a drawing on card 5': inC05((c) => nth(c, '<p class="cap">', 4, `<div class="viz" aria-hidden="true"><p class="vz-tag"><i class="dot"></i><em>${esc(V.ilus)}</em></p></div><p class="cap">`)),
+    'a drawing with an image': inC05((c) => c.replace('<div class="vz-q">', '<img src="/x.png" alt=""><div class="vz-q">')),
+    'a round part in the curve': inC05((c) => c.replace('<path class="vz-ax"', '<circle cx="1" cy="1" r="1"></circle><path class="vz-ax"')),
+    'a drawing under another name': inC05((c) => c.replace('data-viz="curve"', 'data-viz="x"')),
+    'a curve point that is not the figure\'s value': inC05((c) => c.replace('data-v="23"', 'data-v="25"')),
+    'a curve point drawn off its value': inC05((c) => c.replace(/(data-v="23" style="left:[\d.]+%;top:)[\d.]+(%)/, '$150$2')),
+    'a stacked bar that does not add up': inC05((c) => c.replace('data-w="22" style="--w:22"', 'data-w="23" style="--w:23"')),
+    'a stacked bar whose first segment is not the figure': inC05((c) => c.replace('data-w="31" style="--w:31"', 'data-w="30" style="--w:30"').replace('data-w="22" style="--w:22"', 'data-w="23" style="--w:23"')),
+    'a stacked bar with a ruler of 10 ticks': inC05((c) => c.replace('<div class="vz-r"><i></i>', '<div class="vz-r">')),
+    'a dial gone': inC05((c) => c.replace(/<i data-r="-?\d+" style="--r:-?\d+deg"><\/i>/, '')),
+    'a dial at an angle outside its range': inC05((c) => c.replace(/data-r="-?\d+" style="--r:-?\d+deg"/, 'data-r="200" style="--r:200deg"')),
+    'a weight frozen above its box': inC05((c) => c.replace(/data-h="[\d.]+" style="--h:[\d.]+"/, 'data-h="1.4" style="--h:1.4"')),
+    'an answer gone': inC05((c) => c.replace('<b></b>', '')),
+    'a waiting tile gone': inC05((c) => c.replace(/<i class="vz-t" style="--a:\d+%;--b:\d+%"><\/i>/, '')),
+  };
+  const css = {
+    'a round tile (border-radius on .vz-t)': html.replace('.vz-t{position:relative;display:block', '.vz-t{border-radius:50%;position:relative;display:block'),
+    'a round marker (border-radius on .vz-m)': html.replace('.vz-m{position:absolute;width:9px', '.vz-m{border-radius:4px;position:absolute;width:9px'),
+    'a circular clip on a drawing': html.replace('.vz-g{position:relative;', '.vz-g{clip-path:circle(50%);position:relative;'),
+    'a rounded card': html.replace('.fig{position:relative;', '.fig{border-radius:8px;position:relative;'),
+  };
+  let bad = 0;
+  for (const [what, m] of Object.entries(mut)) if (m === html || !vizRule(m, lang).length) { console.error(`FAIL self-test: vizRule does not catch "${what}"`); bad++; }
+  for (const [what, m] of Object.entries(css)) if (m === html || !judge(m, lang).some((x) => /^round: /.test(x))) { console.error(`FAIL self-test: the round-shape rule does not catch "${what}"`); bad++; }
+  return [bad, Object.keys(mut).length + Object.keys(css).length];
+}
+
 // ---------- real tokens: what the page ships for the effects (#v3-tokens) ----------
 // Every string that is a chip must be in the committed file (the page answers 500 otherwise), the page must ship exactly the pieces of that file, those pieces must join back into
 // the strings, and every one of those strings must be on the page: a copy change with a stale file, or a file edited by hand into something that is not a cut, is red here and in
@@ -420,10 +515,10 @@ function judge(html, lang) {
   else if (norm(items[5][2]) !== norm(V.s7Next) || norm(items[5][3]) !== norm(V.vivoV)) f.push('offer: item 6 is not «lo que publique después» with the published vivoV');
   else if (items.some((m) => /^\s*[—–-]/.test(m[3]) || /[—–]\s*$/.test(m[2]))) f.push('offer: a title and its description are joined by a dash again');
 
-  // chapter 05 is the six figures and what they measure: eyebrow, number, caption, lesson number. Each lesson's title and description are chapter 09's,
-  // said once (a second telling only lengthened the page), and the HUD label is the chapter's heading.
-  const cards = [...ch.c05.html.matchAll(/<article class="fig" data-fig>\s*<p class="ie">[^<]*<\/p>\s*<p class="big [^"]*" data-cifra>[^<]*<\/p>\s*<p class="cap">[^<]*<\/p>\s*<span class="no">\d\d<\/span>\s*<\/article>/g)];
-  if (cards.length !== 6) f.push(`structure: chapter 05 has ${cards.length} cards made of eyebrow + number + caption + lesson number, expected 6`);
+  // chapter 05 is the six figures and what they measure: eyebrow, number, (a drawing of the process, five of the six: vizRule judges it), caption, lesson number. Each lesson's title and
+  // description are chapter 09's, said once (a second telling only lengthened the page), and the HUD label is the chapter's heading.
+  const cards = [...ch.c05.html.matchAll(/<article class="fig" data-fig>\s*<p class="ie">[^<]*<\/p>\s*<p class="big [^"]*" data-cifra>[^<]*<\/p>\s*(?:<div class="viz" aria-hidden="true">[\s\S]*?<\/div>\s*(?=<p class="cap">))?<p class="cap">[^<]*<\/p>\s*<span class="no">\d\d<\/span>\s*<\/article>/g)];
+  if (cards.length !== 6) f.push(`structure: chapter 05 has ${cards.length} cards made of eyebrow + number + (a drawing) + caption + lesson number, expected 6`);
   const t05 = copyOf(ch.c05.html);
   for (const m of modulos(lang).slice(0, 6)) for (const [what, s] of [['title', m.h], ['description', m.d]]) if (t05.includes(norm(s))) f.push(`structure: chapter 05 repeats lesson ${m.n}'s ${what} (chapter 09 says it)`);
   if (!/<h2 class="sn" id="c05n">/.test(ch.c05.html)) f.push('structure: chapter 05\'s HUD label is not its h2 (id c05n)');
@@ -511,8 +606,8 @@ function judge(html, lang) {
     if (FX_COPY.test(sel) && FX_HIDES.test(r.body) && !(/\bhtml\.fxl\b/.test(sel) && /\[data-fx-/.test(sel))) f.push(`fx: "${sel}" hides the copy of an effect chapter by default (only html.fxl [data-fx-…], an attribute the armed effect sets, may)`);
   }
 
-  // chapter 03 is square: no rule that styles one of its parts may round it or cut it into a circle (the circular lenses are gone and stay gone)
-  for (const r of rules) if (r.sel.split(',').some((sel) => C03_CSS.test(sel)) && /border-radius\s*:\s*(?!0(?:px)?\s*(?:;|$))|clip-path\s*:\s*(?:circle|ellipse)/i.test(r.body)) f.push(`round: "${r.sel}" makes a round shape in chapter 03 (square HUD geometry, no circles, no rounded corners)`);
+  // chapters 03 and 05 are square: no rule that styles one of their parts may round it or cut it into a circle (the circular lenses are gone and stay gone)
+  for (const [what, re] of [['chapter 03', C03_CSS], ['chapter 05', C05_CSS]]) for (const r of rules) if (r.sel.split(',').some((sel) => re.test(sel)) && /border-radius\s*:\s*(?!0(?:px)?\s*(?:;|$))|clip-path\s*:\s*(?:circle|ellipse)/i.test(r.body)) f.push(`round: "${r.sel}" makes a round shape in ${what} (square HUD geometry, no circles, no rounded corners)`);
 
   // chapter 04 ends with its last tab: no closing line that points at specimens now living in chapter 08, and a scroll length the engine's
   // timeline is scaled for (llm.ts: GIVEN). A mismatch would change the pacing of every beat without any error.
@@ -526,6 +621,7 @@ function judge(html, lang) {
   for (const m of tokensRule(html, lang)) f.push(`tokens: ${m}`);
   for (const m of chatRule(html, lang)) f.push(`chat: ${m}`);
   for (const m of sharpRule(html, lang)) f.push(`sharp: ${m}`);
+  for (const m of vizRule(html, lang)) f.push(`viz: ${m}`);
   return f;
 }
 
@@ -734,6 +830,10 @@ function mutants(html, lang) {
     ['a chapter 03 bar without its flat-height hook', inChapter('c03', (c) => c.replace(/ data-flat="/, ' data-x="')), /fx: #c03 has 9 data-flat/],
     ['chapter 05 without its data-fx name', html.replace('data-fx="track"', 'data-fx="x"'), /fx: #c05 lost its data-fx/],
     ['chapter 05 without its track hook', inChapter('c05', (c) => c.replace(' data-track', '')), /fx: #c05 has 0 data-track/],
+    ['a chapter 05 drawing without its hook', inChapter('c05', (c) => c.replace(' data-viz="eg"', '')), /fx: #c05 has 4 data-viz/],
+    ['the chapter 05 added parts styled without html.fxl', html.replace('html.fxl .vx{position:absolute', '.vx{position:absolute'), /fx: "\.vx" styles a part that only an effect adds/],
+    ['the chapter 05 weights overlay without html.fxl', html.replace('html.fxl [data-viz][data-fx-s] .vz-w i::after{', '[data-viz][data-fx-s] .vz-w i::after{'), /fx: "\[data-viz\]\[data-fx-s\] \.vz-w i::after" styles a part that only an effect adds/],
+    ['a stage-2B rule on a plain chapter 05 part (it would outlive dispose)', html.replace('html.fxl .vz-eg .vx{left:0', 'html.fxl .vz-eg i{left:0'), /fx: "html\.fxl \.vz-eg i" is in the stage-2B block but styles an element no effect owns/],
     ['a chapter 05 figure without its number hook', html.replace(' data-cifra', ''), /fx: #c05 has 5 data-cifra/],
     ['chapter 05 without its pinned-stage wrapper', inChapter('c05', (c) => c.replace('<div class="pstage">', '<div class="x">')), /fx: #c05 has 0 \.pstage wrappers/],
     ['chapter 05\'s wrapper not opening on the header row', inChapter('c05', (c) => c.replace(/(<div class="pstage">)\s*(<div class="sh">)/, '$1<div class="y"></div>$2')), /fx: #c05's \.pstage no longer opens on the header row/],
@@ -929,8 +1029,8 @@ function engineBootSelfTest(src) {
 // The effects are code that touches a page whose copy is its own gate's business. They write no copy (text comes from the DOM), they animate only transform,
 // opacity, clip-path and filter (layout is CSS under html.fxl, decided once at attach), and an effect that pre-arms something (hides it, waiting) does it only to
 // what is below the fold. `files` is { 'c02.ts': source, ... }.
-const FX_PREARM = ['c02.ts', 'c03.ts', 'c07.ts', 'c08.ts', 'wordmark.ts'];                              // modules that arm pre-states for play-once effects: they must ask belowFold() first (a scrubbed one is a function of the scroll position and arms nothing)
-const FX_MODULES = ['index.ts', 'common.ts', 'c02.ts', 'c03.ts', 'c05.ts', 'c06.ts', 'c07.ts', 'c08.ts', 'wordmark.ts'];
+const FX_PREARM = ['c02.ts', 'c03.ts', 'c05v.ts', 'c07.ts', 'c08.ts', 'wordmark.ts'];                              // modules that arm pre-states for play-once effects: they must ask belowFold() first (a scrubbed one is a function of the scroll position and arms nothing)
+const FX_MODULES = ['index.ts', 'common.ts', 'c02.ts', 'c03.ts', 'c05.ts', 'c05v.ts', 'c06.ts', 'c07.ts', 'c08.ts', 'wordmark.ts'];
 const ANIMATED = new Set(['transform', 'opacity', 'clipPath', 'filter', 'willChange']);
 function fxSource(files) {
   const f = [];
@@ -947,7 +1047,8 @@ function fxSource(files) {
     }
     if (/\bclassList\.(?:add|toggle)\(\s*['"](?:fx|fxl|ready|eng-off|nogl|rm)['"]/.test(code)) f.push(`${name}: switches an engine mode class (only main.ts decides the mode)`);
   }
-  for (const name of FX_PREARM) if (typeof files[name] === 'string' && !/\b(?:belowFold|once)\(/.test(files[name])) f.push(`${name}: arms a pre-state without asking belowFold() (a section in view or above must stay final; once() asks it)`);
+  const bare = (src) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`])\/\/.*$/gm, '$1');                // a comment that says once() arms nothing
+  for (const name of FX_PREARM) if (typeof files[name] === 'string' && !/\b(?:belowFold|once)\(/.test(bare(files[name]))) f.push(`${name}: arms a pre-state without asking belowFold() (a section in view or above must stay final; once() asks it)`);
   if (typeof files['common.ts'] === 'string' && !/\bbelowFold\(/.test(/export function once\b[\s\S]*?return \{ state/.exec(files['common.ts'])?.[0] ?? '')) f.push('common.ts: once() arms without asking belowFold() (every play-once effect that uses it would pre-hide a section in view)');
   if (typeof files['wordmark.ts'] === 'string' && !/new IntersectionObserver\(/.test(files['wordmark.ts'])) f.push('wordmark.ts: the runners are not tied to the mark being on screen (an IntersectionObserver): they would lap for nobody');
   if (typeof files['index.ts'] === 'string' && !/export function initFx\b/.test(files['index.ts'])) f.push('index.ts: initFx() is gone');
@@ -968,6 +1069,10 @@ function fxSourceSelfTest(files) {
     ['a template literal written into the page', { ...files, 'c03.ts': files['c03.ts'].replace('export function initC03', "document.body.innerHTML = `<b>${1}</b>`;\nexport function initC03") }, /writes a string literal/],
     ['a pre-state armed without once() or belowFold() (chapter 03)', { ...files, 'c03.ts': files['c03.ts'].replace('once(panel, undo', 'go(panel, undo') }, /c03\.ts: arms a pre-state without asking belowFold/],
     ['a layout property animated (chapter 03, style.height)', { ...files, 'c03.ts': files['c03.ts'].replace('export function initC03', "document.body.style.height = '1px';\nexport function initC03") }, /c03\.ts: sets style\.height/],
+    ['a pre-state armed without once() or belowFold() (chapter 05 drawings)', { ...files, 'c05v.ts': files['c05v.ts'].replace('once(card!, undo', 'go(card!, undo') }, /c05v\.ts: arms a pre-state without asking belowFold/],
+    ['a layout property animated (chapter 05 drawings, style.width)', { ...files, 'c05v.ts': files['c05v.ts'].replace('export function initC05V', "document.body.style.width = '1px';\nexport function initC05V") }, /c05v\.ts: sets style\.width/],
+    ['a literal written by the chapter 05 drawings', { ...files, 'c05v.ts': files['c05v.ts'].replace('export function initC05V', "document.body.textContent = 'x';\nexport function initC05V") }, /c05v\.ts: writes a string literal/],
+    ['a custom property of the page reused by the chapter 05 drawings (--lg)', { ...files, 'c05v.ts': files['c05v.ts'].replace("setProperty('--fx-r'", "setProperty('--lg'") }, /c05v\.ts: sets the custom property --lg/],
     ['a literal written by chapter 03', { ...files, 'c03.ts': files['c03.ts'].replace('export function initC03', "document.body.textContent = 'x';\nexport function initC03") }, /c03\.ts: writes a string literal/],
     ['a custom property of the page reused by chapter 03 (--lg)', { ...files, 'c03.ts': files['c03.ts'].replace("panel.style.setProperty('--fx-s'", "panel.style.setProperty('--lg'") }, /c03\.ts: sets the custom property --lg/],
     ['an engine mode class switched by an effect', { ...files, 'c02.ts': files['c02.ts'].replace('export function initC02', "document.documentElement.classList.add('nogl');\nexport function initC02") }, /switches an engine mode class/],
@@ -1040,7 +1145,7 @@ for (const m of fxSource(fxFiles)) { console.error(`FAIL fx: ${m}`); fail++; }
 for (const lang of LANGS) {
   const html = pages.get(`${lang}/none`);
   fail += selfTest(html, lang); mutantCount += mutants(html, lang).length;
-  for (const t of [deltaSelfTest, tokensSelfTest, chatSelfTest, sharpSelfTest]) { const [bad, n] = t(html, lang); fail += bad; mutantCount += n; }
+  for (const t of [deltaSelfTest, tokensSelfTest, chatSelfTest, sharpSelfTest, vizSelfTest]) { const [bad, n] = t(html, lang); fail += bad; mutantCount += n; }
 }
 for (const lang of LANGS) for (const cc of MARKETS) {
   const tag = `${lang}/${cc ?? 'none'}`, html = pages.get(tag);

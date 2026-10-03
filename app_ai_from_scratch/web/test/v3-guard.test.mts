@@ -9,6 +9,7 @@ import { WORDMARK } from '../src/aegis/wordmark.ts';
 import { KU, LAP, lap, lit } from '../src/aegis/fx/wordmark-phase.ts';
 import { chipStrings, type ChipSources } from '../src/aegis/token-strings.ts';
 import { piecesOf, show, wordsOf, type TokenFile } from '../src/aegis/tokens.ts';
+import { ANSWERS, CURVE, DIALS, END, NODES, NODE_BUDGET, T, TRACK_NODES, VIZ, WEIGHTS, curveOf, dialAngles, figureInts, stackOf, weightHeights } from '../src/aegis/c05-data.ts';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 
 test('guard throws on a city, on plural courses, and lets the tokenizer sentence through', () => {
@@ -532,6 +533,74 @@ test('chapter 03\'s class names are its own: no rule outside its block styles th
   assert.ok(outside.includes('.sharp .c') && outside.includes('[data-sharp]'), 'the shared and the stage-2B rules are still found (the test is not vacuous)');
   // the rule can fail
   assert.deepEqual(stray('.pk{padding:8px 12px}.bw i.pk{x:1}.sk{border:1px solid red}'), ['.bw i.pk', '.sk']);
+});
+
+// ---------- chapter 05: the drawings under the figures ----------
+test('chapter 05: every drawing is done within 2.5 s of its card coming in, in the order the owner listed them, and card 5 has none yet', () => {
+  assert.deepEqual([...VIZ], ['eg', 'curve', 'dials', 'freeze', null, 'stack'], 'examples, error curve, dials, frozen weights, (card 5: held), stacked bar');
+  for (const [k, v] of Object.entries(END)) assert.ok(v >= 1.2 && v <= 2.5, `the ${k} drawing is done ${v.toFixed(2)} s after its card came in`);
+  assert.ok(T.eg.first + (T.eg.n - 1) * T.eg.gap + T.eg.cross + T.eg.sink <= END.eg, 'the last tile has sunk into the slot before the queue is done');
+  assert.ok(T.curve.t0 + T.curve.dur + T.curve.fade <= END.curve + 1e-9);
+  assert.ok(T.freeze.train >= 0.8, 'the weights are seen training before they freeze');
+  assert.ok(T.freeze.train + T.freeze.sweep + T.freeze.lock <= END.freeze, 'every weight is locked before the end');
+  assert.ok(T.dials.a0 + (DIALS.cols - 1) * T.dials.dx + (DIALS.rows - 1) * T.dials.dy + T.dials.turn <= T.dials.a0 + (DIALS.cols - 1) * T.dials.dx + (DIALS.rows - 1) * T.dials.dy + T.dials.lag, 'the second wave starts after the first turn has ended');
+  // the rule can fail
+  assert.ok(T.eg.first + 4 * 0.3 + T.eg.cross + 1.2 > 2.5);
+});
+
+test('chapter 05: what a drawing draws from its card it reads FROM the figure, in both languages, and it refuses a figure it cannot read', () => {
+  for (const lang of ['es', 'en'] as const) {
+    const m = modulos(lang);
+    assert.deepEqual(figureInts(m[1].k), [94, 23, 4], `${lang}: card 2's figure`);
+    const c = curveOf(m[1].k);
+    assert.deepEqual(c.pts.map((p) => p.v), [94, 23, 4], `${lang}: the curve passes through the figure's three values`);
+    assert.ok(c.pts[0].y < c.pts[1].y && c.pts[1].y < c.pts[2].y, 'a lower value is drawn lower');
+    assert.ok(c.pts.every((p) => p.y >= CURVE.top && p.y <= CURVE.base), 'the points are inside the drawing');
+    const w = stackOf(m[5].k);
+    assert.equal(w[0], 31, `${lang}: the first segment is the figure's 31`); assert.equal(w.length, 8); assert.equal(w.reduce((x, y) => x + y, 0), 100);
+    assert.deepEqual(w, [31, 22, 16, 11, 8, 6, 4, 2], 'the options of the page as they are drawn today');
+  }
+  for (let n = 1; n <= 93; n++) { const w = stackOf(`${n} de 100`); assert.equal(w.reduce((x, y) => x + y, 0), 100, `${n} of 100 adds up`); assert.equal(w[0], n); assert.ok(w.every((x) => x >= 1), `${n} of 100 has no empty segment`); }
+  assert.throws(() => stackOf('94 de 100'), /cannot be drawn/); assert.throws(() => stackOf('31 de 90'), /cannot be drawn/); assert.throws(() => stackOf('31'), /cannot be drawn/);
+  assert.throws(() => curveOf('94 → 23'), /cannot be drawn/); assert.throws(() => curveOf('4 → 23 → 94'), /cannot be drawn/); assert.throws(() => curveOf('94 → 23 → 140'), /cannot be drawn/);
+  const a = dialAngles(), h = weightHeights();
+  assert.equal(a.length, DIALS.cols * DIALS.rows); assert.ok(a.every((x) => Number.isInteger(x) && Math.abs(x) <= 130), 'every dial rests within ±130°');
+  assert.equal(h.length, WEIGHTS); assert.ok(h.every((x) => x >= 0.3 && x <= 1), 'every weight is frozen between 0.3 and 1 of its box');
+  assert.ok(new Set(a).size > 12 && new Set(h).size > 8, 'the dials and the weights are not all alike');
+  assert.equal(ANSWERS, 5);
+  assert.deepEqual(dialAngles(), a, 'the same drawing on every render');
+  // the rule can fail
+  assert.notDeepEqual(figureInts('94 → 23 → 4'), figureInts('94 → 25 → 4'));
+});
+
+test('chapter 05: the chapter writes a style on at most 80 nodes in a whole pass (the drawings, the parts they add, and the pinned track\'s own nine)', () => {
+  const all = Object.values(NODES).reduce((x, y) => x + y, 0);
+  assert.ok(all + TRACK_NODES <= NODE_BUDGET, `the drawings write on ${all} nodes and the track on ${TRACK_NODES}: ${all + TRACK_NODES} > ${NODE_BUDGET}`);
+  assert.equal(NODES.dials, DIALS.cols * DIALS.rows); assert.equal(NODES.freeze, WEIGHTS + ANSWERS + 1); assert.equal(NODES.eg, T.eg.n + 1 + T.eg.queue);
+  assert.equal(NODE_BUDGET, 80, 'the budget of the contract');
+  // a part that appears with others is revealed by its container: the ruler of the stacked bar is one clip, never one fade per tick
+  const code = readFileSync(new URL('../src/aegis/fx/c05v.ts', import.meta.url), 'utf8').replace(/\/\/.*$/gm, '');
+  assert.ok(/ruler!?\.style\.clipPath/.test(code) && !/ticks/.test(code), 'the ruler is one node');
+  // the rule can fail: the first version (30 dials, 16 weights, 11 ticks) was 96 nodes with the track
+  assert.ok(30 + (16 + ANSWERS + 1) + NODES.eg + NODES.curve + (8 + 11 + 1) + TRACK_NODES > NODE_BUDGET);
+});
+
+test('chapter 05: a drawing has no copy of its own (the component writes only the tag it is given), nothing in it is round, and the effect plays the clocks of c05-data', () => {
+  const comp = readFileSync(new URL('../src/components/V3Viz.astro', import.meta.url), 'utf8'), body = comp.slice(comp.indexOf('<div class="viz"'));
+  let text = body; while (/\{[^{}]*\}/.test(text)) text = text.replace(/\{[^{}]*\}/g, '');
+  assert.equal(text.replace(/<[^>]+>/g, '').replace(/\s+/g, ''), '', 'the markup of a drawing holds no text but expressions (the tag is the page\'s own ILUSTRATIVO)');
+  assert.ok(/<p class="vz-tag"><i class="dot"><\/i><em>\{tag\}<\/em><\/p>/.test(comp) && /aria-hidden="true"/.test(comp), 'the tag and aria-hidden are in the component');
+  assert.ok(!/<img|<canvas|<circle|<ellipse|border-radius|rx=/.test(comp), 'no image, no round shape');
+  const css = readFileSync(new URL('../src/aegis/v3.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  const mine = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ sel: m[1].trim(), body: m[2] })).filter((r) => /\.vz-|\.viz\b|\.vx\b|\[data-viz\]/.test(r.sel));
+  assert.ok(mine.length >= 35, `the drawings' rules are found (${mine.length})`);
+  for (const r of mine) assert.ok(!/border-radius\s*:\s*(?!0(?:px)?\s*(?:;|$))|clip-path\s*:\s*(?:circle|ellipse)/i.test(r.body), `«${r.sel}» is round`);
+  const src = readFileSync(new URL('../src/aegis/fx/c05v.ts', import.meta.url), 'utf8'), code = src.replace(/\/\/.*$/gm, '');
+  assert.ok(/import \{[^}]*\bEND\b[^}]*\} from '\.\.\/c05-data'/.test(src) && /import \{[^}]*\bT\b[^}]*\} from '\.\.\/c05-data'/.test(src), 'c05v.ts reads its clocks from c05-data');
+  for (const k of ['eg', 'curve', 'dials', 'freeze', 'stack']) assert.ok(new RegExp(`end: END\\.${k}\\b`).test(code), `the ${k} drawing ends when c05-data says`);
+  assert.ok(!/\.style\.(?!opacity\b|transform\b|clipPath\b)\w+\s*=(?!=)/.test(code), 'c05v.ts sets only style.opacity, style.transform and style.clipPath');
+  assert.ok(!/canvas|drawImage|fetch\(|\.webp|\.gif|\.apng/i.test(code), 'no footage, no sprite, no animated image');
+  assert.ok(/initC05V/.test(readFileSync(new URL('../src/aegis/fx/index.ts', import.meta.url), 'utf8')), 'the effect is registered');
 });
 
 // ---------- chapter 02: the chat windows ----------

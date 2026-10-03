@@ -29,10 +29,12 @@ import { modulos, candidatos, preguntas } from '../data/landing';
 import { jsonSafe } from '../lib/json-safe';
 import PrefToggles from '../components/PrefToggles.astro';
 import V3Cta from '../components/V3Cta.astro';
+import V3Viz from '../components/V3Viz.astro';
 import { TOKENS } from '../lib/theme-css';
 import { tokenize, candRowsHTML, ctxOf } from '../aegis/specimens';
 import { show, wordsOf, piecesOf } from '../aegis/tokens';
 import { chipStrings } from '../aegis/token-strings';
+import { VIZ } from '../aegis/c05-data';
 import TOKEN_FILE from '../data/v3-tokens.json';
 import { guard, guarded, withoutCity, assertPriced } from '../aegis/copy-guard';
 import { WORDMARK } from '../aegis/wordmark';
@@ -371,15 +373,17 @@ setTimeout(function(){
 <!-- ===== 05 · CIFRAS (the first six figures of the curriculum). Static grid; stage 2B turns data-track into the horizontal track with parallax
      (.pstage is the wrapper its pinned stage is made of: it has no style until the engine adds `pin` to the section).
      A card is the figure and what it measures (eyebrow, number, caption, lesson number) and nothing else: each lesson's title and description are
-     chapter 09's, and saying them twice on the way down only made the page longer. The HUD label is this chapter's heading (h2). ===== -->
+     chapter 09's, and saying them twice on the way down only made the page longer. Under the figure of five of the six sits a drawing of the process it measures (V3Viz, aria-hidden,
+     ILUSTRATIVO; card 5 has none until the owner decides what «3 palabras = 5 tokens» says: the real o200k tokens of its sentence are 4). The HUD label is this chapter's heading (h2). ===== -->
 <section id="c05" class="sec cx figs-sec" aria-labelledby="c05n" data-fx="track">
   <div class="pstage">
     <div class="sh"><h2 class="sn" id="c05n">■ {label('05', V.ch05)}</h2><div class="sx">{cnt('05')}</div></div>
     <div class="figs" data-track>
-      {mods.slice(0, 6).map((m) => (
+      {mods.slice(0, 6).map((m, i) => (
         <article class="fig" data-fig>
           <p class="ie">{m.eb}</p>
           <p class={`big ${escala(m.k)}`} data-cifra>{m.k}</p>
+          {VIZ[i] && <V3Viz kind={VIZ[i]!} k={m.k} tag={V.ilus} />}
           <p class="cap">{m.kc}</p>
           <span class="no">{m.n}</span>
         </article>

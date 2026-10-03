@@ -1,0 +1,48 @@
+---
+// One drawing of chapter 05 (src/aegis/fx/c05v.ts plays it, once, when its card comes in). It is a decoration under the card's figure: aria-hidden, no text of its own but the ILUSTRATIVO tag
+// (the page passes the published string), and the markup IS the final picture, so a page without the engine shows the finished drawing. What it draws from the figure it reads FROM the
+// figure (src/aegis/c05-data.ts): the three points of the error curve are the card's 94 / 23 / 4, the first segment of the stacked bar is its 31 and the bar adds up to its 100. Square, flat,
+// hairline: no round shape. The class names are all `vz-`, apart from the wrapper: none of them is styled by another part of the stylesheet (a guard test reads that).
+import { ANSWERS, CURVE, DIALS, TILES, curveOf, dialAngles, stackOf, weightHeights, type VizKind } from '../aegis/c05-data';
+interface Props { kind: VizKind; k: string; tag: string }
+const { kind, k, tag } = Astro.props;
+const curve = kind === 'curve' ? curveOf(k) : null, stack = kind === 'stack' ? stackOf(k) : null;
+---
+<div class="viz" aria-hidden="true">
+  <p class="vz-tag"><i class="dot"></i><em>{tag}</em></p>
+  {kind === 'eg' && (
+    <div class="vz-g vz-eg" data-viz="eg">
+      <div class="vz-q">{TILES.map(([a, b]) => (<i class="vz-t" style={`--a:${a}%;--b:${b}%`}></i>))}</div>
+      <div class="vz-s"><i class="vz-f"></i></div>
+    </div>
+  )}
+  {curve && (
+    <div class="vz-g vz-cv" data-viz="curve">
+      <div class="vz-c">
+        <svg viewBox={`0 0 ${CURVE.w} ${CURVE.h}`} preserveAspectRatio="none" focusable="false">
+          <path class="vz-ax" d={`M0 ${CURVE.base}H${CURVE.w}`}></path>
+          <path class="vz-ln" d={curve.d}></path>
+        </svg>
+      </div>
+      {curve.pts.map((p) => (<i class="vz-m" data-x={p.x} data-v={p.v} style={`left:${+(p.x * 100).toFixed(2)}%;top:${+((p.y / CURVE.h) * 100).toFixed(2)}%`}></i>))}
+    </div>
+  )}
+  {kind === 'dials' && (
+    <div class="vz-g vz-dl" data-viz="dials" style={`--cols:${DIALS.cols}`}>
+      {dialAngles().map((a) => (<i data-r={a} style={`--r:${a}deg`}></i>))}
+    </div>
+  )}
+  {kind === 'freeze' && (
+    <div class="vz-g vz-fz" data-viz="freeze">
+      <div class="vz-w">{weightHeights().map((h) => (<i data-h={h} style={`--h:${h}`}></i>))}</div>
+      <div class="vz-a">{Array.from({ length: ANSWERS }, () => (<b></b>))}</div>
+    </div>
+  )}
+  {stack && (
+    <div class="vz-g vz-sk" data-viz="stack">
+      <div class="vz-r">{Array.from({ length: 11 }, () => (<i></i>))}</div>
+      <div class="vz-b">{stack.map((w) => (<i data-w={w} style={`--w:${w}`}></i>))}</div>
+      <div class="vz-k"></div>
+    </div>
+  )}
+</div>

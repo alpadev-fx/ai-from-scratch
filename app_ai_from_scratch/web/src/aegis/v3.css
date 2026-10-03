@@ -534,6 +534,41 @@ html[data-ch="cL"] .cue{display:none}
 .fig .k-xs{font-size:min(30cqw,92px)}.fig .k-s{font-size:min(17cqw,66px)}.fig .k-m{font-size:min(11.5cqw,46px)}
 .fig .k-l{font-size:min(9.4cqw,36px);line-height:1;white-space:normal}
 .fig .cap{font:400 14px/1.5 var(--f);color:var(--l2)}
+/* 05 · under five of the six figures, a drawing of the process it measures (V3Viz: aria-hidden, ILUSTRATIVO). The HTML draws the FINISHED picture; fx/c05v.ts plays it once. Square, flat,
+   hairline: no round shape. Sizes come from the drawing's own width (cqw), so a card of 248px and one of 376px draw the same picture. */
+.viz{display:flex;flex-direction:column;gap:9px;margin:4px 0 2px}
+.vz-tag{margin:0;align-self:flex-end;display:flex;align-items:center;gap:8px;font:500 10px/1 var(--m);letter-spacing:.18em;color:var(--ac)}
+.vz-tag em{font-style:normal}
+.vz-g{position:relative;container-type:inline-size;height:96px}
+.vz-eg{--t:clamp(26px,9cqw,36px);--s:clamp(42px,14cqw,56px);display:flex;align-items:center;justify-content:flex-end;gap:clamp(12px,5cqw,22px);overflow:hidden}
+.vz-eg::before{content:'';position:absolute;left:0;right:0;top:50%;border-top:1px solid var(--hair2)}
+.vz-q{display:flex;gap:clamp(5px,2cqw,8px)}
+.vz-t{position:relative;display:block;flex:none;width:var(--t);height:var(--t);border:1px solid var(--hair);background:var(--bg)}
+.vz-t::before{content:'';position:absolute;left:var(--a,20%);top:var(--b,28%);width:34%;height:34%;background:var(--l3)}
+.vz-t::after{content:'';position:absolute;left:0;right:0;bottom:28%;border-top:1px solid var(--hair)}
+.vz-s{position:relative;flex:none;width:var(--s);height:var(--s);border:1px solid var(--ac);background:var(--bg)}
+.vz-f{position:absolute;inset:4px;background:var(--ac);transform-origin:50% 100%}
+.vz-c{position:absolute;inset:0}
+.vz-c svg{display:block;width:100%;height:100%;overflow:visible}
+.vz-ax{fill:none;stroke:var(--hair);stroke-width:1;vector-effect:non-scaling-stroke}
+.vz-ln{fill:none;stroke:var(--l1);stroke-width:2;vector-effect:non-scaling-stroke}
+.vz-m{position:absolute;width:9px;height:9px;margin:-4.5px 0 0 -4.5px;background:var(--ac)}
+.vz-dl{height:auto;display:grid;grid-template-columns:repeat(var(--cols),minmax(0,1fr));gap:clamp(3px,1.4cqw,6px);align-content:start}
+.vz-dl i{position:relative;aspect-ratio:1;border:1px solid var(--hair);background:var(--bg)}
+.vz-dl i::after{content:'';position:absolute;left:50%;top:50%;width:2px;height:36%;margin:-36% 0 0 -1px;background:var(--l1);transform-origin:50% 100%;transform:rotate(var(--fx-r,var(--r,0deg)))}
+.vz-fz{display:flex;flex-direction:column;justify-content:space-between}
+.vz-w{position:relative;display:flex;align-items:flex-end;gap:clamp(2px,1cqw,4px);height:66px;border-bottom:1px solid var(--hair)}
+.vz-w i{position:relative;flex:1 1 0;min-width:0;height:calc(var(--h)*100%);background:var(--l3);box-shadow:inset 0 2px 0 var(--l1);transform-origin:50% 100%}
+.vz-a{display:flex;justify-content:flex-end;gap:clamp(5px,2cqw,8px);height:14px}
+.vz-a b{display:block;width:clamp(16px,7cqw,28px);height:14px;border:1px solid var(--hair);background:var(--bg)}
+.vz-sk{display:flex;flex-direction:column;justify-content:center;gap:9px}
+.vz-r{display:flex;justify-content:space-between;height:8px}
+.vz-r i{width:1px;height:100%;background:var(--hair)}
+.vz-r i:first-child,.vz-r i:last-child{background:var(--l2)}
+.vz-b{display:flex;height:32px}
+.vz-b i{flex:0 0 calc(var(--w)*1%);min-width:0;background:var(--l3);box-shadow:inset -1px 0 0 var(--panel)}
+.vz-b i:first-child{background:var(--ac)}
+.vz-k{height:8px;border:1px solid var(--l2);border-top:0;transform-origin:0 50%}
 .figs-sec{padding-bottom:0}
 
 /* 06 · lo que no necesitas: the six words struck out, then the line */
@@ -709,6 +744,13 @@ html.fxl .pin .big{margin:0;will-change:transform}
 html.fxl .pin .rail{height:1px;margin:26px var(--fx-pad) 0;background:var(--hair)}
 html.fxl .pin .rail i{display:block;height:100%;background:var(--l1);transform-origin:0 50%;transform:scaleX(0)}
 @media (max-width:900px){html.fxl #c05.pin{--fx-cw:min(78vw,340px)}}
+/* 05: the drawings play once (arm, run, clear; fx/c05v.ts). `vx` is a part the effect adds (the tiles that go into the slot, the scan lines): empty, aria-hidden, absolute. While a drawing
+   plays what moves is promoted; the frozen weights are lit by an overlay whose opacity is the effect's --fx-l (a colour is not cheap to animate, an opacity is). */
+html.fxl .vx{position:absolute;pointer-events:none}
+html.fxl .vz-eg .vx{left:0;top:calc(50% - var(--t)/2)}
+html.fxl .vx.vz-sc{top:0;bottom:0;width:1px;height:auto;background:var(--ac);box-shadow:none}
+html.fxl [data-viz][data-fx-s="run"] .vz-t,html.fxl [data-viz][data-fx-s="run"] .vz-m,html.fxl [data-viz][data-fx-s="run"] .vz-a b,html.fxl [data-viz][data-fx-s="run"] .vx{will-change:transform,opacity}
+html.fxl [data-viz][data-fx-s] .vz-w i::after{content:'';position:absolute;inset:0;background:var(--ac);opacity:var(--fx-l,0)}
 /* 06: scrubbed by the scroll. The particles are a canvas over the stage; the stage keeps the page's own side padding */
 html.fxl #c06.pin{--fx-len:2.6;height:calc(var(--fx-len) * 100svh)}
 html.fxl #c06.pin .pstage{padding-left:max(var(--gut),calc(50% - 620px + var(--gut)));padding-right:max(var(--gut),calc(50% - 620px + var(--gut)))}

@@ -33,6 +33,8 @@ import { TOKENS } from '../lib/theme-css';
 import { tokenize, candRowsHTML, ctxOf, ctxChips } from '../aegis/specimens';
 import { guard, guarded, withoutCity, assertPriced } from '../aegis/copy-guard';
 import V3CSS from '../aegis/v3.css?raw';
+// The stylesheet is inlined in the head: its comments (a sixth of it) are for the source, not for the wire. A `/*!` comment stays (the copy-check finds the stage-2B block by its header).
+const CSS = V3CSS.replace(/\/\*(?!!)[\s\S]*?\*\//g, '');
 
 const { lang, langPref, theme } = publicPrefs(Astro.request);
 const L = t(lang);
@@ -152,7 +154,7 @@ setTimeout(function(){
 },15000);
 })();
 </script>
-<style is:global set:html={V3CSS}></style>
+<style is:global set:html={CSS}></style>
 </head>
 <body>
 <a class="skip" href="#c01">{P.saltar}</a>

@@ -617,7 +617,7 @@ html[data-ch="cL"] .cue{display:none}
   .meta{line-height:1.55}
 }
 
-/* ---------- STAGE 2B · chapter effects (src/aegis/fx). Everything here hangs on html.fxl (the engine is attached) and on attributes or classes the effect itself
+/*! ---------- STAGE 2B · chapter effects (src/aegis/fx). Everything here hangs on html.fxl (the engine is attached) and on attributes or classes the effect itself
    sets, so without the engine (no WebGL2, reduced motion, declined, still loading) none of it exists and the chapters above are the whole page. ---------- */
 /* 02: a beat is armed (hidden) only while it is below the viewport; the strike is drawn by .sk (empty hairlines) from then on, so the native one is off */
 html.fxl [data-fx-s] .ia{position:relative}

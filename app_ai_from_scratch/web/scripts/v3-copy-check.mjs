@@ -258,6 +258,8 @@ function judge(html, lang) {
   // head script (a timer that needs no module), and a hung import cannot leave the page half-engine. The rendered page proves its three parts.
   const css = [...html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].map((m) => m[1]).join('\n');
   if (/:not\(\.ready\)[^{}]*\{[^}]*opacity\s*:\s*0/.test(css)) f.push('boot: a CSS rule hides copy until html.ready (the engine must never gate the hero copy)');
+  const v3css = [...html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].map((m) => m[1]).find((c) => c.includes('STAGE 2B · chapter effects')) ?? '';   // the page's own stylesheet (the theme tokens are another block)
+  if (/\/\*(?!!)/.test(v3css)) f.push('weight: the inline stylesheet ships its source comments again (v3.astro strips every /* comment but a /*! one: about 9 KB on the wire, on the way to the first paint)');
   if (/<(?:h1|div class="sub"|div class="cta"|div class="copy")[^>]*style="[^"]*opacity/.test(ch.c01.html)) f.push('boot: the hero copy is server-rendered hidden (inline opacity)');
   const bootJs = ((html.slice(0, html.indexOf('</head>')).match(/<script[^>]*>[\s\S]*?<\/script>/g) ?? []).find((x) => x.includes("sessionStorage.getItem('v3_ign')"))) ?? '';
   if (!bootJs) f.push('boot: the head script that runs the ignition is missing');
@@ -455,6 +457,7 @@ function mutants(html, lang) {
     ['the chapter 06 length on the page\'s own --len', html.replace('html.fxl #c06.pin{--fx-len:', 'html.fxl #c06.pin{--len:'), /fx: "html\.fxl #c06\.pin" declares --len/],
     ['the particle canvas styled without html.fxl', html.replace('html.fxl .imp{', '.imp{'), /fx: "\.imp" styles a part that only an effect adds/],
     ['a stage-2B rule on the closing line itself (it would outlive dispose)', html.replace('html.fxl #c06.pin .hx{', 'html.fxl .hx{'), /fx: "html\.fxl \.hx" is in the stage-2B block but styles an element no effect owns/],
+    ['a source comment back in the inline stylesheet', html.replace('/*! ---------- STAGE 2B', '/* ---------- STAGE 2B'), /weight: the inline stylesheet ships its source comments/],
     ['chapter 07 without its data-fx name', html.replace('data-fx="ring"', 'data-fx="x"'), /fx: #c07 lost its data-fx/],
     ['chapter 07 without its clock hook', inChapter('c07', (c) => c.replace(' data-ring aria-hidden', ' aria-hidden')), /fx: #c07 has 0 data-ring,/],
     ['a chapter 07 tick without its hook', inChapter('c07', (c) => c.replace(' data-tick', '')), /fx: #c07 has 11 data-tick/],

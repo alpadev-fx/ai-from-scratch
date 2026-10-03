@@ -104,7 +104,7 @@ function required(lang) {
       ...[1, 2, 3].flatMap((i) => [[`symptom ${i} lesson`, P[`s${i}Lec`]], [`symptom ${i}`, P[`s${i}H`]], [`symptom ${i} cause`, P[`s${i}C`]]])],
     c02: [['label', lab('02', V.s1Eb)], ['h2', V.s1H], ...V.s1Beats.flatMap((b, i) => [[`beat ${i + 1} you`, b.tu], [`beat ${i + 1} ai`, b.ia], [`beat ${i + 1} tag`, b.tag]]),
       ['earlier', V.s1Earlier], ['gap', V.s1Gap], ['shout', V.s1Cierre], ['you', V.chatTu], ['ai', V.chatIa]],
-    c03: [['label', lab('03', V.ch03)], ['h2', P.llevasH2], ['chips source', V.tokReal], ...V.askSlots.map((w) => ['slot', w]), ['drawing label', V.ilus],
+    c03: [['label', lab('03', V.ch03)], ['h2', P.llevasH2], ['chips source', V.tokReal], ...V.askSlots.map((w) => ['slot', w]), ['bars say what they are', V.tabNext], ['drawing label', V.ilus],
       ['l1', P.l1H], ['l1', P.l1D], ['l2', P.l2H], ['l2', P.l2D], ['l3', P.l3H], ['l3', P.l3D], ...cta],
     cL: [['label', lab('04', V.ch04)], ['h2', V.adentroH], ['sub', P.aD], ['context', ctx], ['candidates', V.cand], ['dial', V.tabTemp],
       ...['05', '06', '08', '09'].flatMap((n) => [[`step ${n} lesson`, `${V.lec} ${n}`], [`step ${n} h`, mod(n).h], [`step ${n} d`, mod(n).d]])],
@@ -248,8 +248,10 @@ function sharpRule(html, lang) {
   const src = [...pn.matchAll(/<p class="src">([\s\S]*?)<\/p>/g)].map((m) => norm(m[1]));
   if (src.length !== 1 || src[0] !== norm(V.tokReal)) out.push(`the source label of the request chips is [${src.join(' | ')}], expected exactly one «${V.tokReal}»`);
   else if (!(pn.indexOf('class="sq"') < pn.indexOf('class="src"') && pn.indexOf('class="src"') < pn.indexOf('class="sl"'))) out.push('the source label is not between the request chips and the context chips');
-  const ilt = [...pn.matchAll(/<p class="ilt"><i class="dot"><\/i><em>([^<]*)<\/em><\/p>/g)].map((m) => decode(m[1]));
-  if (ilt.length !== 1 || ilt[0] !== V.ilus) out.push(`the drawing carries [${ilt.join(' | ')}] as its label, expected exactly one «${V.ilus}»`);
+  // the bars say what they are (the options for the next token: the same term chapter 04 uses, V.tabNext) and that they are a drawing (ILUSTRATIVO)
+  const ilt = [...pn.matchAll(/<p class="ilt"><i class="dot"><\/i><em>([^<]*)<\/em><\/p>/g)].map((m) => norm(decode(m[1])));
+  if (ilt.length !== 1 || ilt[0] !== `${V.tabNext} · ${V.ilus}`) out.push(`the bars are labelled [${ilt.join(' | ')}], expected exactly one «${V.tabNext} · ${V.ilus}»`);
+  if (/\bclass="flat"|--u:/.test(pn)) out.push('the dashed uniform line is back: an unexplained line in a drawing that has no legend');
   // the distribution: ten bars on one scale, the first the winner (and the only accent one), a clear winner, a flat start (every word about as likely), both of the same mass
   const bars = [...pn.matchAll(/<i\b([^>]*\bdata-bar="([^"]*)"[^>]*)>/g)].map((m) => ({ attrs: m[1], v: +m[2], f: +(/\bdata-flat="([^"]*)"/.exec(m[1])?.[1] ?? NaN), css: +(/style="--v:([\d.]+)"/.exec(m[1])?.[1] ?? NaN) }));
   if (bars.length !== 10) out.push(`the drawing has ${bars.length} bars, expected 10`);
@@ -262,8 +264,6 @@ function sharpRule(html, lang) {
       if (Math.max(...fs) / Math.min(...fs) > 1.2) out.push(`the flat start is [${fs}]: every word must be about as likely (the tallest at most 1.2 times the shortest)`);
       const sv = vs.reduce((x, y) => x + y, 0), sf = fs.reduce((x, y) => x + y, 0);
       if (Math.abs(sv - sf) > 0.02) out.push(`the sharp bars add up to ${sv.toFixed(3)} and the flat ones to ${sf.toFixed(3)}: both are the same distribution on the same scale, they must weigh the same`);
-      const u = +(/<div class="sb" style="--u:([\d.]+)">/.exec(pn)?.[1] ?? NaN);
-      if (!(Math.abs(u - sf / 10) < 0.01)) out.push(`the uniform line is at ${u} but the flat bars average ${(sf / 10).toFixed(3)}`);
     }
     const hi = (pn.match(/<i class="hi"/g) ?? []).length;
     if (hi !== 1 || !/<i class="hi" data-bar="1"/.test(pn)) out.push('the winner (the first bar) is not the only accent bar');
@@ -292,7 +292,9 @@ function sharpSelfTest(html, lang) {
     'a winner that is not clear': inC03((c) => c.replace(/(<span class="bw"><i data-bar=")[^"]*(")/, '$10.8$2').replace(/style="--v:0\.\d+"/, 'style="--v:0.8"')),
     'a flat start that is not flat': inC03((c) => c.replace(/data-flat="[^"]*"/, 'data-flat="0.9"')),
     'a second accent bar': inC03((c) => c.replace('<span class="bw"><i data-bar', '<span class="bw"><i class="hi" data-bar')),
-    'the uniform line out of place': inC03((c) => c.replace(/<div class="sb" style="--u:[\d.]+">/, '<div class="sb" style="--u:.9">')),
+    'the bars labelled only ILUSTRATIVO (nothing says what they are)': inC03((c) => c.replace(`${esc(V.tabNext)} · `, '')),
+    'the bars labelled only with what they are (no ILUSTRATIVO)': inC03((c) => c.replace(` · ${esc(V.ilus)}`, '')),
+    'the dashed uniform line back': inC03((c) => c.replace('<div class="sb">', '<div class="sb" style="--u:.2"><i class="flat"></i>')),
   };
   const css = {
     'a round chip (border-radius on .sk)': html.replace('.sk{display:inline-flex', '.sk{border-radius:50%;display:inline-flex'),

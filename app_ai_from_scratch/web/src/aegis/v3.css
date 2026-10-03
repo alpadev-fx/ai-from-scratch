@@ -515,7 +515,6 @@ html[data-ch="cL"] .cue{display:none}
 .ilt{margin:0;display:flex;align-items:center;gap:8px;font:500 10px/1 var(--m);letter-spacing:.18em;color:var(--ac)}
 .ilt em{font-style:normal}
 .sb{position:relative;display:flex;align-items:flex-end;justify-content:space-between;gap:6px;height:clamp(124px,13vw,176px);border-bottom:1px solid var(--hair)}
-.sb .flat{position:absolute;left:0;right:0;bottom:calc(var(--u)*100%);border-top:1px dashed var(--hair);pointer-events:none}
 .bw{flex:1 1 0;min-width:0;max-width:40px;height:100%;display:flex;align-items:flex-end}
 .bw i{display:block;width:100%;height:100%;background:var(--l3);transform-origin:50% 100%;transform:scaleY(var(--v))}
 .bw i.hi{background:var(--ac)}

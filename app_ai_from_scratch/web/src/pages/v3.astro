@@ -86,12 +86,11 @@ const PIECES = Object.fromEntries(chipText.map((c) => [c.text, piecesOf(TOK, c.t
 const realA = piecesOf(TOK, sentence), realB = piecesOf(TOK, ctx), realBw = wordsOf(realB), realNext = piecesOf(TOK, ' ' + cands[0].name)[0][0];   // chapter 04: row A, and the dog context with the word each piece belongs to
 // 03 · the request of chapter 02's third case (the one that came back generic) as the real tokens it is, and the distribution over the next word that saying what, for whom and how moves.
 // The bars are a DRAWING of that process (every word about as likely, then one clear winner), not a measurement: the panel carries ILUSTRATIVO. Both lists sum to 1 and are drawn on the same
-// scale (the winner's height is the whole chart); `u` is where a uniform distribution (1 in 10) stands on it.
+// scale (the winner's height is the whole chart).
 const askP = piecesOf(TOK, V.s1Beats[2].tu);
 const SHARP = [0.46, 0.17, 0.11, 0.08, 0.06, 0.04, 0.03, 0.025, 0.015, 0.01];
 const FLAT = [0.108, 0.104, 0.102, 0.101, 0.1, 0.099, 0.098, 0.097, 0.096, 0.095];
 const bars = SHARP.map((v, k) => ({ v: +(v / SHARP[0]).toFixed(3), f: +(FLAT[k] / SHARP[0]).toFixed(3) }));
-const flatU = +(0.1 / SHARP[0]).toFixed(3);
 const sym = [
   { lbl: P.s1Lbl, lec: P.s1Lec, h: P.s1H, d: P.s1D, c: P.s1C },
   { lbl: P.s2Lbl, lec: P.s2Lec, h: P.s2H, d: P.s2D, c: P.s2C },
@@ -319,9 +318,8 @@ setTimeout(function(){
       </div>
     </div>
     <div class="spr">
-      <p class="ilt"><i class="dot"></i><em>{V.ilus}</em></p>
-      <div class="sb" style={`--u:${flatU}`}>
-        <i class="flat"></i>
+      <p class="ilt"><i class="dot"></i><em>{V.tabNext} · {V.ilus}</em></p>
+      <div class="sb">
         {bars.map((b, k) => (<span class="bw"><i class={k === 0 ? 'hi' : undefined} data-bar={b.v} data-flat={b.f} style={`--v:${b.v}`}></i></span>))}
       </div>
     </div>

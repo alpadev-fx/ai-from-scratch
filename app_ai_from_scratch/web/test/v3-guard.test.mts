@@ -453,6 +453,10 @@ test('chapter 06 on a 320-359px phone: the struck words are sized to their cell 
 test('chapter 03: the request is the REAL tokens of case 3, the added chips are the words case 3\'s own tag names, and the bars are one distribution drawn flat, then sharp', () => {
   const page = readFileSync(new URL('../src/pages/v3.astro', import.meta.url), 'utf8');
   assert.ok(/const askP = piecesOf\(TOK, V\.s1Beats\[2\]\.tu\);/.test(page), 'the request row is the cut of case 3\'s pill in the committed token file');
+  const fig = page.slice(page.indexOf('<figure class="sharp"'), page.indexOf('</figure>', page.indexOf('<figure class="sharp"')));
+  assert.ok(/<em>\{V\.tabNext\} · \{V\.ilus\}<\/em>/.test(fig), 'the bars say what they are (the options for the next token, the term chapter 04 uses) and that they are a drawing');
+  assert.ok(!/class="flat"|--u:/.test(fig), 'no unexplained dashed line in the drawing');
+  for (const lang of ['es', 'en'] as const) assert.ok(STR[lang].pub.v3.tabNext && STR[lang].pub.v3.ilus, `${lang}: both words of the label exist`);
   for (const lang of ['es', 'en'] as const) {
     const V = STR[lang].pub.v3, tag = V.s1Beats[2].tag;
     assert.ok(piecesOf(TOKENS[lang], V.s1Beats[2].tu).length >= 6, `${lang}: the request has real pieces in the file`);
@@ -520,7 +524,7 @@ test('chapter 03\'s class names are its own: no rule outside its block styles th
   const page = readFileSync(new URL('../src/pages/v3.astro', import.meta.url), 'utf8'), at = page.indexOf('<figure class="sharp"'), fig = page.slice(at, page.indexOf('</figure>', at));
   const own = new Set([...fig.matchAll(/class="([^"]*)"/g)].flatMap((m) => m[1].split(/\s+/)).concat([...fig.matchAll(/class=\{([^}]*)\}/g)].flatMap((m) => [...m[1].matchAll(/'([\w-]+)'/g)].map((x) => x[1]))));
   for (const shared of ['c', 'tl', 'tr', 'bl', 'br', 'dot']) own.delete(shared);
-  assert.ok(['sharp', 'spl', 'spr', 'sq', 'sl', 'sk', 'ask', 'src', 'ilt', 'sb', 'bw', 'hi', 'flat'].every((c) => own.has(c)), `the panel's classes are read from the markup (${[...own]})`);
+  assert.ok(['sharp', 'spl', 'spr', 'sq', 'sl', 'sk', 'ask', 'src', 'ilt', 'sb', 'bw', 'hi'].every((c) => own.has(c)), `the panel's classes are read from the markup (${[...own]})`);
   const NAMES = new RegExp(`\\.(?:${[...own].join('|')})(?![\\w-])`);
   const ALLOWED = new Set(['.sharp .c', '.sharp .tl', '.sharp .tr', '.sharp .bl', '.sharp .br', '.sharp', '.spl', '.spr', '.sb']);   // the corner brackets shared with the bio panel and the chat windows; the phone block
   const stray = (text: string) => [...text.matchAll(/([^{}]+)\{([^{}]*)\}/g)].flatMap((m) => m[1].split(',').map((s) => s.trim())).filter((s) => NAMES.test(s) && !ALLOWED.has(s) && !/\[data-sharp\]/.test(s));

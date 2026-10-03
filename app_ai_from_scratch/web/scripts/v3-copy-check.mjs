@@ -620,6 +620,25 @@ function fxSourceSelfTest(files) {
   return [bad, cases.length];
 }
 
+// The scramble alphabet (hud.ts SCR) is drawn by ScrambleText, which writes innerHTML: a `<`, `>` or `&` in it comes out as an entity and the reveal slices it mid-way, so every HUD head
+// and chapter 02's typing showed «&l», «lt;», «gt;» debris. The real fix is the alphabet; this keeps it that way.
+function scrambleAlphabet(src) {
+  const m = /export const SCR\s*=\s*(['"`])((?:\\.|(?!\1)[^\\])*)\1/.exec(src);
+  if (!m) return ['hud.ts: the scramble alphabet SCR is gone'];
+  const bad = [...new Set(m[2].match(/[<>&]/g) ?? [])];
+  return bad.length ? [`hud.ts: SCR contains ${bad.join(' ')}: ScrambleText writes innerHTML, so these come out as entities and its reveal slices them mid-way (the «&l» / «lt;» debris); use ‹ › for the look`] : [];
+}
+function scrambleAlphabetSelfTest(src) {
+  if (scrambleAlphabet(src).length) return [0, 0];                   // the real file is judged by the run below
+  const cases = [
+    ['an angle bracket back in the scramble alphabet', src.replace("'01·—/‹›ABCDEF'", "'01·—/<>ABCDEF'"), /SCR contains < >/],
+    ['an ampersand in the scramble alphabet', src.replace("'01·—/‹›ABCDEF'", "'01·—/&ABCDEF'"), /SCR contains &/],
+    ['the scramble alphabet gone', src.replace('export const SCR', 'export const SCRX'), /SCR is gone/],
+  ];
+  let bad = 0; for (const [what, m, expect] of cases) { if (m === src) { console.error(`FAIL self-test: the mutation "${what}" changed nothing`); bad++; continue; } if (!scrambleAlphabet(m).some((g) => expect.test(g))) { console.error(`FAIL self-test: scrambleAlphabet does not catch "${what}"`); bad++; } }
+  return [bad, cases.length];
+}
+
 // ---------- run ----------
 const pages = new Map();
 for (const lang of LANGS) for (const cc of MARKETS) {
@@ -634,6 +653,9 @@ let fail = 0, mutantCount = 0;
 const mainSrc = readFileSync(new URL('../src/aegis/main.ts', import.meta.url), 'utf8');
 { const [bad, n] = engineBootSelfTest(mainSrc); fail += bad; mutantCount += n; }
 for (const m of engineBoot(mainSrc)) { console.error(`FAIL main.ts: ${m}`); fail++; }
+const hudSrc = readFileSync(new URL('../src/aegis/hud.ts', import.meta.url), 'utf8');
+{ const [bad, n] = scrambleAlphabetSelfTest(hudSrc); fail += bad; mutantCount += n; }
+for (const m of scrambleAlphabet(hudSrc)) { console.error(`FAIL hud.ts: ${m}`); fail++; }
 const fxFiles = Object.fromEntries(FX_MODULES.map((n) => { try { return [n, readFileSync(new URL(`../src/aegis/fx/${n}`, import.meta.url), 'utf8')]; } catch { return [n, undefined]; } }));
 { const [bad, n] = fxSourceSelfTest(fxFiles); fail += bad; mutantCount += n; }
 for (const m of fxSource(fxFiles)) { console.error(`FAIL fx: ${m}`); fail++; }

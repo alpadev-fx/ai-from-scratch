@@ -8,7 +8,8 @@ import { $, $$, clamp, el, eo, eio, seg } from './util';
 
 gsap.registerPlugin(SplitText, ScrambleTextPlugin);
 export { gsap };
-export const SCR = '01·—/<>ABCDEF';
+// The alphabet ScrambleText draws from. Never `<`, `>` or `&`: the plugin writes innerHTML, so they come out as entities and its reveal slices them mid-way («&l», «lt;»).
+export const SCR = '01·—/‹›ABCDEF';
 
 const heads: Array<{ redo(): void }> = [];
 

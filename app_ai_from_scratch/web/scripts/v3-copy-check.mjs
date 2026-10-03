@@ -40,7 +40,7 @@ const FX_HOOKS = {
   c03: { fx: 'lens', hooks: [['data-lens', 3]] },
   c05: { fx: 'track', hooks: [['data-track', 1], ['data-fig', 6], ['data-cifra', 6]], stage: true },
   c06: { fx: 'implode', hooks: [['data-nots', 1], ['data-word', 6], ['data-final', 1]], stage: true },
-  c07: { fx: 'ring', hooks: [['data-ring', 1], ['data-ring-stroke', 1], ['data-tick', 12], ['data-count', 5], ['data-specs', 1], ['data-spec', 4]] },
+  c07: { fx: 'ring', hooks: [['data-ring', 1], ['data-ring-stroke', 1], ['data-tick', 12], ['data-count', 1]] },   // one counter only: the four figures under the ring never count
 };
 // the parts that exist only because an effect added them (they must hang on html.fxl) · the selectors that name the copy of an effect chapter · what hides it
 const FX_ONLY = /\.(?:sk|ty|sp|lens|lc|lr|pin|rail|imp|pen|num)\b|\[data-fx-/;
@@ -461,9 +461,8 @@ function mutants(html, lang) {
     ['chapter 07 without its data-fx name', html.replace('data-fx="ring"', 'data-fx="x"'), /fx: #c07 lost its data-fx/],
     ['chapter 07 without its clock hook', inChapter('c07', (c) => c.replace(' data-ring aria-hidden', ' aria-hidden')), /fx: #c07 has 0 data-ring,/],
     ['a chapter 07 tick without its hook', inChapter('c07', (c) => c.replace(' data-tick', '')), /fx: #c07 has 11 data-tick/],
-    ['a chapter 07 figure without its count hook', inChapter('c07', (c) => c.replace(' data-count="12"', '')), /fx: #c07 has 4 data-count/],
-    ['chapter 07 without its figures hook', inChapter('c07', (c) => c.replace(' data-specs', '')), /fx: #c07 has 0 data-specs/],
-    ['a chapter 07 figure row without its hook', inChapter('c07', (c) => c.replace(' data-spec>', '>')), /fx: #c07 has 3 data-spec,/],
+    ['a chapter 07 figure counting up again (a second count hook)', inChapter('c07', (c) => c.replace('<dt>12</dt>', '<dt data-count="12">12</dt>')), /fx: #c07 has 2 data-count, the effect needs 1/],
+    ['a chapter 07 counter without its count hook', inChapter('c07', (c) => c.replace(' data-count="40"', '')), /fx: #c07 has 0 data-count, the effect needs 1/],
     ['chapter 07 with the pin class in the markup', html.replace('<section id="c07" class="sec cx"', '<section id="c07" class="sec cx pin"'), /layout: #c07 carries the effects' `pin` class/],
     ['the clock ticks styled without html.fxl', html.replace('html.fxl .clock[data-fx-s] .tick{', '.clock[data-fx-s] .tick{'), /fx: "\.clock\[data-fx-s\] \.tick" styles a part that only an effect adds/],
     ['the counter overlay styled without html.fxl', html.replace('html.fxl .num{', '.num{'), /fx: "\.num" styles a part that only an effect adds/],
@@ -610,7 +609,7 @@ function fxSourceSelfTest(files) {
     ['an engine mode class switched by an effect', { ...files, 'c02.ts': files['c02.ts'].replace('export function initC02', "document.documentElement.classList.add('nogl');\nexport function initC02") }, /switches an engine mode class/],
     ['a pre-state armed without belowFold()', { ...files, 'c02.ts': files['c02.ts'].replace('if (!belowFold(b.el)) continue;', '') }, /arms a pre-state without asking belowFold/],
     ['a pre-state armed without belowFold() (chapter 07)', { ...files, 'c07.ts': files['c07.ts'].replaceAll('belowFold(', 'Boolean(') }, /c07\.ts: arms a pre-state without asking belowFold/],
-    ['a counter that writes a literal (chapter 07)', { ...files, 'c07.ts': files['c07.ts'].replace('n.ov.textContent = String(k)', "n.ov.textContent = 'x'") }, /c07\.ts: writes a string literal/],
+    ['a counter that writes a literal (chapter 07)', { ...files, 'c07.ts': files['c07.ts'].replace('ov.textContent = String(k)', "ov.textContent = 'x'") }, /c07\.ts: writes a string literal/],
     ['a layout property animated (chapter 07, style.width)', { ...files, 'c07.ts': files['c07.ts'].replace('export function initC07', "document.body.style.width = '1px';\nexport function initC07") }, /c07\.ts: sets style\.width/],
     ['a module gone', { ...files, 'c02.ts': undefined }, /c02\.ts: the module is missing/],
     ['effect() that stops undoing a half-built effect', { ...files, 'common.ts': files['common.ts'].replace(/dispose\(\);\s*throw e;/, 'throw e;').replace('const dispose = ', 'const disposeX = ') }, /effect\(\) no longer undoes/],

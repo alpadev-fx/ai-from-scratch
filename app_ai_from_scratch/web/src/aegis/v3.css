@@ -655,7 +655,7 @@ html.fxl #c06.pin{--fx-len:2.6;height:calc(var(--fx-len) * 100svh)}
 html.fxl #c06.pin .pstage{padding-left:max(var(--gut),calc(50% - 620px + var(--gut)));padding-right:max(var(--gut),calc(50% - 620px + var(--gut)))}
 html.fxl #c06.pin .hx{will-change:transform,opacity,filter}
 html.fxl .imp{position:absolute;inset:0;width:100%;height:100%;z-index:3;pointer-events:none}
-/* 07: the clock draws once, only if it was below the viewport when the engine attached ([data-fx-s] is set then). Every counter is an overlay on its number: the real text
+/* 07: the clock draws once, only if it was below the viewport when the engine attached ([data-fx-s] is set then). Its counter is an overlay on the number: the real text
    stays in the page, transparent while the overlay runs, and is what the reader ends with. The ring is revealed by a clip-path on its svg; the pen is the bright dot at its head */
 html.fxl{--fx-pen:drop-shadow(0 0 6px var(--ac)) drop-shadow(0 0 16px color-mix(in srgb,var(--ac) 55%,transparent))}
 html.fxl[data-theme="paper"]{--fx-pen:drop-shadow(0 3px 6px rgba(0,0,0,.3))}

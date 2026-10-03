@@ -348,8 +348,8 @@ setTimeout(function(){
       <p class="lede">{V.s4Sub}</p>
     </div>
   </div>
-  <dl class="specs" data-specs>
-    {V.specs.map((s) => (<div class="srow" data-spec><dt data-count={s.k}>{s.k}</dt><dd>{s.d}</dd></div>))}
+  <dl class="specs">
+    {V.specs.map((s) => (<div class="srow"><dt>{s.k}</dt><dd>{s.d}</dd></div>))}
   </dl>
   <V3Cta label={P.preCta} micro={P.heroGar} />
 </section>

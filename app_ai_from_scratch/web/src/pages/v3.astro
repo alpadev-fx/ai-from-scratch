@@ -317,13 +317,16 @@ setTimeout(function(){
   </div>
 </section>
 
-<!-- ===== 06 · LO QUE NO NECESITAS (Hormozi s3). Static: the six words struck out, then the line. Stage 2B: the words implode toward the centre. ===== -->
+<!-- ===== 06 · LO QUE NO NECESITAS (Hormozi s3). Static: the six words struck out, then the line. Stage 2B: scrubbed by the scroll, the words implode into
+     particles toward the line, which lands (.pstage is the wrapper its pinned stage is made of: no style until the engine adds `pin` to the section). ===== -->
 <section id="c06" class="sec cx" aria-labelledby="c06h" data-fx="implode">
-  <div class="sh"><div class="sn">■ {label('06', V.s3Eb)}</div><div class="sx">{cnt('06')}</div></div>
-  <ul class="nots" data-nots>
-    {V.s3Palabras.map((w) => (<li><s data-word>{w}</s></li>))}
-  </ul>
-  <h2 id="c06h" class="hx xl" data-final>{V.s3H}</h2>
+  <div class="pstage">
+    <div class="sh"><div class="sn">■ {label('06', V.s3Eb)}</div><div class="sx">{cnt('06')}</div></div>
+    <ul class="nots" data-nots>
+      {V.s3Palabras.map((w) => (<li><s data-word>{w}</s></li>))}
+    </ul>
+    <h2 id="c06h" class="hx xl" data-final>{V.s3H}</h2>
+  </div>
 </section>
 
 <!-- ===== 07 · EL TIEMPO (Hormozi s4 + the four figures) + CTA. Static ring, fully drawn. Stage 2B: the ring draws and the counter runs 0 to 40. ===== -->

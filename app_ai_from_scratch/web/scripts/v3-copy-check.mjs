@@ -39,9 +39,10 @@ const FX_HOOKS = {
   c02: { fx: 'type-strike', hooks: [['data-chat', 1], ['data-beat', 3], ['data-type', 3], ['data-strike', 3], ['data-tag', 3]] },
   c03: { fx: 'lens', hooks: [['data-lens', 3]] },
   c05: { fx: 'track', hooks: [['data-track', 1], ['data-fig', 6], ['data-cifra', 6]], stage: true },
+  c06: { fx: 'implode', hooks: [['data-nots', 1], ['data-word', 6], ['data-final', 1]], stage: true },
 };
 // the parts that exist only because an effect added them (they must hang on html.fxl) · the selectors that name the copy of an effect chapter · what hides it
-const FX_ONLY = /\.(?:sk|ty|sp|lens|lc|lr|pin|rail)\b|\[data-fx-/;
+const FX_ONLY = /\.(?:sk|ty|sp|lens|lc|lr|pin|rail|imp)\b|\[data-fx-/;
 const FX_COPY = /\.(?:rp|tag|you|ia|who|shout|bt|beat|chat|trio|tri|figs|fig|big|cap|ie|nots|hx|ctr|specs|srow|tcopy|lede|clock)\b|\bs\[data-word\]|\bdt\b|\bdd\b|#c0[2-7]\b/;
 const FX_HIDES = /(?:^|;)\s*(?:opacity\s*:\s*0(?![.\d])|visibility\s*:\s*hidden|display\s*:\s*none|clip-path\s*:|color\s*:\s*transparent|font-size\s*:\s*0\b|transform\s*:\s*scale\(0\b)/;
 const CTA_CHAPTERS = ['c03', 'c07', 'c10', 'c11'];       // CTA rows with the price label + the guarantee line; c14 has its in-card button; c16 closes
@@ -440,8 +441,21 @@ function mutants(html, lang) {
     ['chapter 05\'s track outside its wrapper', inChapter('c05', (c) => c.replace('<div class="figs" data-track>', '</div><div class="figs" data-track>').replace(/<\/div>\s*<\/section>/, '</section>')), /fx: #c05's data-track is outside its \.pstage wrapper/],
     ['chapter 05 with the pin class in the markup', html.replace('<section id="c05" class="sec cx figs-sec"', '<section id="c05" class="sec cx figs-sec pin"'), /layout: #c05 carries the effects' `pin` class/],
     ['the pinned stage keyed to html.fx instead of html.fxl', html.replace('html.fxl .pin .pstage{', 'html.fx .pin .pstage{'), /fx: "html\.fx \.pin \.pstage" styles a part that only an effect adds/],
-    ['the pinned section height without html.fxl', html.replace('html.fxl .pin{--fx-cw', '.pin{--fx-cw'), /fx: "\.pin" styles a part that only an effect adds/],
+    ['the pinned section height without html.fxl', html.replace('html.fxl #c05.pin{--fx-cw', '#c05.pin{--fx-cw'), /fx: "#c05\.pin" styles a part that only an effect adds/],
     ['the lens ring styled without html.fxl', html.replace('html.fxl .lr{', '.lr{'), /fx: "\.lr" styles a part that only an effect adds/],
+    ['chapter 06 without its data-fx name', html.replace('data-fx="implode"', 'data-fx="x"'), /fx: #c06 lost its data-fx/],
+    ['chapter 06 without its grid hook', inChapter('c06', (c) => c.replace(' data-nots', '')), /fx: #c06 has 0 data-nots/],
+    ['a chapter 06 word without its hook', inChapter('c06', (c) => c.replace(' data-word', '')), /fx: #c06 has 5 data-word/],
+    ['chapter 06 without its closing-line hook', inChapter('c06', (c) => c.replace(' data-final', '')), /fx: #c06 has 0 data-final/],
+    ['chapter 06 without its pinned-stage wrapper', inChapter('c06', (c) => c.replace('<div class="pstage">', '<div class="x">')), /fx: #c06 has 0 \.pstage wrappers/],
+    ['chapter 06\'s closing line outside its wrapper', inChapter('c06', (c) => c.replace(/<h2 id="c06h"/, '</div><h2 id="c06h"').replace(/<\/div>\s*<\/section>/, '</section>')), /fx: #c06's data-final is outside its \.pstage wrapper/],
+    ['chapter 06 with the pin class in the markup', html.replace('<section id="c06" class="sec cx"', '<section id="c06" class="sec cx pin"'), /layout: #c06 carries the effects' `pin` class/],
+    ['the chapter 06 pinned length without html.fxl', html.replace('html.fxl #c06.pin{', '#c06.pin{'), /fx: "#c06\.pin" styles a part that only an effect adds/],
+    ['the chapter 06 length on the page\'s own --len', html.replace('html.fxl #c06.pin{--fx-len:', 'html.fxl #c06.pin{--len:'), /fx: "html\.fxl #c06\.pin" declares --len/],
+    ['the particle canvas styled without html.fxl', html.replace('html.fxl .imp{', '.imp{'), /fx: "\.imp" styles a part that only an effect adds/],
+    ['a stage-2B rule on the closing line itself (it would outlive dispose)', html.replace('html.fxl #c06.pin .hx{', 'html.fxl .hx{'), /fx: "html\.fxl \.hx" is in the stage-2B block but styles an element no effect owns/],
+    ['the closing line of chapter 06 hidden by default', html.replace('</head>', '<style>.hx{opacity:0}</style></head>'), /fx: "\.hx" hides the copy/],
+    ['the struck words hidden by default', html.replace('</head>', '<style>s[data-word]{color:transparent}</style></head>'), /fx: "s\[data-word\]" hides the copy/],
     ['a stage-2B rule on a plain element (it would outlive dispose)', html.replace('html.fxl [data-fx-s] .ia{position:relative}', 'html.fxl .ia{position:relative}'), /fx: "html\.fxl \.ia" is in the stage-2B block but styles an element no effect owns/],
     ['the lens glow back on the logo-size custom property', html.replace('html.fxl{--fx-glow:', 'html.fxl{--lg:'), /fx: "html\.fxl" declares --lg/],
     ['chapter 02 with the pin class in the markup', html.replace('<section id="c02" class="sec cx s02"', '<section id="c02" class="sec cx s02 pin"'), /layout: #c02 carries the effects' `pin` class/],
@@ -542,7 +556,7 @@ function engineBootSelfTest(src) {
 // opacity, clip-path and filter (layout is CSS under html.fxl, decided once at attach), and an effect that pre-arms something (hides it, waiting) does it only to
 // what is below the fold. `files` is { 'c02.ts': source, ... }.
 const FX_PREARM = ['c02.ts', 'c03.ts'];                              // modules that arm pre-states for play-once effects: they must ask belowFold() first (a scrubbed one is a function of the scroll position and arms nothing)
-const FX_MODULES = ['index.ts', 'common.ts', 'c02.ts', 'c03.ts', 'c05.ts'];
+const FX_MODULES = ['index.ts', 'common.ts', 'c02.ts', 'c03.ts', 'c05.ts', 'c06.ts'];
 const ANIMATED = new Set(['transform', 'opacity', 'clipPath', 'filter', 'willChange']);
 function fxSource(files) {
   const f = [];

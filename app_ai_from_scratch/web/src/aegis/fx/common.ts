@@ -25,6 +25,14 @@ export function whenSeen(e: Element, cb: () => void, margin = '0px 0px -15% 0px'
   io.observe(e); return () => io.disconnect();
 }
 
+/** Pins a chapter's stage (adds the `pin` class) when everything in it fits the viewport's height, and leaves the chapter static when it does not: a phone on its side, a short window.
+ *  A stage that overflows lays its content out from the top (`safe center`), so scrollHeight tells. Returns whether the chapter is pinned. Asked at attach and on every resize. */
+export function setPin(sec: HTMLElement, stage: HTMLElement): boolean {
+  sec.classList.add('pin');
+  if (stage.scrollHeight <= stage.clientHeight + 1) return true;
+  sec.classList.remove('pin'); return false;
+}
+
 /** Runs `f` after every engine tick (the engine's ticker: one clock for the page). Returns the remove. */
 export function onTick(f: (dt: number) => void): () => void {
   A.after.push(f);

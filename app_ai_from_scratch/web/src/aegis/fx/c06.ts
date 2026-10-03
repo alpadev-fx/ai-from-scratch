@@ -9,8 +9,9 @@ import { $, $$, clamp, el, hash, lerp, seg, ss } from '../util';
 import { effect, onResize, onTheme, onTick, setPin, token } from './common';
 
 const A0 = 0.14, A1 = 0.17;          // the words hand over to their particles (legible before A0)
-const B0 = 0.16, B1 = 0.62;          // the particles stream in
-const L0 = 0.64, L1 = 0.92;          // the line lands (after the halo they gather in has peaked: never light text over a light glow)
+const B0 = 0.16, B1 = 0.50;          // the particles stream in
+const H0 = 0.28, H1 = 0.42, H2 = 0.46, H3 = 0.60;   // the halo they gather in: up from H0 to H1, down from H2 to H3
+const L0 = 0.52, L1 = 0.72;          // the line lands, while the halo is going out (never light text over a light glow) and is fully sharp, still pinned, for the last 28 % of the pin (0.45 screens)
 
 /** A CSS colour as [r, g, b] (any notation the tokens use). */
 const rgb = (c: string): [number, number, number] => {
@@ -89,13 +90,13 @@ export function initC06() {
       const hand = ss(seg(p, A0, A1)), q = seg(p, B0, B1), land = ss(seg(p, L0, L1));
       // the words, the panels they sit on, the line
       const wo = (1 - hand).toFixed(3); words.forEach((w) => { w.style.opacity = wo; });
-      nots.style.opacity = (1 - ss(seg(p, 0.3, 0.66))).toFixed(3);
+      nots.style.opacity = (1 - ss(seg(p, 0.2, B1))).toFixed(3);
       h2.style.opacity = land.toFixed(3);
       h2.style.transform = `translate3d(0,${(-dy).toFixed(1)}px,0) scale(${(1.1 - 0.1 * land).toFixed(4)})`;
       h2.style.filter = land < 0.999 ? `blur(${((1 - land) * 16).toFixed(1)}px)` : '';
       // the particles
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, Hh);
-      if (hand <= 0 || p > 0.84) return;
+      if (hand <= 0 || p > H3 + 0.02) return;
       const cnt = bn; cnt.fill(0);                                  // 4 alphas x 2 colours: one fill each
       for (let i = 0; i < n; i++) {
         const t = clamp((q - pd[i]) / (1 - pd[i])), u = t * t * t * (t * (6 * t - 15) + 10);
@@ -112,7 +113,7 @@ export function initC06() {
         ctx.fill();
       }
       // the halo they gather in: accent on dark, a dark soft shadow on paper (never light on light)
-      const core = ss(seg(p, 0.42, 0.58)) * (1 - ss(seg(p, 0.6, 0.78)));
+      const core = ss(seg(p, H0, H1)) * (1 - ss(seg(p, H2, H3)));
       if (core > 0.01) {
         const r = 14 + clamp(W * 0.1, 46, 118) * core, gr = ctx.createRadialGradient(tx, ty, 0, tx, ty, r), c = paper ? c1 : ca, m = lerp(0.55, 0.16, +paper);
         gr.addColorStop(0, paper ? `rgba(${c[0]},${c[1]},${c[2]},${(0.34 * core).toFixed(3)})` : `rgba(255,255,255,${(0.9 * core).toFixed(3)})`);

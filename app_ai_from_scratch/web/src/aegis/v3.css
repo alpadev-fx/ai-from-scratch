@@ -617,6 +617,22 @@ html[data-ch="cL"] .cue{display:none}
   .meta{line-height:1.55}
 }
 
+/* ---------- the end of the page: a BLACK plate in every theme (paper, auto-light and dark alike). Its tokens are the dark ones of theme-css.ts, scoped to it by v3.astro (.endp{--bg:#000;--l1:…}),
+   so its text and hairlines are the light ones and nothing in it follows the page's theme. A straight cut at the top (no gradient, no corners). It holds the brand row, the legal line and the wordmark ---------- */
+.endp{position:relative;z-index:2;background:var(--bg);color:var(--l1)}
+.endp .foot{margin-left:max(var(--gut),calc(50% - 620px + var(--gut)));margin-right:max(var(--gut),calc(50% - 620px + var(--gut)))}
+.endp .foot:first-child{border-top:0;padding-top:44px}
+/* the wordmark: «AI FROM SCRATCH», the outlines of its letters (src/aegis/wordmark.ts). Static = the outline, fully drawn; the effect is in the stage-2B block */
+.wmk{--wm-ink:242,244,246;--wm-ls:.15;--wm-fs:.022;position:relative;overflow:hidden;padding:32px var(--gut) 0;line-height:0}
+.wmk .wmg{position:absolute;inset:0;background:radial-gradient(ellipse 58% 100% at 50% 100%,rgba(242,244,246,.075),transparent);pointer-events:none}   /* a halo rising from the bottom edge of the page, gone before the top and the sides of the band: no visible edge */
+.wmk .wmr{position:relative}
+.wmk svg{display:block;width:100%;height:auto;overflow:visible}
+.wmk .wm2{display:none}
+.wmk path{fill:none;vector-effect:non-scaling-stroke}          /* the stroke keeps its pixel width (and its dashes their pixel length) at every size of the mark */
+.wmk path.o{fill:rgba(var(--wm-ink),var(--wm-fs));stroke:rgba(var(--wm-ink),var(--wm-ls));stroke-width:1.2}
+@keyframes fx-wm-lap{from{stroke-dashoffset:var(--fx-P)}to{stroke-dashoffset:0}}
+@media (max-width:640px){.wmk .wm1{display:none}.wmk .wm2{display:block}.wmk{--wm-ls:.24;--wm-fs:.03;padding-top:24px}}
+
 /*! ---------- STAGE 2B · chapter effects (src/aegis/fx). Everything here hangs on html.fxl (the engine is attached) and on attributes or classes the effect itself
    sets, so without the engine (no WebGL2, reduced motion, declined, still loading) none of it exists and the chapters above are the whole page. ---------- */
 /* 02: a beat is armed (hidden) only while it is below the viewport; the strike is drawn by .sk (empty hairlines) from then on, so the native one is off */
@@ -667,3 +683,14 @@ html.fxl .ctr .num{right:0;text-align:center}
 html.fxl .pen{position:absolute;left:0;top:0;width:9px;height:9px;margin:-4.5px 0 0 -4.5px;border-radius:50%;background:var(--l1);opacity:0;filter:var(--fx-pen);pointer-events:none;will-change:transform,opacity}
 /* 08: the bars of the temperature specimen grow once, from their left end, the first time the card is seen ([data-fx-s] is on the list only while that is pending) */
 html.fxl [data-fx-s] .cb i{transform-origin:0 50%;will-change:transform}
+
+/* 17 · the wordmark: the runners are an extra svg laid over each outline (`.wrs`, added by the effect, with one path `.wr` per contour of the letters): a short bright dash that laps its contour,
+   every contour with a phase of its own, so lines are always running somewhere on the mark. Always white on the black plate. The glow is a drop-shadow on that one svg (WebKit does not paint
+   a CSS filter on a path inside an svg, it does on the svg itself). They run only while `.run` (the effect sets it while the mark is on screen and drawn). The dash (--fx-d), the gap (--fx-g)
+   and the pattern (--fx-P) are screen pixels (the stroke is non-scaling), set by the effect from the real size of the mark; --fx-T is the lap and --fx-ph a contour's phase. While the outline
+   draws itself ([data-fx-s]) its dash is --fx-dw (the longest contour) and --fx-o is how much of it is still to draw. */
+html.fxl .wmk .wrs{position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;filter:drop-shadow(0 0 6px rgba(255,255,255,.9));opacity:0;transition:opacity .8s}
+html.fxl .wmk.run .wrs{opacity:.85}
+html.fxl .wmk .wr{stroke:#fff;stroke-width:1.6;stroke-linecap:square;stroke-dasharray:var(--fx-d,1) var(--fx-g,99999)}
+html.fxl .wmk.run .wr{animation:fx-wm-lap var(--fx-T,4.5s) linear var(--fx-ph,0s) infinite}
+html.fxl .wmk[data-fx-s] path.o{stroke-dasharray:var(--fx-dw);stroke-dashoffset:var(--fx-o)}

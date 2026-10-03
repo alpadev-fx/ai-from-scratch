@@ -44,7 +44,7 @@ const FX_HOOKS = {
   c08: { fx: 'bars-once', hooks: [['data-bars', 1]] },
 };
 // the parts that exist only because an effect added them (they must hang on html.fxl) · the selectors that name the copy of an effect chapter · what hides it
-const FX_ONLY = /\.(?:sk|ty|sp|lens|lc|lr|pin|rail|imp|pen|num)\b|\[data-fx-/;
+const FX_ONLY = /\.(?:sk|ty|sp|lens|lc|lr|pin|rail|imp|pen|num|wrs?)\b|\[data-fx-/;
 const FX_COPY = /\.(?:rp|tag|you|ia|who|shout|bt|beat|chat|trio|tri|figs|fig|big|cap|ie|nots|hx|ctr|specs|srow|tcopy|lede|clock)\b|cb|cn|cp|crow|cands|spec|\bs\[data-word\]|\bdt\b|\bdd\b|#c(?:0[2-9]|1[0-6])\b/;
 const FX_HIDES = /(?:^|;)\s*(?:opacity\s*:\s*0(?![.\d])|visibility\s*:\s*hidden|display\s*:\s*none|clip-path\s*:|color\s*:\s*transparent|font-size\s*:\s*0\b|transform\s*:\s*scale\(0\b)/;
 const CTA_CHAPTERS = ['c03', 'c07', 'c10', 'c11'];       // CTA rows with the price label + the guarantee line; c14 has its in-card button; c16 closes
@@ -340,8 +340,114 @@ function judge(html, lang) {
   if (!len || +len[1] !== given) f.push(`structure: chapter 04 is ${len ? len[1] : '(no --len)'} screens but llm.ts scales its timeline for ${given}`);
 
   for (const m of deltaRule(html, lang)) f.push(`delta: ${m}`);
+  for (const m of wordmarkRule(html)) f.push(`wordmark: ${m}`);
   return f;
 }
+
+// ---------- the footer plate and the wordmark (/v3 only) ----------
+// The closing footer (the brand row, the legal line and the wordmark) is a BLACK plate in every theme: paper, auto-light and dark alike, with the dark tokens scoped to it, light text and
+// white runners always. «AI FROM SCRATCH» ends it as a ghost outline: the outlines of its letters (src/aegis/wordmark.ts), no copy, aria-hidden. The page's own picture is the outline fully
+// drawn; the draw and the runners that lap its edges are an effect's (fx/wordmark.ts, html.fxl): they are never in the markup and never what a visitor without the engine is waiting for.
+// It is on /v3 once, after the last chapter, in both layouts (one line, two lines), and never on `/` (the shared footer of the other public pages is not touched).
+const balanced = (h, at, tag) => { let depth = 0, end = h.length; for (const m of h.slice(at).matchAll(new RegExp(`<${tag}\\b|</${tag}>`, 'g'))) { depth += m[0].startsWith('</') ? -1 : 1; if (!depth) { end = at + m.index + m[0].length; break; } } return h.slice(at, end); };
+const colour = (v) => {                                                    // #rgb / #rrggbb / rgba(r,g,b,a) → [r,g,b,a]
+  v = String(v).trim().toLowerCase(); let m;
+  if ((m = /^#([0-9a-f]{3})$/.exec(v))) return [...m[1]].map((c) => parseInt(c + c, 16)).concat(1);
+  if ((m = /^#([0-9a-f]{6})$/.exec(v))) return [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16)).concat(1);
+  if ((m = /^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*(?:,\s*([\d.]+)\s*)?\)$/.exec(v))) return [+m[1], +m[2], +m[3], m[4] === undefined ? 1 : +m[4]];
+  return null;
+};
+const luminance = ([r, g, b]) => { const f = (c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b); };
+/** WCAG contrast of `fg` (any alpha) painted on the opaque `bg`. */
+const contrast = (fg, bg) => { const mix = [0, 1, 2].map((i) => fg[3] * fg[i] + (1 - fg[3]) * bg[i]), a = luminance(mix) + 0.05, b = luminance(bg) + 0.05; return Math.max(a, b) / Math.min(a, b); };
+function wordmarkRule(html) {
+  const f = [];
+  const open = [...html.matchAll(/<div\b[^>]*\bdata-fx="wordmark"[^>]*>/g)];
+  if (open.length !== 1) { f.push(`the footer wordmark block appears ${open.length} times (expected 1)`); return f; }
+  const at = open[0].index, block = balanced(html, at, 'div'), tag = open[0][0];
+  if (!/\bclass="wmk"/.test(tag)) f.push('the wordmark block lost its class="wmk"');
+  if (!/\baria-hidden="true"/.test(tag)) f.push('the wordmark block is not aria-hidden (it is a decoration with no copy)');
+  // the plate: <footer class="endp"> after the last chapter, inside <main>, holding the brand row, the legal line and the wordmark
+  const plates = [...html.matchAll(/<footer\b[^>]*\bclass="endp"[^>]*>/g)], c16 = html.indexOf('id="c16"'), main = html.indexOf('</main>');
+  if (plates.length !== 1) f.push(`the black footer plate (<footer class="endp">) appears ${plates.length} times (expected 1)`);
+  else {
+    const pAt = plates[0].index, pEnd = html.indexOf('</footer>', pAt), plate = html.slice(pAt, pEnd);
+    if (c16 < 0 || pAt < c16 || (main >= 0 && pAt > main)) f.push('the footer plate is not after the last chapter, inside <main>');
+    if (!(at > pAt && at < pEnd)) f.push('the wordmark is not inside the footer plate (it would be on the page\'s theme, not on black)');
+    if (!/<div class="foot">/.test(plate) || !/<div class="foot legal2">/.test(plate)) f.push('the footer plate lost its brand row or its legal line (they live on the black plate, not in the closing chapter)');
+    const ch16 = html.slice(c16, pAt);
+    if (/<div class="foot\b/.test(ch16)) f.push('a footer row is still inside the closing chapter (it belongs to the black plate)');
+  }
+  const wraps = [...block.matchAll(/<div class="wmr (wm[12])">([\s\S]*?)<\/svg>\s*<\/div>/g)];
+  if (wraps.length !== 2 || wraps[0][1] !== 'wm1' || wraps[1][1] !== 'wm2') f.push(`the wordmark has ${wraps.length} layouts (expected 2, in order: .wm1 one line, .wm2 two lines)`);
+  for (const w of wraps) {
+    const cls = w[1], inner = w[2], svg = /<svg\b([^>]*)>([\s\S]*)$/.exec(inner), attrs = svg?.[1] ?? '', body = svg?.[2] ?? '';
+    const vb = /\bviewBox="0 0 (\d+) (\d+)"/.exec(attrs);
+    if (!vb || +vb[1] < 100 || +vb[2] < 20) f.push(`.${cls} has no viewBox (the box would not reserve its aspect ratio: layout shift)`);
+    const lc = (/\bdata-lc="([\d,]+)"/.exec(attrs)?.[1] ?? '').split(',').filter(Boolean).map(Number), d = /\bd="(M[^"]*)"/.exec(body)?.[1] ?? '';
+    if (lc.length < 2 || lc.some((c) => !(c > 0))) f.push(`.${cls} has no data-lc (the length of each contour: the runners are sized and timed by them)`);
+    else if (lc.length !== (d.match(/M/g) ?? []).length) f.push(`.${cls}: data-lc lists ${lc.length} contours but the path has ${(d.match(/M/g) ?? []).length}`);
+    if (!/\bfocusable="false"/.test(attrs)) f.push(`.${cls} is focusable (focusable="false" is missing)`);
+    if (/\bstyle=|\baria-label=|\brole=/.test(attrs)) f.push(`.${cls} carries a style, an aria-label or a role (a decoration has none)`);
+    const paths = [...body.matchAll(/<path\b([^>]*)\/?>/g)];
+    if (paths.length !== 1 || !/\bclass="o"/.test(paths[0][1]) || d.length < 500) f.push(`.${cls} must hold exactly one <path class="o" d="M…"> (the outline); the runners are the effect's`);
+    if (/<(?:text|title|desc|use|image|foreignObject|animate|animateTransform|set|style|script)\b/.test(body)) f.push(`.${cls} holds <text>, <title>, <use>, an animation or a script: the mark is paths only`);
+  }
+  if (/\bclass="[^"]*\b(?:wrs?|fxk)\b/.test(block) || /\bdata-fx-s\b/.test(block)) f.push('the markup already carries a runner (.wr / .wrs / .fxk) or a pre-state (data-fx-s): they are the effect\'s, added with the engine');
+  if (textOf(block)) f.push('the wordmark block carries text (it is aria-hidden paths: no copy)');
+  // the stylesheet: the outline is visible by default and nothing hides it, both layouts exist and switch, the plate is black in EVERY theme with light text, the runners are white, the stroke keeps its
+  // pixel width, caps are square
+  const css = [...html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].map((m) => m[1]).join('\n').replace(/\/\*[\s\S]*?\*\//g, '');
+  const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ sel: m[1].trim(), body: m[2] }));
+  if (!rules.some((r) => /(^|,)\s*\.wmk path\.o\s*(,|$)/.test(r.sel) && /\bfill:/.test(r.body) && /\bstroke:/.test(r.body) && /\bstroke-width:/.test(r.body))) f.push('no rule paints the outline (.wmk path.o needs a fill, a stroke and a stroke-width): the static page would show nothing');
+  for (const r of rules) for (const sel of r.sel.split(',').map((x) => x.trim())) {
+    if (!/\.wmk\b/.test(sel) || /\.wm[12]\b/.test(sel)) continue;
+    if (/(?:^|;)\s*(?:opacity\s*:\s*0(?![.\d])|visibility\s*:\s*hidden|display\s*:\s*none|clip-path\s*:|stroke-dasharray\s*:|stroke-dashoffset\s*:|transform\s*:\s*scale\(0\b)/.test(r.body) && !(/\bhtml\.fxl\b/.test(sel) && /\[data-fx-|\.wrs?\b/.test(sel)))
+      f.push(`"${sel}" hides the wordmark by default (only html.fxl [data-fx-…] or the effect's own .wr / .wrs may: the static page shows the outline fully drawn)`);
+  }
+  if (!rules.some((r) => r.sel === '.wmk .wm2' && /\bdisplay:none\b/.test(r.body)) || !/@media\s*\(max-width:640px\)\s*\{[^@]*\.wmk \.wm1\{display:none\}\.wmk \.wm2\{display:block\}/.test(css)) f.push('layout switch: .wm2 is not hidden by default, or phones (max-width:640px) do not swap to the two-line mark (both would show, or the one line would be tiny)');
+  if (!rules.some((r) => r.sel === '.wmk path' && /vector-effect:\s*non-scaling-stroke/.test(r.body))) f.push('.wmk path lost vector-effect:non-scaling-stroke (the stroke and the runners\' dashes are in screen pixels: the effect sizes them that way)');
+  // the plate is black whatever the theme: the dark tokens, scoped to .endp; nothing in the stylesheet lets a theme reach it; a straight solid cut at the top
+  const endp = rules.find((r) => r.sel === '.endp' && /--bg:/.test(r.body));
+  const tok = (n) => new RegExp(`(?:^|;)\\s*--${n}:\\s*([^;]+)`).exec(endp?.body ?? '')?.[1];
+  if (!endp) f.push('the plate has no scoped tokens (.endp{--bg:#000;--l1:…}): it would take the page\'s theme');
+  else {
+    const bg = colour(tok('bg') ?? '');
+    if (!bg || bg[3] !== 1 || bg[0] + bg[1] + bg[2] !== 0) f.push(`the plate's --bg is ${tok('bg')}: it must be black (#000) in every theme`);
+    else for (const n of ['l1', 'l2', 'l3']) {
+      const c = colour(tok(n) ?? ''), r = c && contrast(c, bg);
+      if (!c) f.push(`the plate's --${n} is missing or unreadable`);
+      else if (r < 4.5) f.push(`the plate's --${n} (${tok(n)}) is ${r.toFixed(2)}:1 on black: its small text must be at least 4.5:1 (WCAG AA)`);
+    }
+  }
+  const plateRules = rules.filter((r) => r.sel.split(',').some((x) => /\.(?:endp|wmk|foot)\b/.test(x) && /\.endp\b|\.wmk\b/.test(x)));
+  for (const r of plateRules) {
+    if (/\[data-theme|prefers-color-scheme/.test(r.sel)) f.push(`"${r.sel}": a theme reaches the black plate (it is black in paper, auto-light and dark alike)`);
+    if (r.sel.split(',').some((x) => /^\.endp$/.test(x.trim())) && /gradient|border-radius|\bborder-top\s*:/.test(r.body)) f.push(`"${r.sel}": the plate has a gradient, a corner or a top border (its top edge is a straight cut)`);
+  }
+  for (const m of css.matchAll(/@media\s*\(prefers-color-scheme:\s*light\)\s*\{/g)) {                     // each such block, braces balanced (not the CSS that merely follows it)
+    let depth = 1, i = m.index + m[0].length; for (; i < css.length && depth; i++) depth += css[i] === '{' ? 1 : css[i] === '}' ? -1 : 0;
+    if (/\.(?:wmk|endp)\b/.test(css.slice(m.index + m[0].length, i))) { f.push('a prefers-color-scheme rule reaches the black plate or the wordmark (it is black in every theme)'); break; }
+  }
+  if (!rules.some((r) => r.sel === '.endp' && /background:\s*var\(--bg\)/.test(r.body))) f.push('.endp lost background:var(--bg): the plate is not painted');
+  if ([...css.matchAll(/--wm-run\s*:/g)].length) f.push('--wm-run is back (the runners are white in every theme; a themed colour would go white on white again)');
+  const wr = rules.find((r) => /(^|,)\s*html\.fxl \.wmk \.wr\s*(,|$)/.test(r.sel));
+  if (!wr) f.push('html.fxl .wmk .wr is gone: the runners have no style');
+  else {
+    if (!/stroke:\s*(?:#fff(?:fff)?|white)\s*(;|$)/i.test(wr.body)) f.push('the runners are not white (#fff): they run on a black plate in every theme');
+    if (!/stroke-linecap:\s*square/.test(wr.body)) f.push('the runners\' caps are not square (the owner rejected rounded ones)');
+  }
+  const ov = rules.find((r) => /(^|,)\s*html\.fxl \.wmk \.wrs\s*(,|$)/.test(r.sel));
+  if (!ov) f.push('html.fxl .wmk .wrs is gone: the runners\' overlay has no style');
+  else {
+    if (!/\bopacity:\s*0(?![.\d])/.test(ov.body)) f.push('the runners are visible by default (they run only while .run)');
+    if (!/filter:\s*drop-shadow\(/.test(ov.body)) f.push('the runners\' glow (a drop-shadow on their overlay svg) is gone');
+  }
+  if (!rules.some((r) => /html\.fxl \.wmk\.run \.wr/.test(r.sel) && /animation:[^;]*\binfinite\b/.test(r.body))) f.push('html.fxl .wmk.run .wr lost its infinite animation (the runners lap the mark)');
+  return f;
+}
+/** `/` (and the other public pages share its layout): the wordmark and the plate are /v3's and must not appear there. */
+const rootRule = (html) => (/\bclass="wmk"|data-fx="wordmark"|\bclass="wmr\b|\bclass="endp"/.test(html) ? ['the footer wordmark or its black plate is on `/` (they are /v3 only: the shared footer of the public pages is untouched)'] : []);
 
 // ---------- self-tests: every rule must be able to fail, and the exemptions must stay narrow ----------
 const poison = (h, s) => h.replace('</main>', `<p>${s}</p></main>`);
@@ -479,6 +585,36 @@ function mutants(html, lang) {
     ['a stage-2B rule on a plain element (it would outlive dispose)', html.replace('html.fxl [data-fx-s] .ia{position:relative}', 'html.fxl .ia{position:relative}'), /fx: "html\.fxl \.ia" is in the stage-2B block but styles an element no effect owns/],
     ['the lens glow back on the logo-size custom property', html.replace('html.fxl{--fx-glow:', 'html.fxl{--lg:'), /fx: "html\.fxl" declares --lg/],
     ['chapter 02 with the pin class in the markup', html.replace('<section id="c02" class="sec cx s02"', '<section id="c02" class="sec cx s02 pin"'), /layout: #c02 carries the effects' `pin` class/],
+    ['the footer wordmark block gone', (() => { const at = /<div class="wmk"/.exec(html).index; return html.replace(balanced(html, at, 'div'), ''); })(), /wordmark: the footer wordmark block appears 0 times/],
+    ['the footer wordmark twice', (() => { const at = /<div class="wmk"/.exec(html).index, b = balanced(html, at, 'div'); return html.replace(b, b + b); })(), /wordmark: the footer wordmark block appears 2 times/],
+    ['the footer wordmark outside the black plate', (() => { const at = /<div class="wmk"/.exec(html).index, b = balanced(html, at, 'div'); return html.replace(b, '').replace('<footer class="endp">', b + '<footer class="endp">'); })(), /wordmark: the wordmark is not inside the footer plate/],
+    ['the footer plate gone', html.replace('<footer class="endp">', '<footer class="x">'), /wordmark: the black footer plate .* appears 0 times/],
+    ['the footer plate before the last chapter', (() => { const at = html.indexOf('<footer class="endp">'), end = html.indexOf('</footer>', at) + 9, b = html.slice(at, end); return html.replace(b, '').replace(/<main[^>]*>/, (m) => m + b); })(), /wordmark: the footer plate is not after the last chapter/],
+    ['the footer wordmark not aria-hidden', html.replace('data-fx="wordmark" aria-hidden="true"', 'data-fx="wordmark"'), /wordmark: the wordmark block is not aria-hidden/],
+    ['text inside the footer wordmark', html.replace('<path class="o"', '<text>AI FROM SCRATCH</text><path class="o"'), /wordmark: \.wm1 holds <text>/],
+    ['a runner already in the markup', html.replace('<path class="o"', '<path class="wr" d="M0 0"/><path class="o"'), /wordmark: the markup already carries a runner/],
+    ['the footer wordmark without its viewBox', html.replace(/(<div class="wmr wm1"><svg )viewBox="[^"]*"/, '$1'), /wordmark: \.wm1 has no viewBox/],
+    ['the footer wordmark without its contour lengths', html.replace(/(<div class="wmr wm2"><svg [^>]*?) data-lc="[\d,]*"/, '$1'), /wordmark: \.wm2 has no data-lc/],
+    ['the footer wordmark with a wrong contour count', html.replace(/(<div class="wmr wm1"><svg [^>]*?data-lc="\d+),/, '$1'), /wordmark: \.wm1: data-lc lists 17 contours but the path has 18/],
+    ['the footer wordmark outline hidden by default', html.replace('</head>', '<style>.wmk path.o{opacity:0}</style></head>'), /wordmark: "\.wmk path\.o" hides the wordmark by default/],
+    ['the footer wordmark drawn back (dash) by default', html.replace('</head>', '<style>.wmk path.o{stroke-dasharray:9;stroke-dashoffset:9}</style></head>'), /wordmark: "\.wmk path\.o" hides the wordmark by default/],
+    ['the footer wordmark runners styled without html.fxl', html.replace('html.fxl .wmk .wr{', '.wmk .wr{'), /fx: "\.wmk \.wr" styles a part that only an effect adds/],
+    ['the footer wordmark runners overlay styled without html.fxl', html.replace('html.fxl .wmk .wrs{', '.wmk .wrs{'), /fx: "\.wmk \.wrs" styles a part that only an effect adds/],
+    ['the footer wordmark draw pre-state styled without html.fxl', html.replace('html.fxl .wmk[data-fx-s] path.o{', '.wmk[data-fx-s] path.o{'), /fx: "\.wmk\[data-fx-s\] path\.o" styles a part that only an effect adds/],
+    ['the footer plate follows the paper theme', html.replace('</head>', '<style>html[data-theme="paper"] .endp{--bg:#F2F2F2}</style></head>'), /wordmark: "html\[data-theme="paper"\] \.endp": a theme reaches the black plate/],
+    ['the footer plate follows the system light theme', html.replace('</head>', '<style>@media (prefers-color-scheme:light){html[data-theme="auto"] .endp{--bg:#F2F2F2}}</style></head>'), /wordmark: a prefers-color-scheme rule reaches the black plate/],
+    ['a paper colour for the runners back', html.replace('</head>', '<style>html[data-theme="paper"] .wmk{--wm-run:#000}</style></head>'), /wordmark: --wm-run is back/],
+    ['the footer plate not black', html.replace(/(\.endp\{[^}]*?)--bg:#000;/, '$1--bg:#111;'), /wordmark: the plate's --bg is #111/],
+    ['the footer plate text too faint on black', html.replace(/(\.endp\{[^}]*?--l3:)rgba\(235,235,245,\.50\)/, '$1rgba(235,235,245,.30)'), /wordmark: the plate's --l3 \(rgba\(235,235,245,\.30\)\) is [\d.]+:1 on black/],
+    ['the footer plate with a gradient', html.replace('</head>', '<style>.endp{background:linear-gradient(#000,#111)}</style></head>'), /wordmark: "\.endp": the plate has a gradient/],
+    ['the footer plate unpainted', html.replace('.endp{position:relative;z-index:2;background:var(--bg);color:var(--l1)}', '.endp{position:relative;z-index:2;color:var(--l1)}'), /wordmark: \.endp lost background:var\(--bg\)/],
+    ['runners not white', html.replace('html.fxl .wmk .wr{stroke:#fff;', 'html.fxl .wmk .wr{stroke:#999;'), /wordmark: the runners are not white/],
+    ['rounded runner caps', html.replace('stroke-linecap:square', 'stroke-linecap:round'), /wordmark: the runners' caps are not square/],
+    ['both layouts of the wordmark on screen', html.replace('.wmk .wm2{display:none}', '.wmk .wm2{display:block}'), /wordmark: layout switch/],
+    ['the wordmark stroke scales with the mark', html.replace('.wmk path{fill:none;vector-effect:non-scaling-stroke}', '.wmk path{fill:none}'), /wordmark: \.wmk path lost vector-effect/],
+    ['runners that no longer lap', html.replace('var(--fx-ph,0s) infinite', 'var(--fx-ph,0s) 1'), /wordmark: html\.fxl \.wmk\.run \.wr lost its infinite animation/],
+    ['runners visible by default', html.replace('drop-shadow(0 0 6px rgba(255,255,255,.9));opacity:0;', 'drop-shadow(0 0 6px rgba(255,255,255,.9));opacity:.85;'), /wordmark: the runners are visible by default/],
+    ['runners without their glow', html.replace('filter:drop-shadow(0 0 6px rgba(255,255,255,.9));opacity:0;transition', 'opacity:0;transition'), /wordmark: the runners' glow/],
     ['no noindex', html.replace(/<meta name="robots"[^>]*>/, ''), /meta: no noindex/],
     ['a Meta Pixel', html.replace('</head>', '<script>fbq("init")</script></head>'), /meta: Meta Pixel/],
   ];
@@ -575,8 +711,8 @@ function engineBootSelfTest(src) {
 // The effects are code that touches a page whose copy is its own gate's business. They write no copy (text comes from the DOM), they animate only transform,
 // opacity, clip-path and filter (layout is CSS under html.fxl, decided once at attach), and an effect that pre-arms something (hides it, waiting) does it only to
 // what is below the fold. `files` is { 'c02.ts': source, ... }.
-const FX_PREARM = ['c02.ts', 'c03.ts', 'c07.ts', 'c08.ts'];                              // modules that arm pre-states for play-once effects: they must ask belowFold() first (a scrubbed one is a function of the scroll position and arms nothing)
-const FX_MODULES = ['index.ts', 'common.ts', 'c02.ts', 'c03.ts', 'c05.ts', 'c06.ts', 'c07.ts', 'c08.ts'];
+const FX_PREARM = ['c02.ts', 'c03.ts', 'c07.ts', 'c08.ts', 'wordmark.ts'];                              // modules that arm pre-states for play-once effects: they must ask belowFold() first (a scrubbed one is a function of the scroll position and arms nothing)
+const FX_MODULES = ['index.ts', 'common.ts', 'c02.ts', 'c03.ts', 'c05.ts', 'c06.ts', 'c07.ts', 'c08.ts', 'wordmark.ts'];
 const ANIMATED = new Set(['transform', 'opacity', 'clipPath', 'filter', 'willChange']);
 function fxSource(files) {
   const f = [];
@@ -595,6 +731,7 @@ function fxSource(files) {
   }
   for (const name of FX_PREARM) if (typeof files[name] === 'string' && !/\b(?:belowFold|once)\(/.test(files[name])) f.push(`${name}: arms a pre-state without asking belowFold() (a section in view or above must stay final; once() asks it)`);
   if (typeof files['common.ts'] === 'string' && !/\bbelowFold\(/.test(/export function once\b[\s\S]*?return \{ state/.exec(files['common.ts'])?.[0] ?? '')) f.push('common.ts: once() arms without asking belowFold() (every play-once effect that uses it would pre-hide a section in view)');
+  if (typeof files['wordmark.ts'] === 'string' && !/new IntersectionObserver\(/.test(files['wordmark.ts'])) f.push('wordmark.ts: the runners are not tied to the mark being on screen (an IntersectionObserver): they would lap for nobody');
   if (typeof files['index.ts'] === 'string' && !/export function initFx\b/.test(files['index.ts'])) f.push('index.ts: initFx() is gone');
   if (typeof files['common.ts'] === 'string' && !/export function effect\b[\s\S]*dispose\(\)/.test(files['common.ts'])) f.push('common.ts: effect() no longer undoes a half-built effect');
   return f;
@@ -619,6 +756,10 @@ function fxSourceSelfTest(files) {
     ['a layout property animated (chapter 07, style.width)', { ...files, 'c07.ts': files['c07.ts'].replace('export function initC07', "document.body.style.width = '1px';\nexport function initC07") }, /c07\.ts: sets style\.width/],
     ['a pre-state armed without once() or belowFold() (chapter 08)', { ...files, 'c08.ts': files['c08.ts'].replace('once(box, undo', 'go(box, undo') }, /c08\.ts: arms a pre-state without asking belowFold/],
     ['a layout property animated (chapter 08, style.width)', { ...files, 'c08.ts': files['c08.ts'].replace('export function initC08', "document.body.style.width = '1px';\nexport function initC08") }, /c08\.ts: sets style\.width/],
+    ['a pre-state armed without once() or belowFold() (wordmark)', { ...files, 'wordmark.ts': files['wordmark.ts'].replace('once(box, undo', 'go(box, undo') }, /wordmark\.ts: arms a pre-state without asking belowFold/],
+    ['a layout property animated (wordmark, style.width)', { ...files, 'wordmark.ts': files['wordmark.ts'].replace('export function initWordmark', "document.body.style.width = '1px';\nexport function initWordmark") }, /wordmark\.ts: sets style\.width/],
+    ['a literal written by the wordmark', { ...files, 'wordmark.ts': files['wordmark.ts'].replace('export function initWordmark', "document.body.textContent = 'x';\nexport function initWordmark") }, /wordmark\.ts: writes a string literal/],
+    ['runners that lap whether or not the mark is on screen', { ...files, 'wordmark.ts': files['wordmark.ts'].replace('new IntersectionObserver(', 'new Foo(') }, /wordmark\.ts: the runners are not tied to the mark being on screen/],
     ['once() that arms without asking belowFold()', { ...files, 'common.ts': files['common.ts'].replace('if (belowFold(at)) { state', 'if (true) { state') }, /common\.ts: once\(\) arms without asking belowFold/],
     ['a module gone', { ...files, 'c02.ts': undefined }, /c02\.ts: the module is missing/],
     ['effect() that stops undoing a half-built effect', { ...files, 'common.ts': files['common.ts'].replace(/dispose\(\);\s*throw e;/, 'throw e;').replace('const dispose = ', 'const disposeX = ') }, /effect\(\) no longer undoes/],
@@ -658,6 +799,14 @@ for (const lang of LANGS) for (const cc of MARKETS) {
   } catch (e) { console.error(`FAIL ${tag}: cannot fetch ${BASE}/v3 (${e.message})`); process.exit(1); }
 }
 let fail = 0, mutantCount = 0;
+// `/` is another page and another gate's business, but the footer wordmark is /v3's: `/` is fetched once and must not carry it (and the rule must be able to fail on a copy that does)
+let rootPage = '';
+try { const r = await fetch(`${BASE}/`); if (!r.ok) throw new Error(`HTTP ${r.status}`); rootPage = await r.text(); } catch (e) { console.error(`FAIL cannot fetch ${BASE}/ (${e.message})`); process.exit(1); }
+{
+  const planted = rootPage.replace('</body>', '<div class="wmk" data-fx="wordmark" aria-hidden="true"></div></body>'); mutantCount++;
+  if (planted === rootPage || !rootRule(planted).length) { console.error('FAIL self-test: the gate does not catch the footer wordmark planted on `/`'); fail++; }
+  for (const m of rootRule(rootPage)) { console.error(`FAIL /: ${m}`); fail++; }
+}
 const mainSrc = readFileSync(new URL('../src/aegis/main.ts', import.meta.url), 'utf8');
 { const [bad, n] = engineBootSelfTest(mainSrc); fail += bad; mutantCount += n; }
 for (const m of engineBoot(mainSrc)) { console.error(`FAIL main.ts: ${m}`); fail++; }

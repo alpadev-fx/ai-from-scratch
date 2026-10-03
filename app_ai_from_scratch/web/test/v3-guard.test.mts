@@ -5,6 +5,9 @@ import { STR } from '../src/lib/i18n.ts';
 import { PRECIO_VISUAL } from '../src/lib/price.ts';
 import { ctxChips, ctxOf, draw, softmax, tokenize } from '../src/aegis/specimens.ts';
 import { candidatos, modulos } from '../src/data/landing.ts';
+import { WORDMARK } from '../src/aegis/wordmark.ts';
+import { KU, LAP, lap, lit } from '../src/aegis/fx/wordmark-phase.ts';
+import { readFileSync } from 'node:fs';
 
 test('guard throws on a city, on plural courses, and lets the tokenizer sentence through', () => {
   assert.throws(() => guard('t', 'Hecho en Medellín'), /forbidden/);
@@ -240,4 +243,92 @@ test('ctxChips groups pieces by word and follows tokenize at the edges', () => {
   assert.deepEqual(ctxChips('Hola mundo'), [{ t: 'Hola', w: 0 }, { t: 'mundo', w: 1 }]);
   assert.deepEqual(ctxChips('abcdefghij k'), [{ t: 'abcde', w: 0 }, { t: 'fghi', w: 0 }, { t: 'j', w: 0 }, { t: 'k', w: 1 }]);
   assert.equal(ctxChips('x '.repeat(40)).length, tokenize('x '.repeat(40)).length);        // the same 26-piece cap
+});
+
+// ---------- the footer wordmark: the outlines of «AI FROM SCRATCH» (web/scripts/v3-wordmark.py writes src/aegis/wordmark.ts) ----------
+// The module is generated, so the test reads the paths the way a browser does (the compact grammar the generator writes: M, then relative h v l q c, z) and proves what the page depends on:
+// the text, 18 contours in each layout, every point inside the box the page reserves, and `lc`, the length of each contour (the effect sizes and times the runners by them), is the real one.
+type Pt = [number, number];
+function contoursOf(d: string): Pt[][] {
+  const out: Pt[][] = []; let cur: Pt[] = [], x = 0, y = 0, sx = 0, sy = 0, cmd = '';
+  const arity: Record<string, number> = { M: 2, h: 1, v: 1, l: 2, q: 4, c: 6, z: 0 };
+  const toks = d.match(/[MhvlqcZz]|-?\d+(?:\.\d+)?/g) ?? [];
+  assert.equal(toks.join(''), d.replace(/\s+/g, ''), 'the path holds only the commands and numbers the generator writes');
+  for (let i = 0; i < toks.length;) {
+    if (/[A-Za-z]/.test(toks[i])) cmd = toks[i++].replace('Z', 'z'); else assert.ok(cmd && cmd !== 'z' && cmd !== 'M', 'a number with no command to repeat');
+    const n = arity[cmd]; assert.ok(n !== undefined, `unknown command ${cmd}`);
+    if (cmd === 'z') { cur.push([sx, sy]); out.push(cur); cur = []; x = sx; y = sy; continue; }
+    const a = toks.slice(i, i + n).map(Number); assert.equal(a.length, n, `${cmd} needs ${n} numbers`); i += n;
+    if (cmd === 'M') { x = sx = a[0]; y = sy = a[1]; cur = [[x, y]]; cmd = 'l'; }              // numbers after an M are lineto's, but the generator never writes them
+    else if (cmd === 'h') { x += a[0]; cur.push([x, y]); }
+    else if (cmd === 'v') { y += a[0]; cur.push([x, y]); }
+    else if (cmd === 'l') { x += a[0]; y += a[1]; cur.push([x, y]); }
+    else if (cmd === 'q') { const [cx, cy, ex, ey] = [x + a[0], y + a[1], x + a[2], y + a[3]]; for (let k = 1; k <= 32; k++) { const t = k / 32; cur.push([(1 - t) ** 2 * x + 2 * (1 - t) * t * cx + t * t * ex, (1 - t) ** 2 * y + 2 * (1 - t) * t * cy + t * t * ey]); } x = ex; y = ey; }
+    else { const [c1x, c1y, c2x, c2y, ex, ey] = [x + a[0], y + a[1], x + a[2], y + a[3], x + a[4], y + a[5]]; for (let k = 1; k <= 32; k++) { const t = k / 32; cur.push([(1 - t) ** 3 * x + 3 * (1 - t) ** 2 * t * c1x + 3 * (1 - t) * t * t * c2x + t ** 3 * ex, (1 - t) ** 3 * y + 3 * (1 - t) ** 2 * t * c1y + 3 * (1 - t) * t * t * c2y + t ** 3 * ey]); } x = ex; y = ey; }
+  }
+  assert.equal(cur.length, 0, 'every contour is closed (z)');
+  return out;
+}
+const lengthOf = (c: Pt[]) => c.reduce((s, p, i) => s + Math.hypot(p[0] - c[(i + 1) % c.length][0], p[1] - c[(i + 1) % c.length][1]), 0);
+
+test('the wordmark says AI FROM SCRATCH, in one line and in two, from 18 closed contours each', () => {
+  assert.equal(WORDMARK.text, 'AI FROM SCRATCH');
+  assert.equal(WORDMARK.lines.join(' '), WORDMARK.text);
+  // A(2) I F R(2) O(2) M · S C R(2) A(2) T C H: the letters' outlines and their counters
+  for (const k of ['one', 'two'] as const) assert.equal(contoursOf(WORDMARK[k].d).length, WORDMARK.contours, `${k}: contours`);
+  assert.equal(WORDMARK.contours, 18);
+  assert.ok(WORDMARK.one.w / WORDMARK.one.h > 8, 'one line is a wide band');
+  assert.ok(WORDMARK.two.w / WORDMARK.two.h > 1.5 && WORDMARK.two.w / WORDMARK.two.h < 4, 'two lines are a block');
+  assert.ok(WORDMARK.two.h > 2 * WORDMARK.two.cap, 'the two-line layout holds two lines (it is taller than two caps)');
+});
+
+test('every point of the wordmark is inside the box the page reserves for it (the viewBox is the ink, so the box has its aspect ratio from the first paint)', () => {
+  for (const k of ['one', 'two'] as const) {
+    const m = WORDMARK[k], pts = contoursOf(m.d).flat();
+    const [x0, y0, x1, y1] = [Math.min(...pts.map((p) => p[0])), Math.min(...pts.map((p) => p[1])), Math.max(...pts.map((p) => p[0])), Math.max(...pts.map((p) => p[1]))];
+    assert.ok(x0 >= -1 && y0 >= -1 && x1 <= m.w + 1 && y1 <= m.h + 1, `${k}: ink ${x0.toFixed(1)},${y0.toFixed(1)} → ${x1.toFixed(1)},${y1.toFixed(1)} inside 0,0 → ${m.w},${m.h}`);
+    assert.ok(x1 - x0 >= m.w - 2 && y1 - y0 >= m.h - 2, `${k}: the box is the ink, not bigger (a loose box would shift the mark off the page's edges)`);
+  }
+});
+
+test('`lc` lists the real length of each contour, in the order of the path, in both layouts', () => {
+  for (const k of ['one', 'two'] as const) {
+    const real = contoursOf(WORDMARK[k].d).map(lengthOf), lc = WORDMARK[k].lc;
+    assert.equal(lc.length, real.length, `${k}: one length per contour`);
+    real.forEach((r, i) => assert.ok(Math.abs(r - lc[i]) / r < 0.01, `${k}: contour ${i}: lc ${lc[i]} vs ${r.toFixed(0)}`));
+  }
+});
+
+// The footer's runners: every contour has its own, on its own phase, so lines are ALWAYS running somewhere on the mark (the AEGIS footer starts every contour together and leaves the mark
+// empty for part of each lap: the owner looked in a gap and saw nothing). The phases are a pure function of the lengths, so the promise is provable without a browser.
+test('there are always runners lit on the wordmark: at every instant of the lap, in both layouts, at least floor(S) contours are lit', () => {
+  for (const k of ['one', 'two'] as const) {
+    const l = lap(WORDMARK[k].lc);
+    assert.ok(l.cover >= 4, `${k}: the windows cover the lap ${l.cover.toFixed(2)} times (at least 4)`);
+    assert.ok(l.starts.every((s) => s >= 0 && s < LAP), `${k}: every phase is inside the lap`);
+    let min = Infinity, max = 0;
+    for (let i = 0; i < 4000; i++) { const n = lit(l, (i / 4000) * LAP); min = Math.min(min, n); max = Math.max(max, n); }
+    assert.ok(min >= Math.floor(l.cover) - 0, `${k}: at least ${Math.floor(l.cover)} lit at every instant (min ${min}, max ${max})`);
+    assert.ok(min >= 4, `${k}: never fewer than 4 runners (min ${min})`);
+  }
+});
+
+test('the measure of the runners can fail: every contour starting together (the AEGIS footer) leaves the mark empty, and a pattern too long does too', () => {
+  const lc = WORDMARK.one.lc, l = lap(lc), together = { ...l, starts: l.starts.map(() => 0) };
+  const gap = (x: typeof l, ku = KU) => { let min = Infinity; for (let i = 0; i < 4000; i++) min = Math.min(min, lit(x, (i / 4000) * LAP)); return min; };
+  assert.equal(gap(together), 0, 'synchronized runners: a part of the lap with nothing lit');
+  assert.ok(gap(lap(lc, 12)) < 3, 'a pattern 12 longest contours long is lit too rarely');
+  assert.ok(gap(l) >= 4);
+});
+
+test('the wordmark names its font and its OFL licence, the file header says the same, and SF Pro is not the source', () => {
+  const f = WORDMARK.font, src = readFileSync(new URL('../src/aegis/wordmark.ts', import.meta.url), 'utf8');
+  assert.match(f.sha256, /^[0-9a-f]{64}$/); assert.match(f.commit, /^[0-9a-f]{40}$/);
+  assert.match(f.license, /Open Font License/);
+  assert.ok(/^\/\/ GENERATED by web\/scripts\/v3-wordmark\.py/.test(src), 'the file says it is generated');
+  for (const s of [f.sha256, f.license, f.copyright, f.name]) assert.ok(src.split('\n').slice(0, 12).join('\n').includes(s), `the header names ${s}`);
+  assert.ok(!/SF Pro|San Francisco/i.test(f.name + f.path + f.source));
+  const gen = readFileSync(new URL('../scripts/v3-wordmark.py', import.meta.url), 'utf8');
+  assert.ok(gen.includes(f.sha256) && gen.includes(f.commit), 'the generator pins the same font (commit and sha256)');
+  assert.ok(/got = hashlib\.sha256\(data\)\.hexdigest\(\)\s+if got != FONT\['sha256'\]:\s+die\(f"the font is not the pinned one/.test(gen), 'the generator fails closed on a font that is not the pinned one');
 });

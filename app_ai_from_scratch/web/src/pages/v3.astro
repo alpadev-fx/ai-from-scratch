@@ -32,8 +32,15 @@ import V3Cta from '../components/V3Cta.astro';
 import { TOKENS } from '../lib/theme-css';
 import { tokenize, candRowsHTML, ctxOf, ctxChips } from '../aegis/specimens';
 import { guard, guarded, withoutCity, assertPriced } from '../aegis/copy-guard';
+import { WORDMARK } from '../aegis/wordmark';
 import V3CSS from '../aegis/v3.css?raw';
-// The stylesheet is inlined in the head: its comments (a sixth of it) are for the source, not for the wire. A `/*!` comment stays (the copy-check finds the stage-2B block by its header).
+// The wordmark at the end of the page («AI FROM SCRATCH», precomputed outlines: src/aegis/wordmark.ts). The page cuts a tenth of the bottom line's cap height off below the
+// baseline, so the mark bleeds off the end of the page; the box is the cropped viewBox, so it keeps its aspect ratio from the first paint (no layout shift).
+const wmBox = (m: { w: number; h: number; cap: number }) => `0 0 ${m.w} ${m.h - Math.round(m.cap * 0.1)}`;
+// The closing footer (the brand row, the legal line and the wordmark) is a BLACK plate in every theme: the dark tokens of theme-css.ts, scoped to it. Its first :root block is their one
+// source (a recalibration there reaches the plate too); if it is not readable the page does not render, rather than ship a footer with the wrong colours.
+const PLATE = `.endp{${(/:root\{([^}]*)\}/.exec(TOKENS)?.[1] ?? '').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\s+/g, ' ').trim()}}`;
+if (!/--bg:#000;/.test(PLATE) || !/--l1:#fff;/.test(PLATE) || !/--l3:rgba\(/.test(PLATE)) throw new Error('[v3] the footer plate cannot read the dark tokens (theme-css.ts :root block): it would not be black');
 const CSS = V3CSS.replace(/\/\*(?!!)[\s\S]*?\*\//g, '');
 
 const { lang, langPref, theme } = publicPrefs(Astro.request);
@@ -154,7 +161,7 @@ setTimeout(function(){
 },15000);
 })();
 </script>
-<style is:global set:html={CSS}></style>
+<style is:global set:html={PLATE + CSS}></style>
 </head>
 <body>
 <a class="skip" href="#c01">{P.saltar}</a>
@@ -503,6 +510,11 @@ setTimeout(function(){
   </ol>
   <h2 id="c16h">{V.cierreH}</h2>
   <V3Cta label={P.cierreCta} />
+</section>
+{/* The end of the page: a black plate in every theme (v3.css .endp): the brand row, the legal line and the wordmark. The wordmark: «AI FROM SCRATCH» as the ghost outline that ends the page (a
+    decoration: no copy, aria-hidden), one line on desktop and two on phones (v3.css picks). Static: the outline, fully drawn. Stage 2B (fx/wordmark.ts): it draws itself when it comes into
+    view, then white lines run along the edges of its letters while it is on screen. /v3 only: the shared footer of the other public pages is untouched. */}
+<footer class="endp">
   <div class="foot">
     <div><span class="lg" aria-hidden="true">IA</span> {MARCA}</div>
     <div>{P.pieHand}</div>
@@ -510,7 +522,12 @@ setTimeout(function(){
     <div><a href="/login">{P.navEntrar}</a></div>
   </div>
   <div class="foot legal2"><a href="/terminos">{PUB.footer.term}</a> · <a href="/privacidad">{PUB.footer.priv}</a></div>
-</section>
+  <div class="wmk" data-fx="wordmark" aria-hidden="true">
+    <i class="wmg"></i>
+    <div class="wmr wm1"><svg viewBox={wmBox(WORDMARK.one)} data-lc={WORDMARK.one.lc.join(',')} focusable="false"><path class="o" d={WORDMARK.one.d} /></svg></div>
+    <div class="wmr wm2"><svg viewBox={wmBox(WORDMARK.two)} data-lc={WORDMARK.two.lc.join(',')} focusable="false"><path class="o" d={WORDMARK.two.d} /></svg></div>
+  </div>
+</footer>
 </main>
 
 <script type="application/json" id="v3-data" is:inline set:html={jsonSafe(DATA)}></script>

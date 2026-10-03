@@ -448,3 +448,31 @@ test('chapter 06 on a 320-359px phone: the struck words are sized to their cell 
   assert.ok(fits(r!), 'the widest struck word is wider than its cell at some width between 320 and 359');
   assert.ok(!fits([18, 26, 6.6, 26]), 'the rule can fail: the old size (26px) and padding (18px) do not fit at 320');
 });
+
+// ---------- chapter 02: the chat windows ----------
+test('chapter 02: every answer streams through the REAL pieces of its string and is done within 2.5 s of its window coming in', () => {
+  const src = readFileSync(new URL('../src/aegis/fx/c02.ts', import.meta.url), 'utf8');
+  // the answers' pieces come from the committed token file (the page ships them), never from a cut of the effect's own
+  assert.ok(/piecesOf\(TOK, text\)/.test(src) && /tokensFromPage\(\)/.test(src), 'c02.ts reads the pieces of the answers from #v3-tokens');
+  assert.ok(!/tokenize\(|\.split\((?:''|"")\)/.test(src), 'c02.ts does not cut text by a heuristic of its own');
+  for (const lang of ['es', 'en'] as const) for (const b of STR[lang].pub.v3.s1Beats) assert.ok(piecesOf(TOKENS[lang], b.ia).length > 3, `${lang}: the answer «${b.ia.slice(0, 30)}…» has real pieces in the file`);
+  // the budget: the timings are in the source, and their sum is what a reader waits
+  const T = /const T = two \? \{ pill: ([\d.]+), think: ([\d.]+), stream: ([\d.]+) \} : \{ pill: ([\d.]+), think: ([\d.]+), stream: ([\d.]+) \};/.exec(src);
+  const dur = /const dur = two \? ([\d.]+) : clamp\(([\d.]+) \+ n \* ([\d.]+), ([\d.]+), ([\d.]+)\);/.exec(src);
+  assert.ok(T && dur, 'c02.ts keeps its timings where this test looks for them');
+  const [, , , s2, , , s1] = T!.map(Number), [, d2, , , , dmax] = dur!.map(Number);
+  assert.ok(s2 + d2 <= 2.5, `window 2 is done ${(s2 + d2).toFixed(2)} s after it came in`);
+  assert.ok(s1 + dmax <= 2.5, `a short window is done at most ${(s1 + dmax).toFixed(2)} s after it came in`);
+  // the rule can fail
+  assert.ok(1.4 + 1.3 > 2.5);
+});
+
+test('chapter 02: no avatar, no visible YOU / AI label, nobody else\'s mark: the labels are screen-reader-only and the markup has the owner\'s pieces', () => {
+  const page = readFileSync(new URL('../src/pages/v3.astro', import.meta.url), 'utf8'), css = readFileSync(new URL('../src/aegis/v3.css', import.meta.url), 'utf8');
+  const sec = page.slice(page.indexOf('<section id="c02"'), page.indexOf('</section>', page.indexOf('<section id="c02"')));
+  assert.ok(!/chatgpt|openai|gpt-/i.test(sec), 'chapter 02 does not name another product');
+  assert.ok(!/<img\b|class="who"/.test(sec), 'no avatar image, no visible label');
+  assert.equal((sec.match(/<span class="sr">\{V\.chat(?:Tu|Ia)\}<\/span>/g) ?? []).length, 5, 'the labels are sr-only spans: the first instruction of window 2, then a pill and an answer in each of the two branches of the markup (window 2 inside its bracket, the others without)');
+  const sr = /\.sr\{([^}]*)\}/.exec(css)?.[1] ?? '';
+  assert.ok(/position:absolute/.test(sr) && /width:1px/.test(sr) && /clip:rect\(0 0 0 0\)/.test(sr), '.sr is the visually-hidden pattern');
+});

@@ -224,9 +224,9 @@ html.fxl .s02{padding-top:max(110px,22svh);padding-bottom:86px;min-height:100svh
 .lede.big{margin-top:28px;font:400 clamp(18px,1.7vw,24px)/1.45 var(--f);max-width:40ch;padding-bottom:0}
 .n3-hook{display:none}
 .bio{position:relative;border:1px solid var(--hair);background:var(--panel);padding:44px 40px;display:grid;grid-template-columns:1fr 1fr;gap:36px 48px}
-.bio .c,.chat .c{position:absolute;width:16px;height:16px;border:0 solid var(--ac)}
-.bio .tl,.chat .tl{left:-1px;top:-1px;border-left-width:2px;border-top-width:2px}.bio .tr,.chat .tr{right:-1px;top:-1px;border-right-width:2px;border-top-width:2px}
-.bio .bl,.chat .bl{left:-1px;bottom:-1px;border-left-width:2px;border-bottom-width:2px}.bio .br,.chat .br{right:-1px;bottom:-1px;border-right-width:2px;border-bottom-width:2px}
+.bio .c,.cw .c{position:absolute;width:16px;height:16px;border:0 solid var(--ac)}
+.bio .tl,.cw .tl{left:-1px;top:-1px;border-left-width:2px;border-top-width:2px}.bio .tr,.cw .tr{right:-1px;top:-1px;border-right-width:2px;border-top-width:2px}
+.bio .bl,.cw .bl{left:-1px;bottom:-1px;border-left-width:2px;border-bottom-width:2px}.bio .br,.cw .br{right:-1px;bottom:-1px;border-right-width:2px;border-bottom-width:2px}
 @media (max-width:900px){.bio{grid-template-columns:1fr;padding:28px 22px}.s02{padding-top:72px}html.fxl .s02{padding-top:max(86px,20svh)}}
 
 /* ---------- ENGINE MODE: tall chapters, sticky stage, WebGL behind ----------
@@ -474,21 +474,33 @@ html[data-ch="cL"] .cue{display:none}
 .buy.ghost:hover:not(:disabled){background:var(--ac);color:var(--on-ac,#fff);border-color:var(--ac)}
 .buy.ghost:disabled{opacity:.45;cursor:default}
 
-/* 02 · te ha pasado: a chat plate with three failed answers, each struck and tagged with the lesson that explains it */
-.chat{position:relative;margin:54px 0 0;max-width:920px;border:1px solid var(--hair);background:var(--panel)}
-.beat{display:grid;grid-template-columns:76px minmax(0,1fr);padding:30px 32px 32px 0;border-top:1px solid var(--hair2)}
-.beat:first-of-type{border-top:0}
-.bn{padding:3px 0 0 32px;font:600 11px/1 var(--m);letter-spacing:.18em;color:var(--ac)}
-.bt{display:flex;flex-direction:column;gap:13px;min-width:0}
-.who{display:inline-block;margin-right:12px;font:600 10px/1 var(--m);letter-spacing:.2em;color:var(--l3);vertical-align:2px}
-.you{font:600 clamp(16px,1.5vw,19px)/1.4 var(--f)}
-.you.faint{font-weight:500;color:var(--l3)}
-.gap{padding:2px 0;font:500 11px/1.4 var(--m);letter-spacing:.14em;color:var(--l3)}
-.ia{font:400 clamp(15px,1.3vw,17px)/1.55 var(--f);color:var(--l2)}
-.rp{text-decoration:line-through;text-decoration-thickness:1.5px;text-decoration-color:var(--l1)}
-.tag{display:flex;align-items:flex-start;gap:10px;align-self:flex-start;max-width:100%;padding:9px 13px;border:1px solid var(--ac);font:600 11px/1.5 var(--m);letter-spacing:.1em;color:var(--l1)}
+/* 02 · te ha pasado: three chat windows, one per case. A chat's look (the user's message in a soft grey pill on the right, the answer as plain text, a composer at the bottom) in our straight HUD
+   frame, with our mark where a chat shows its name. The pill, the composer, its send button, the dot and the ghosts are rounded: the owner's one exception, and only inside the windows.
+   The diagnosis tag is outside, under its window, square, with a leader line up to it. Colours are the page's tokens: a dark chat in dark, a light chat in paper. */
+.cases{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:52px 28px;margin:54px 0 0}
+.case{display:flex;flex-direction:column;min-width:0}
+.bn{margin:0 0 12px;font:600 11px/1 var(--m);letter-spacing:.18em;color:var(--ac)}
+.cw{position:relative;flex:1;display:flex;flex-direction:column;margin:0;border:1px solid var(--hair);background:var(--panel)}
+.cwh{display:flex;align-items:center;padding:16px 18px 2px;--lg:22px}
+.cwb{position:relative;flex:1;display:flex;flex-direction:column;gap:16px;padding:14px 18px 26px}
+.sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+.you{align-self:flex-end;max-width:86%;padding:10px 16px;border-radius:20px;background:var(--fill);font:400 clamp(15px,1.1vw,16px)/1.45 var(--f);color:var(--l1)}
+.you.faint{opacity:.62}
+.gap{align-self:center;padding:2px 0;font:500 10px/1.5 var(--m);letter-spacing:.14em;color:var(--l3);text-align:center}
+.ia{position:relative;font:400 clamp(15px,1.1vw,16px)/1.65 var(--f);color:var(--l1)}
+.ctx{position:relative;display:flex;flex-direction:column;gap:16px;padding-left:16px}
+.ctx::before{content:'';position:absolute;left:0;top:0;bottom:0;width:7px;border:1px solid var(--ac);border-right:0}
+.cwc{display:flex;align-items:center;justify-content:space-between;margin:0 14px 14px;min-height:52px;padding:7px 7px 7px 20px;border-radius:26px;background:var(--fill)}
+.caret{width:2px;height:20px;background:var(--l1)}
+.send{display:grid;place-items:center;flex:none;width:36px;height:36px;border-radius:50%;background:var(--btn-bg);color:var(--btn-fg)}
+.tag{position:relative;display:flex;align-items:flex-start;gap:10px;align-self:flex-start;max-width:100%;margin-top:18px;padding:9px 13px;border:1px solid var(--ac);font:600 11px/1.5 var(--m);letter-spacing:.1em;color:var(--l1)}
+.tag::before{content:'';position:absolute;left:18px;bottom:100%;width:1px;height:18px;background:var(--ac)}
 .tag i{flex:none;width:7px;height:7px;margin-top:5px;background:var(--ac)}
+.tag a{text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:3px}
+.tag a:hover{color:var(--ac)}
+.tag a:focus-visible{outline:1px solid var(--l1);outline-offset:3px}
 .shout{margin-top:46px;max-width:22ch;font:700 clamp(26px,3.4vw,50px)/1.06 var(--f);letter-spacing:-.04em;text-wrap:balance}
+@media (max-width:1099px){.cases{grid-template-columns:minmax(0,1fr);max-width:640px}}
 
 /* 03 · qué cambia: three plates, one word each */
 .trio{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin-top:48px;border-top:1px solid var(--hair)}
@@ -598,7 +610,7 @@ html[data-ch="cL"] .cue{display:none}
 }
 @media (max-width:900px){
   .cx .sh{padding-bottom:20px}
-  .beat{grid-template-columns:48px minmax(0,1fr);padding:24px 18px 26px 0}.bn{padding-left:16px}
+  .cwh{padding:14px 14px 0}.cwb{padding:12px 14px 22px}.cwc{margin:0 10px 10px}
   .trio{grid-template-columns:1fr;margin-top:34px}
   .tri,.tri + .tri{padding:26px 0 30px;border-left:0;border-top:1px solid var(--hair2)}
   .tri:first-child{border-top:0}
@@ -642,18 +654,25 @@ html[data-ch="cL"] .cue{display:none}
 .wmk path{fill:none;vector-effect:non-scaling-stroke}          /* the stroke keeps its pixel width (and its dashes their pixel length) at every size of the mark */
 .wmk path.o{fill:rgba(var(--wm-ink),var(--wm-fs));stroke:rgba(var(--wm-ink),var(--wm-ls));stroke-width:1.2}
 @keyframes fx-wm-lap{from{stroke-dashoffset:var(--fx-P)}to{stroke-dashoffset:0}}
+/* chapter 02's two loops (the composer's caret, the stream's dot); keyframes stay above the stage-2B block, whose rules are all checked against what an effect owns */
+@keyframes fx-caret{0%,55%{opacity:1}56%,100%{opacity:0}}
+@keyframes fx-dot{0%,100%{transform:scale(.78);opacity:.55}50%{transform:scale(1.12);opacity:1}}
 @media (max-width:640px){.wmk .wm1{display:none}.wmk .wm2{display:block}.wmk{--wm-ls:.24;--wm-fs:.03;padding-top:24px}}
 
 /*! ---------- STAGE 2B · chapter effects (src/aegis/fx). Everything here hangs on html.fxl (the engine is attached) and on attributes or classes the effect itself
    sets, so without the engine (no WebGL2, reduced motion, declined, still loading) none of it exists and the chapters above are the whole page. ---------- */
-/* 02: a beat is armed (hidden) only while it is below the viewport; the strike is drawn by .sk (empty hairlines) from then on, so the native one is off */
-html.fxl [data-fx-s] .ia{position:relative}
-html.fxl [data-fx-s] .rp{text-decoration-color:transparent}
-html.fxl [data-fx-s="arm"] .rp,html.fxl [data-fx-s="type"] .rp{opacity:0}
-html.fxl [data-fx-s="arm"] .tag,html.fxl [data-fx-s="type"] .tag,html.fxl [data-fx-s="strike"] .tag{opacity:0}
-html.fxl .ty{position:absolute;left:0;right:0;top:0;overflow-wrap:anywhere;pointer-events:none}   /* the scrambled tail has no spaces: it must wrap inside the plate */
-html.fxl .ty .sp{display:inline-block;width:var(--fx-w)}
-html.fxl .sk{position:absolute;left:var(--fx-x);top:var(--fx-y);width:var(--fx-w);height:1.5px;margin-top:-.75px;background:var(--l1);transform-origin:0 50%;pointer-events:none}
+/* 02: a window is armed (its pill, its answer and its tag waiting) only while it is below the viewport. The answer streams through .ty, an overlay laid over the real text, which stays in the
+   page and is hidden until the stream ends; .ty holds the same text (what has come, what is still to come in transparent ink), so the answer wraps exactly as it will when it is final. Its dot is a
+   separate absolute part moved with transform (a dot that moved by layout would count as a layout shift).
+   The composer's caret blinks while the effect is attached ([data-fx-live] on the section). The ghosts are the messages that pass through the context bracket of the second case. */
+html.fxl [data-fx-s="arm"] .you:not(.faint),html.fxl [data-fx-s="arm"] .gap,html.fxl [data-fx-s="arm"] .rp,html.fxl [data-fx-s="run"] .rp{opacity:0}
+html.fxl [data-fx-s="arm"] .tag,html.fxl [data-fx-s="run"] .tag{opacity:0}
+html.fxl [data-fx-live] .caret{animation:fx-caret 1.1s linear infinite}
+html.fxl .ty{position:absolute;left:0;right:0;top:0;pointer-events:none;contain:layout}
+html.fxl .ty .off{color:transparent}
+html.fxl .ty .cur{position:absolute;left:0;top:0;width:0;height:0;will-change:transform}
+html.fxl .ty .cur::after{content:'';position:absolute;left:3px;top:-.3em;width:.6em;height:.6em;border-radius:50%;background:var(--l1);animation:fx-dot .9s ease-in-out infinite}
+html.fxl .gh{position:absolute;left:16px;top:var(--fx-t);width:var(--fx-w);height:30px;border-radius:15px;background:var(--fill);pointer-events:none}
 /* 03: a square lens above each card's text (a decoration: aria-hidden, added with the engine). The footage is a canvas; the ring and the four ticks are CSS */
 html.fxl{--fx-glow:drop-shadow(0 0 20px color-mix(in srgb,var(--ac) 32%,transparent))}
 html.fxl[data-theme="paper"]{--fx-glow:drop-shadow(0 8px 20px rgba(0,0,0,.2))}

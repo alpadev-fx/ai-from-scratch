@@ -42,7 +42,7 @@ const LEGACY = ['especimenes', 'indice', 'ventajas', 'quien', 'vivo', 'precio', 
 // What each chapter's SERVER-RENDERED markup must carry for its stage-2B effect: the data-fx name and the hooks the effect reads, with how many of each. A hook that
 // goes missing makes its effect throw at attach (the chapter stays static, with a console warning): this catches it before it ships.
 const FX_HOOKS = {
-  c02: { fx: 'type-strike', hooks: [['data-chat', 1], ['data-beat', 3], ['data-type', 3], ['data-strike', 3], ['data-tag', 3]] },
+  c02: { fx: 'chat-stream', hooks: [['data-chat', 1], ['data-beat', 3], ['data-win', 3], ['data-type', 3], ['data-tag', 3], ['data-ctx', 1]] },
   c03: { fx: 'lens', hooks: [['data-lens', 3]] },
   c05: { fx: 'track', hooks: [['data-track', 1], ['data-fig', 6], ['data-cifra', 6]], stage: true },
   c06: { fx: 'implode', hooks: [['data-nots', 1], ['data-word', 6], ['data-final', 1]], stage: true },
@@ -50,7 +50,7 @@ const FX_HOOKS = {
   c08: { fx: 'bars-once', hooks: [['data-bars', 1]] },
 };
 // the parts that exist only because an effect added them (they must hang on html.fxl) · the selectors that name the copy of an effect chapter · what hides it
-const FX_ONLY = /\.(?:sk|ty|sp|lens|lc|lr|pin|rail|imp|pen|num|wrs?)\b|\[data-fx-/;
+const FX_ONLY = /\.(?:ty|gh|lens|lc|lr|pin|rail|imp|pen|num|wrs?)\b|\[data-fx-/;
 const FX_COPY = /\.(?:rp|tag|you|ia|who|shout|bt|beat|chat|trio|tri|figs|fig|big|cap|ie|nots|hx|ctr|specs|srow|tcopy|lede|clock)\b|cb|cn|cp|crow|cands|spec|\bs\[data-word\]|\bdt\b|\bdd\b|#c(?:0[2-9]|1[0-6])\b/;
 const FX_HIDES = /(?:^|;)\s*(?:opacity\s*:\s*0(?![.\d])|visibility\s*:\s*hidden|display\s*:\s*none|clip-path\s*:|color\s*:\s*transparent|font-size\s*:\s*0\b|transform\s*:\s*scale\(0\b)/;
 const CTA_CHAPTERS = ['c03', 'c07', 'c10', 'c11'];       // CTA rows with the price label + the guarantee line; c14 has its in-card button; c16 closes
@@ -164,6 +164,56 @@ function deltaRule(html, lang) {
   if (refs.length !== 1 || refs[0] !== norm(V.tokReal)) out.push(`the source label of the chips is [${refs.join(' | ')}], expected exactly one «${V.tokReal}»`);
   else if (sec.indexOf('<p class="tokref">') < iA || sec.indexOf('<p class="tokref">') > iB) out.push('the source label is not between the two chip rows');
   return out;
+}
+
+// ---------- chapter 02: a chat's look in our frame, and nothing of anyone else's ----------
+// The owner's brief: the windows look like a chat (the user's message in a soft grey pill on the right, the answer as plain text on the left with no avatar, a composer with a caret and an
+// arrow-up send button at the bottom) but they carry OUR mark where a chat shows its name, never another product's: no logo, no name («ChatGPT», «OpenAI», «GPT-»), no model picker, no
+// disclaimer, no copied placeholder, no avatar next to the answer, no visible YOU / AI labels (they exist for a screen reader only). The diagnosis tag is OUTSIDE its window and links its lesson.
+const MARKS = /chatgpt|openai|gpt-|can make mistakes|check important info|puede cometer errores|ask anything|pregunta lo que quieras|pregunta cualquier cosa|model picker/i;
+function chatRule(html, lang) {
+  const out = [], V = STR[lang].pub.v3;
+  const c02 = (html.match(/<section id="c02"[\s\S]*?<\/section>/) ?? [''])[0];
+  if (!c02) return ['chapter 02 is missing'];
+  const mark = c02.match(MARKS);
+  if (mark) out.push(`chapter 02 carries another product's mark or text («${mark[0]}»): a chat's look with our name only`);
+  const wins = [...c02.matchAll(/<figure class="cw" data-win>([\s\S]*?)<\/figure>/g)].map((m) => m[1]);
+  if (wins.length !== 3) out.push(`chapter 02 has ${wins.length} chat windows, expected 3 (one per case)`);
+  wins.forEach((w, i) => {
+    if (!/<div class="cwh" aria-hidden="true"><span class="lg">IA<\/span><\/div>/.test(w)) out.push(`window ${i + 1} does not carry the site's own mark (the square IA) in its header`);
+    if (!/<div class="cwc" aria-hidden="true"><i class="caret"><\/i><b class="send"><svg[\s\S]*?<\/svg><\/b><\/div>/.test(w)) out.push(`window ${i + 1} has no composer with a caret and a send button`);
+    if (/<img\b|<picture\b|<canvas\b|\bavatar\b|class="av\b/i.test(w)) out.push(`window ${i + 1} has an avatar or an image: the answer is plain text with no avatar`);
+    if (/\bdata-tag\b/.test(w)) out.push(`window ${i + 1} holds its diagnosis tag: the tag sits OUTSIDE the window, under it`);
+    if (/class="who"/.test(w) || !/<p class="you[^"]*"><span class="sr">/.test(w) || !/<p class="ia"><span class="sr">/.test(w)) out.push(`window ${i + 1}: the YOU / AI labels must be screen-reader-only spans (class sr), never visible`);
+  });
+  const sr = (t) => (c02.match(new RegExp(`<span class="sr">${t}</span>`, 'g')) ?? []).length;
+  if (sr(V.chatTu) !== 4 || sr(V.chatIa) !== 3) out.push(`the screen-reader labels are ${sr(V.chatTu)} «${V.chatTu}» and ${sr(V.chatIa)} «${V.chatIa}», expected 4 and 3 (a pill each, the first instruction of window 2, an answer each)`);
+  const tags = [...c02.matchAll(/<\/figure>\s*<p class="tag" data-tag>([\s\S]*?)<\/p>/g)].map((m) => m[1]);
+  if (tags.length !== 3) out.push(`chapter 02 has ${tags.length} diagnosis tags right after a window, expected 3`);
+  tags.forEach((t, i) => { if (!/<a href="#c09">(?:LECCI[ÓO]N|LESSON) \d\d<\/a>/.test(t)) out.push(`tag ${i + 1} has no link to its lesson in the syllabus (#c09)`); });
+  return out;
+}
+// A gate that cannot fail proves nothing: each way the chat can turn into somebody else's, or lose what the owner asked for, must be caught by chatRule.
+function chatSelfTest(html, lang) {
+  if (chatRule(html, lang).length) return [0, 0];                   // the real page is judged by the loop below
+  const inC02 = (fn) => { const at = html.indexOf('<section id="c02"'), end = html.indexOf('</section>', at); return html.slice(0, at) + fn(html.slice(at, end)) + html.slice(end); };
+  const mut = {
+    'the text «ChatGPT» in chapter 02': inC02((c) => c.replace('<div class="cwh" aria-hidden="true">', '<div class="cwh" aria-hidden="true"><span>ChatGPT</span>')),
+    'the text «OpenAI» in an attribute of chapter 02': inC02((c) => c.replace('<figure class="cw" data-win>', '<figure class="cw" data-win aria-label="OpenAI">')),
+    'a model name («GPT-4o») in chapter 02': inC02((c) => c.replace('<p class="gap">', '<p class="gap">GPT-4o ')),
+    'the disclaimer of another product in chapter 02': inC02((c) => c.replace('</figure>', '<p>ChatGPT can make mistakes. Check important info.</p></figure>')),
+    'a copied placeholder in the composer': inC02((c) => c.replace('<i class="caret"></i>', '<i class="caret"></i><span>Ask anything</span>')),
+    'an avatar image next to the answer': inC02((c) => c.replace('<p class="ia">', '<p class="ia"><img src="/x.png" alt="">')),
+    'a visible YOU label (not screen-reader-only)': inC02((c) => c.replace('<span class="sr">', '<span class="who">')),
+    'a window without the site\'s mark': inC02((c) => c.replace('<span class="lg">IA</span>', '<span class="lg"></span>')),
+    'a window without its composer': inC02((c) => c.replace(/<div class="cwc" aria-hidden="true">[\s\S]*?<\/svg><\/b><\/div>/, '')),
+    'the diagnosis tag inside its window': inC02((c) => c.replace('</figure> <p class="tag" data-tag>', '<p class="tag" data-tag>').replace('</p> </div><div class="case" data-beat="1">', '</p></figure> </div><div class="case" data-beat="1">')),
+    'a tag without its lesson link': inC02((c) => c.replace(/<a href="#c09">/, '<a href="/login">')),
+    'a fourth chat window': inC02((c) => c.replace('<p class="shout">', '<figure class="cw" data-win></figure><p class="shout">')),
+  };
+  let bad = 0;
+  for (const [what, m] of Object.entries(mut)) if (m === html || !chatRule(m, lang).length) { console.error(`FAIL self-test: chatRule does not catch "${what}"`); bad++; }
+  return [bad, Object.keys(mut).length];
 }
 
 // ---------- real tokens: what the page ships for the effects (#v3-tokens) ----------
@@ -383,6 +433,7 @@ function judge(html, lang) {
   for (const m of deltaRule(html, lang)) f.push(`delta: ${m}`);
   for (const m of wordmarkRule(html)) f.push(`wordmark: ${m}`);
   for (const m of tokensRule(html, lang)) f.push(`tokens: ${m}`);
+  for (const m of chatRule(html, lang)) f.push(`chat: ${m}`);
   return f;
 }
 
@@ -570,13 +621,15 @@ function mutants(html, lang) {
     ['a fake loading counter back in the ignition', html.replace('<button class="iskip"', '<div class="pct">000</div><button class="iskip"'), /boot: the ignition shows a loading counter/],
     ['the stale closing line back in chapter 04', inChapter('cL', (c) => c.replace('</section>', `<div class="lend copy2"><h3 class="head">${esc(P.espH2)}</h3></div></section>`)), /structure: chapter 04 closes on/],
     ['chapter 04 with a length the engine is not scaled for', html.replace('id="cL" style="--len:6.2"', 'id="cL" style="--len:6.4"'), /structure: chapter 04 is 6.4 screens/],
-    ['chapter 02 without its data-fx name', html.replace('data-fx="type-strike"', 'data-fx="x"'), /fx: #c02 lost its data-fx/],
+    ['chapter 02 without its data-fx name', html.replace('data-fx="chat-stream"', 'data-fx="x"'), /fx: #c02 lost its data-fx/],
     ['a chapter 02 beat without its typed answer hook', html.replace(' data-type', ''), /fx: #c02 has 2 data-type|fx: #c02 beat 1 does not carry exactly one data-type/],
     ['a chapter 02 beat without its lesson tag hook', inChapter('c02', (c) => c.replace(/ data-tag(?=[\s>])/, '')), /fx: #c02 has 2 data-tag/],
     ['chapter 02 without its chat hook', html.replace(' data-chat', ''), /fx: #c02 has 0 data-chat/],
-    ['a chapter 02 beat gone', inChapter('c02', (c) => c.replace(/<div class="beat" data-beat="2">[\s\S]*?<\/div> <\/div>/, '')), /fx: #c02 has 2 data-beat/],
-    ['an effect class (.sk) styled without html.fxl', html.replace('html.fxl .sk{', '.sk{'), /fx: "\.sk" styles a part that only an effect adds/],
-    ['an effect attribute rule without html.fxl', html.replace('html.fxl [data-fx-s] .rp{', '[data-fx-s] .rp{'), /fx: "\[data-fx-s\] \.rp" styles a part that only an effect adds/],
+    ['a chapter 02 window gone', inChapter('c02', (c) => c.replace(/<div class="case" data-beat="2">[\s\S]*?<\/figure> <p class="tag" data-tag>[\s\S]*?<\/p> <\/div>/, '')), /fx: #c02 has 2 data-beat/],
+    ['a chapter 02 window without its window hook', inChapter('c02', (c) => c.replace(' data-win', '')), /fx: #c02 has 2 data-win/],
+    ['chapter 02 without its context bracket hook', inChapter('c02', (c) => c.replace(' data-ctx', '')), /fx: #c02 has 0 data-ctx/],
+    ['an effect class (.ty) styled without html.fxl', html.replace('html.fxl .ty{', '.ty{'), /fx: "\.ty" styles a part that only an effect adds/],
+    ['an effect attribute rule without html.fxl', html.replace('html.fxl [data-fx-live] .caret{', '[data-fx-live] .caret{'), /fx: "\[data-fx-live\] \.caret" styles a part that only an effect adds/],
     ['the typed answer hidden by default', html.replace('html.fxl [data-fx-s="arm"] .rp,', '.rp,'), /fx: "\.rp" hides the copy of an effect chapter by default/],
     ['the typed answer hidden under html.fxl without the armed attribute', html.replace('html.fxl [data-fx-s="arm"] .rp,', 'html.fxl .rp,'), /fx: "html\.fxl \.rp" hides the copy/],
     ['a CSS rule that hides a lesson tag by default', html.replace('</head>', '<style>.tag{opacity:0}</style></head>'), /fx: "\.tag" hides the copy/],
@@ -624,7 +677,7 @@ function mutants(html, lang) {
     ['chapter 08 without its bars hook', inChapter('c08', (c) => c.replace(' data-bars', '')), /fx: #c08 has 0 data-bars/],
     ['the chapter 08 bar pre-state styled without html.fxl', html.replace('html.fxl [data-fx-s] .cb i{', '[data-fx-s] .cb i{'), /fx: "\[data-fx-s\] \.cb i" styles a part that only an effect adds/],
     ['the chapter 08 bars hidden by default', html.replace('</head>', '<style>.cb i{opacity:0}</style></head>'), /fx: "\.cb i" hides the copy/],
-    ['a stage-2B rule on a plain element (it would outlive dispose)', html.replace('html.fxl [data-fx-s] .ia{position:relative}', 'html.fxl .ia{position:relative}'), /fx: "html\.fxl \.ia" is in the stage-2B block but styles an element no effect owns/],
+    ['a stage-2B rule on a plain element (it would outlive dispose)', html.replace('html.fxl [data-fx-live] .caret{', 'html.fxl .caret{'), /fx: "html\.fxl \.caret" is in the stage-2B block but styles an element no effect owns/],
     ['the lens glow back on the logo-size custom property', html.replace('html.fxl{--fx-glow:', 'html.fxl{--lg:'), /fx: "html\.fxl" declares --lg/],
     ['chapter 02 with the pin class in the markup', html.replace('<section id="c02" class="sec cx s02"', '<section id="c02" class="sec cx s02 pin"'), /layout: #c02 carries the effects' `pin` class/],
     ['the footer wordmark block gone', (() => { const at = /<div class="wmk"/.exec(html).index; return html.replace(balanced(html, at, 'div'), ''); })(), /wordmark: the footer wordmark block appears 0 times/],
@@ -812,7 +865,7 @@ function fxSourceSelfTest(files) {
     ['a copy literal written with textContent', { ...files, 'c02.ts': files['c02.ts'].replace('export function initC02', "const _x = document.body; _x.textContent = 'Hola';\nexport function initC02") }, /writes a string literal/],
     ['a copy literal written with innerHTML', { ...files, 'c02.ts': files['c02.ts'].replace('export function initC02', "const _x = document.body; _x.innerHTML = '<b>Hola</b>';\nexport function initC02") }, /writes a string literal/],
     ['a text node created', { ...files, 'c02.ts': files['c02.ts'].replace('export function initC02', "document.createTextNode('Hola');\nexport function initC02") }, /writes text or markup/],
-    ['an element built with literal content', { ...files, 'c02.ts': files['c02.ts'].replace("el('i', 'sk')", "el('i', 'sk', 'Hola')") }, /builds an element with literal content/],
+    ['an element built with literal content', { ...files, 'c02.ts': files['c02.ts'].replace("el('i', 'gh')", "el('i', 'gh', 'Hola')") }, /builds an element with literal content/],
     ['a layout property animated (style.width)', { ...files, 'c02.ts': files['c02.ts'].replace('export function initC02', "document.body.style.width = '1px';\nexport function initC02") }, /sets style\.width/],
     ['a layout property animated (style.top)', { ...files, 'c02.ts': files['c02.ts'].replace('export function initC02', "document.body.style.top = '1px';\nexport function initC02") }, /sets style\.top/],
     ['a layout property set with setProperty', { ...files, 'c02.ts': files['c02.ts'].replace('export function initC02', "document.body.style.setProperty('height', '1px');\nexport function initC02") }, /sets the CSS property height/],
@@ -820,7 +873,7 @@ function fxSourceSelfTest(files) {
     ['a template literal written into the page', { ...files, 'c03.ts': files['c03.ts'].replace('export function initC03', "document.body.innerHTML = `<b>${1}</b>`;\nexport function initC03") }, /writes a string literal/],
     ['a pre-state armed without belowFold() (chapter 03)', { ...files, 'c03.ts': files['c03.ts'].replace('l.armed = belowFold(l.tri);', 'l.armed = true;') }, /c03\.ts: arms a pre-state without asking belowFold/],
     ['an engine mode class switched by an effect', { ...files, 'c02.ts': files['c02.ts'].replace('export function initC02', "document.documentElement.classList.add('nogl');\nexport function initC02") }, /switches an engine mode class/],
-    ['a pre-state armed without belowFold()', { ...files, 'c02.ts': files['c02.ts'].replace('if (!belowFold(b.el)) continue;', '') }, /arms a pre-state without asking belowFold/],
+    ['a pre-state armed without belowFold()', { ...files, 'c02.ts': files['c02.ts'].replace('if (!belowFold(w.el)) continue;', '') }, /arms a pre-state without asking belowFold/],
     ['a pre-state armed without belowFold() (chapter 07)', { ...files, 'c07.ts': files['c07.ts'].replaceAll('belowFold(', 'Boolean(') }, /c07\.ts: arms a pre-state without asking belowFold/],
     ['a counter that writes a literal (chapter 07)', { ...files, 'c07.ts': files['c07.ts'].replace('ov.textContent = String(k)', "ov.textContent = 'x'") }, /c07\.ts: writes a string literal/],
     ['a layout property animated (chapter 07, style.width)', { ...files, 'c07.ts': files['c07.ts'].replace('export function initC07', "document.body.style.width = '1px';\nexport function initC07") }, /c07\.ts: sets style\.width/],
@@ -889,7 +942,7 @@ for (const m of fxSource(fxFiles)) { console.error(`FAIL fx: ${m}`); fail++; }
 for (const lang of LANGS) {
   const html = pages.get(`${lang}/none`);
   fail += selfTest(html, lang); mutantCount += mutants(html, lang).length;
-  for (const t of [deltaSelfTest, tokensSelfTest]) { const [bad, n] = t(html, lang); fail += bad; mutantCount += n; }
+  for (const t of [deltaSelfTest, tokensSelfTest, chatSelfTest]) { const [bad, n] = t(html, lang); fail += bad; mutantCount += n; }
 }
 for (const lang of LANGS) for (const cc of MARKETS) {
   const tag = `${lang}/${cc ?? 'none'}`, html = pages.get(tag);

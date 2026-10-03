@@ -25,6 +25,19 @@ export function whenSeen(e: Element, cb: () => void, margin = '0px 0px -15% 0px'
   io.observe(e); return () => io.disconnect();
 }
 
+/** The shape of every play-once effect. `arm` puts the pre-state on, and only while `at` is fully below the viewport when this runs (a section in view or above stays final);
+ *  `play` runs the first time `at` is inside the viewport shrunk by `margin` (IntersectionObserver syntax) and calls `done` when the picture is final; `clear` puts back exactly what the
+ *  page has (it must be safe to call at any time, any number of times). A reader who goes past before it played gets `clear` at once. Returns the state (for effects that re-measure) and `clear`. */
+export function once(at: Element, undo: (f: () => void) => void, o: { arm: () => void; play: (done: () => void) => void; clear: () => void; margin?: string }) {
+  let state: 'static' | 'arm' | 'run' = 'static', stop: (() => void) | undefined;
+  const clear = () => { stop && stop(); stop = undefined; state = 'static'; o.clear(); };
+  undo(clear);                                                       // registered first: an arm() that throws half-way is undone too
+  if (belowFold(at)) { state = 'arm'; o.arm(); stop = whenSeen(at, () => { stop = undefined; state = 'run'; o.play(clear); }, o.margin); }
+  let y0 = -1;                                                       // a reader who went past before it played gets the page as it is: never a pre-state left behind them
+  undo(onTick(() => { if (A.st.y === y0) return; y0 = A.st.y; if (state === 'arm' && passed(at)) clear(); }));
+  return { state: () => state, clear };
+}
+
 /** Pins a chapter's stage (adds the `pin` class) when everything in it fits the viewport's height, and leaves the chapter static when it does not: a phone on its side, a short window.
  *  A stage that overflows lays its content out from the top (`safe center`), so scrollHeight tells. Returns whether the chapter is pinned. Asked at attach and on every resize. */
 export function setPin(sec: HTMLElement, stage: HTMLElement): boolean {

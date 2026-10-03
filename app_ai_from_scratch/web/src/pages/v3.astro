@@ -364,7 +364,7 @@ setTimeout(function(){
       <div class="meta"><span>{V.s5Eb}</span><span class="ac">{P.espInter}</span></div>
       <p class="pctx">{ctx}</p>
       <div class="ph">{V.cand}</div>
-      <div id="cands" class="cands" set:html={candRowsHTML(cands, 0.3)}></div>
+      <div id="cands" class="cands" data-bars set:html={candRowsHTML(cands, 0.3)}></div>
       <div class="temp">
         <div class="meta"><span>{P.bTemp}</span><b id="tempLabel" class="ac">0.30</b></div>
         <input id="tempin" class="deslizador" type="range" min="1" max="180" step="1" value="30" aria-label={P.bTemp}>

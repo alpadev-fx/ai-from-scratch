@@ -7,8 +7,9 @@ import { initC03 } from './c03';
 import { initC05 } from './c05';
 import { initC06 } from './c06';
 import { initC07 } from './c07';
+import { initC08 } from './c08';
 
-const CHAPTERS: Array<[string, () => Fx]> = [['c02', initC02], ['c03', initC03], ['c05', initC05], ['c06', initC06], ['c07', initC07]];
+const CHAPTERS: Array<[string, () => Fx]> = [['c02', initC02], ['c03', initC03], ['c05', initC05], ['c06', initC06], ['c07', initC07], ['c08', initC08]];
 
 export function initFx(): Fx {
   const live: Fx[] = [];

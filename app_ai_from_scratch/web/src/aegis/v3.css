@@ -665,3 +665,5 @@ html.fxl [data-fx-s] [data-count]{position:relative;color:transparent}
 html.fxl .num{position:absolute;left:0;top:0;white-space:nowrap;font-style:normal;color:var(--l1);pointer-events:none}   /* an <i>, not a <span>: the page styles `.ctr span` (the MIN label) */
 html.fxl .ctr .num{right:0;text-align:center}
 html.fxl .pen{position:absolute;left:0;top:0;width:9px;height:9px;margin:-4.5px 0 0 -4.5px;border-radius:50%;background:var(--l1);opacity:0;filter:var(--fx-pen);pointer-events:none;will-change:transform,opacity}
+/* 08: the bars of the temperature specimen grow once, from their left end, the first time the card is seen ([data-fx-s] is on the list only while that is pending) */
+html.fxl [data-fx-s] .cb i{transform-origin:0 50%;will-change:transform}

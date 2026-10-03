@@ -15,6 +15,8 @@ export interface Chapter {
   enter?: () => void; leave?: () => void;
   boundIn?: (t: number) => void; boundOut?: (t: number) => void;
   _hold?: number;
+  /** register() put the `lay` class on this chapter (the hero has it in its markup): the engine took the layout, so giving it back removes it. */
+  layAdded?: boolean;
 }
 export interface Shot { a: Chapter; b: Chapter | null; t: number }
 

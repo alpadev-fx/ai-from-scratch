@@ -10,8 +10,9 @@
 // ALL the copy is in the server HTML: the engine (src/aegis/*) only animates it, so ?rm=1, ?nogl=1 and a real no-WebGL
 // browser read every chapter in full.
 // NOTHING IN THE ENGINE GATES WHAT THE VISITOR READS. The hero copy is painted from the first frame; the ignition is a 1.0 s CSS timeline
-// that the head script ends (animationend, 1.2 s at the latest, or click / key / wheel / touch); the engine attaches later and never hides
-// the copy again; if an import hangs, the head script's watchdog turns the page into the static page after 15 s.
+// that the head script ends (animationend, 1.2 s at the latest, or click / key / wheel / touch); the engine attaches later, only to a page that
+// has not been scrolled, and never hides the copy again; if an import hangs, the head script's watchdog marks the visit engine-off after 15 s.
+// The page is not tall until an engine drives it (html.fxl, set by main.ts), and nothing changes its layout once somebody is scrolling it.
 //
 // COPY RULES, enforced by code and not by hope. Everything this page reads from `pub` passes through `guarded()`, which
 // THROWS the moment a banned string is read (city, plural courses, the Hormozi §0.4 list, monthly wording, «veinte segundos»,
@@ -115,14 +116,18 @@ const seal = V.s8Sello.repeat(2);
    · the ignition (first visit of the session, engine mode only, never under reduced motion) is a CSS timeline of 1.0 s (v3.css). It ENDS here:
      when that animation ends, at 1.2 s from the first frame at the latest, or on any click, key, wheel or touch. Ending = the overlay goes,
      the scroll lock goes, and the session remembers it;
-   · watchdog: if the engine modules have not attached after 15 s (a hung import never throws, so the catch in main.ts never runs),
-     the page becomes the static page. Console-visible, never silent. */
+   · layout: the page is tall (html.fxl) only once main.ts attaches the engine, and it only attaches at the very top of the page; before that the
+     hero is one screen and every other chapter is static. Scroll restoration is off, so a reload opens at the top;
+   · watchdog: if the engine has not attached after 15 s (a hung import never throws, so the catch in main.ts never runs) the visit is marked
+     engine-off (html.eng-off). It changes no layout, so it cannot move a reader who is scrolling; late modules find eng-off and stay detached.
+     Console-visible, never silent. */
 (function(){var d=document.documentElement,q=location.search,rm=/[?&]rm=1/.test(q)||(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches),gl=false;
 try{gl=!!document.createElement('canvas').getContext('webgl2')}catch(e){}
 if(/[?&]nogl=1/.test(q))gl=false;
 if(rm){d.classList.add('rm');return}
 if(!gl){d.classList.add('nogl');return}
 d.classList.add('fx');
+try{history.scrollRestoration='manual'}catch(e){}
 var seen=false;try{seen=sessionStorage.getItem('v3_ign')==='1'}catch(e){}
 if(!seen){
   d.classList.add('ign-on');
@@ -141,9 +146,9 @@ if(!seen){
   requestAnimationFrame(arm);setTimeout(arm,250);
 }
 setTimeout(function(){
-  if(d.classList.contains('ready')||!d.classList.contains('fx'))return;
-  try{console.warn('[v3] engine did not attach in 15 s: showing the static page')}catch(x){}
-  d.classList.remove('fx','gl-on','foot-on','ign-on');d.classList.add('nogl');
+  if(d.classList.contains('ready')||d.classList.contains('eng-off'))return;
+  try{console.warn('[v3] engine did not attach in 15 s: it stays off for this visit and the page keeps the layout it has')}catch(x){}
+  d.classList.remove('ign-on');d.classList.add('eng-off');d.setAttribute('data-eng-off','timeout');
 },15000);
 })();
 </script>
@@ -187,7 +192,7 @@ setTimeout(function(){
      SECONDARY free one; adapted to prod: the primary is prod's preCta -> /pago (one 30-day product, renewal off by default, so no ?renovar=1),
      the secondary is the free heroCta -> /registro. The trust line (guarantee, cancel) sits under both, next to the paid button it is about.
      Engine chapter: the engine reads .copy, .head, .rule, .sub and .cta (the whole block, both buttons and the line). ===== -->
-<section class="ch" id="c01" style="--len:5.6" aria-labelledby="c01h">
+<section class="ch lay" id="c01" style="--len:5.6" aria-labelledby="c01h">
   <div class="stage">
     <figure class="pstat" aria-hidden="true">
       <img class="poster" src="/v3/poster/n1.webp" alt="" width="48" height="85">

@@ -9,7 +9,10 @@ import { $, $$, clamp } from './util';
 
 export function register(c: Partial<Chapter> & { id: string }): Chapter | null {
   const el = document.getElementById(c.id); if (!el) return null;
-  const ch = Object.assign(c, { el, stage: ($('.stage', el) || el) as HTMLElement, p: 0, near: false, vis: false, top: 0, h: 0, span: 1 }) as Chapter;
+  // `lay` hands the chapter to the engine layout (v3.css): its stage pins and, once the engine has switched html.fxl on, it is `--len` screens tall.
+  // The hero has it in its markup (its look is the engine's from the first paint); every other chapter gets it here, so nothing is tall before an engine exists.
+  const layAdded = !el.classList.contains('lay'); if (layAdded) el.classList.add('lay');
+  const ch = Object.assign(c, { el, stage: ($('.stage', el) || el) as HTMLElement, p: 0, near: false, vis: false, top: 0, h: 0, span: 1, layAdded }) as Chapter;
   A.chapters.push(ch); A.byId[ch.id] = ch; return ch;
 }
 export function chapterAt(y: number) {

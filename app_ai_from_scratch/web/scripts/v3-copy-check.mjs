@@ -246,8 +246,31 @@ function judge(html, lang) {
   const bootJs = ((html.slice(0, html.indexOf('</head>')).match(/<script[^>]*>[\s\S]*?<\/script>/g) ?? []).find((x) => x.includes("sessionStorage.getItem('v3_ign')"))) ?? '';
   if (!bootJs) f.push('boot: the head script that runs the ignition is missing');
   else for (const [what, re] of [['the 1200 ms cap on the ignition', /setTimeout\(end,1200\)/], ['ending on animationend', /animationend/], ['skipping on click', /'click'/], ['skipping on any key', /'keydown'/],
-    ['skipping on wheel', /'wheel'/], ['skipping on touch', /'touchstart'/], ['the 15 s watchdog', /\},15000\)/]]) if (!re.test(bootJs)) f.push(`boot: the head script lost ${what}`);
+    ['skipping on wheel', /'wheel'/], ['skipping on touch', /'touchstart'/], ['the 15 s watchdog', /\},15000\)/], ['manual scroll restoration', /history\.scrollRestoration\s*=\s*'manual'/]]) if (!re.test(bootJs)) f.push(`boot: the head script lost ${what}`);
   if (/class="pct"/.test(ch.ign.html)) f.push('boot: the ignition shows a loading counter that is not bound to anything real');
+  // The watchdog gives up on the engine; it must not move anybody. It marks the visit (html.eng-off) and changes NO layout: removing fx / adding nogl
+  // would reflow a reader who has been scrolling the page for 15 s (the chapters would change height under them).
+  const wd = bootJs.match(/setTimeout\(function\(\)\{([\s\S]*?)\},15000\)/)?.[1];
+  if (bootJs && wd !== undefined) {
+    if (!/classList\.add\(\s*'eng-off'/.test(wd)) f.push('boot: the watchdog no longer marks the visit as engine-off (html.eng-off)');
+    if (/classList\.remove\([^)]*'fx'/.test(wd) || /classList\.add\(\s*'nogl'/.test(wd)) f.push('boot: the watchdog changes the layout (removes fx or adds nogl): that moves a reader who has been scrolling for 15 s');
+  }
+
+  // layout: the page is only as tall as the engine it has. The tall scroll-driven chapters (html.fxl) are switched on by main.ts when it attaches the engine
+  // at the top of the page; until then, and for the whole visit of anybody who scrolled first, the hero is ONE screen in its engine look and every other
+  // chapter is the static one. The rendered CSS and markup prove the parts of that which live in the page (v3.css "ENGINE MODE", the `lay` class).
+  const cssNc = css.replace(/\/\*[\s\S]*?\*\//g, ''), rules = [...cssNc.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ sel: m[1].trim(), body: m[2] }));
+  const tall = rules.filter((r) => /calc\(var\(--len\)\s*\*\s*100svh\)/.test(r.body));
+  if (!tall.length) f.push('layout: no rule gives a chapter its tall height (calc(var(--len) * 100svh))');
+  for (const r of tall) if (!/\bhtml\.fxl\b/.test(r.sel)) f.push(`layout: the tall chapter height is keyed to "${r.sel}", not to html.fxl: the page would be tall (and its stage pinned) before any engine exists`);
+  if (!rules.some((r) => r.sel === 'html.fx .lay' && /(^|;)\s*height:100svh\b/.test(r.body))) f.push('layout: the hero is not one screen before the engine attaches (expected html.fx .lay{height:100svh})');
+  for (const r of rules) for (const sel of r.sel.split(',').map((x) => x.trim()))
+    if (/\bhtml\.fx\b(?!l)/.test(sel) && /\.(?:stage|copy|head|chr|label|sub|chips|sent|tk|pcard|dial|steps(?:-wrap)?|s02)\b/.test(sel) && !/\.lay\b|#c01\b/.test(sel))
+      f.push(`layout: "${sel}" lays chapters out under html.fx alone (use html.fxl, or .lay / #c01 for the hero's one-screen look)`);
+  const secs = [...html.matchAll(/<section\b([^>]*)>/g)].map((m) => ({ id: /\bid="([^"]*)"/.exec(m[1])?.[1], cls: (/\bclass="([^"]*)"/.exec(m[1])?.[1] ?? '').split(/\s+/) }));
+  if (!secs.some((x) => x.id === 'c01' && x.cls.includes('lay'))) f.push('layout: the hero lost its `lay` class in the markup: it would not be the one-screen engine look it paints at first');
+  const stray = secs.filter((x) => x.id !== 'c01' && x.cls.includes('lay')).map((x) => `#${x.id}`);
+  if (stray.length) f.push(`layout: ${stray.join(', ')} carries the engine's \`lay\` class in the markup: it gets it when the engine registers it, or it is pinned and one screen tall before any engine exists`);
 
   // chapter 04 ends with its last tab: no closing line that points at specimens now living in chapter 08, and a scroll length the engine's
   // timeline is scaled for (llm.ts: GIVEN). A mismatch would change the pacing of every beat without any error.
@@ -325,6 +348,17 @@ function mutants(html, lang) {
     ['the ignition without its 1.2 s cap', html.replace('setTimeout(end,1200)', 'setTimeout(end,12000)'), /boot: the head script lost the 1200 ms cap/],
     ['the ignition that cannot be skipped by wheel', html.replace("'wheel'", "'wheelx'"), /boot: the head script lost skipping on wheel/],
     ['the head script without the watchdog', html.replace('},15000);', '},15000000);'), /boot: the head script lost the 15 s watchdog/],
+    ['the head script without manual scroll restoration', html.replace("history.scrollRestoration='manual'", "history.scrollRestoration='auto'"), /boot: the head script lost manual scroll restoration/],
+    ['a watchdog that takes the layout away again (fx off, nogl on)', html.replace("d.classList.remove('ign-on');d.classList.add('eng-off');", "d.classList.remove('fx','ign-on');d.classList.add('nogl');"), /boot: the watchdog (changes the layout|no longer marks)/],
+    ['a watchdog that no longer marks the visit', html.replace("d.classList.add('eng-off');", ''), /boot: the watchdog no longer marks the visit/],
+    ['the tall chapter height keyed to html.fx again', html.replace('html.fxl .lay{height:calc(var(--len) * 100svh)}', 'html.fx .lay{height:calc(var(--len) * 100svh)}'), /layout: the tall chapter height is keyed to "html\.fx \.lay"/],
+    ['the tall chapter height gone', html.replace('html.fxl .lay{height:calc(var(--len) * 100svh)}', ''), /layout: no rule gives a chapter its tall height/],
+    ['the hero not one screen before the engine', html.replace('html.fx .lay{height:100svh;', 'html.fx .lay{'), /layout: the hero is not one screen/],
+    ['a stage rule keyed to html.fx alone again', html.replace('</head>', '<style>html.fx .stage{position:sticky}</style></head>'), /layout: "html\.fx \.stage" lays chapters out under html\.fx alone/],
+    ['chapter 02 full-screen layout keyed to html.fx again', html.replace('html.fxl .s02{padding-top:max(110px', 'html.fx .s02{padding-top:max(110px'), /layout: "html\.fx \.s02" lays chapters out/],
+    ['a chapter 04 engine rule keyed to html.fx again', html.replace('html.fxl .steps-wrap{', 'html.fx .steps-wrap{'), /layout: "html\.fx \.steps-wrap" lays chapters out/],
+    ['the hero without its lay class', html.replace('<section class="ch lay" id="c01"', '<section class="ch" id="c01"'), /layout: the hero lost its `lay` class/],
+    ['chapter 04 with the lay class in the markup', html.replace('<section class="ch" id="cL"', '<section class="ch lay" id="cL"'), /layout: #cL carries the engine's `lay` class/],
     ['a fake loading counter back in the ignition', html.replace('<button class="iskip"', '<div class="pct">000</div><button class="iskip"'), /boot: the ignition shows a loading counter/],
     ['the stale closing line back in chapter 04', inChapter('cL', (c) => c.replace('</section>', `<div class="lend copy2"><h3 class="head">${esc(P.espH2)}</h3></div></section>`)), /structure: chapter 04 closes on/],
     ['chapter 04 with a length the engine is not scaled for', html.replace('id="cL" style="--len:6.2"', 'id="cL" style="--len:6.4"'), /structure: chapter 04 is 6.4 screens/],
@@ -379,6 +413,34 @@ function deltaSelfTest(html, lang) {
   return bad;
 }
 
+// ---------- the engine's boot (src/aegis/main.ts) ----------
+// The page rules above read the rendered page. The other half of the layout contract lives in main.ts: it is the only place that switches the tall layout on,
+// only at the very top of the page, and when anything stops the engine it leaves the layout alone. Removing fx or adding nogl there (or scrolling the page to the
+// top) would reflow a reader who is already moving through the chapters, which is the jump this exists to prevent.
+function engineBoot(src) {
+  const f = [];
+  if (!/classList\.add\('fxl'\)/.test(src)) f.push('it no longer switches the tall layout on (html.fxl)');
+  if (!/scrollY\s*<=\s*0/.test(src)) f.push('it no longer attaches only at the very top of the page (scrollY <= 0)');
+  if (!/classList\.add\('eng-off'\)/.test(src)) f.push('it no longer marks a visit that has no engine (html.eng-off)');
+  if (/classList\.remove\([^)]*'fx'/.test(src) || /classList\.add\(\s*'nogl'/.test(src)) f.push('it takes the layout away from the page (removes fx or adds nogl): that reflows a reader who is already scrolling');
+  if (/\bscrollTo\(\s*0\s*,\s*0\s*\)/.test(src)) f.push('it scrolls the page to the top when it boots: that yanks a reader who has already moved');
+  return f;
+}
+function engineBootSelfTest(src) {
+  if (engineBoot(src).length) return [0, 0];                       // the real file is judged by the run below
+  let bad = 0;
+  const cases = [
+    ['no html.fxl switch', src.replace("classList.add('fxl')", "classList.add('fxl-x')"), /switches the tall layout on/],
+    ['no scroll guard', src.replace('scrollY <= 0', 'true'), /only at the very top/],
+    ['no eng-off marker', src.replaceAll("classList.add('eng-off')", "classList.add('off-x')"), /marks a visit that has no engine/],
+    ['fx taken off when the engine fails', src.replace("release(); markOff('error');", "release(); de.classList.remove('fx', 'gl-on'); markOff('error');"), /takes the layout away/],
+    ['nogl put on when the engine fails', src.replace("release(); markOff('error');", "release(); de.classList.add('nogl'); markOff('error');"), /takes the layout away/],
+    ['a scrollTo(0, 0) at boot', src.replace('if (!A.fx) return;', 'if (!A.fx) return; scrollTo(0, 0);'), /scrolls the page to the top/],
+  ];
+  for (const [what, m, expect] of cases) { const got = engineBoot(m); if (m === src || !got.some((g) => expect.test(g))) { console.error(`FAIL self-test: engineBoot does not catch "${what}" (got ${got.join(' | ') || 'nothing'})`); bad++; } }
+  return [bad, cases.length];
+}
+
 // ---------- run ----------
 const pages = new Map();
 for (const lang of LANGS) for (const cc of MARKETS) {
@@ -390,6 +452,9 @@ for (const lang of LANGS) for (const cc of MARKETS) {
   } catch (e) { console.error(`FAIL ${tag}: cannot fetch ${BASE}/v3 (${e.message})`); process.exit(1); }
 }
 let fail = 0, mutantCount = 0;
+const mainSrc = readFileSync(new URL('../src/aegis/main.ts', import.meta.url), 'utf8');
+{ const [bad, n] = engineBootSelfTest(mainSrc); fail += bad; mutantCount += n; }
+for (const m of engineBoot(mainSrc)) { console.error(`FAIL main.ts: ${m}`); fail++; }
 for (const lang of LANGS) {
   const html = pages.get(`${lang}/none`);
   fail += selfTest(html, lang) + deltaSelfTest(html, lang);

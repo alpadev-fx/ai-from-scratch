@@ -402,3 +402,14 @@ test('the hero cannot flicker the way it did: the grain is the same on every fra
   assert.ok(/time/.test(grain('float g = (h21(vUv * res * 1.31 + fract(time * 13.37) * 173.0) - 0.5) * grain;')));
   assert.ok(/joinB/.test(glitch('      glitch: 0.55 * shatter + 1.0 * joinB,')));
 });
+
+// ---------- phones: the unscrolled page is never wider than the screen ----------
+test('the unscrolled hero cannot be stretched by its buttons: the phone grid track has a zero minimum and the labels wrap where the pair does not fit', () => {
+  const css = readFileSync(new URL('../src/aegis/v3.css', import.meta.url), 'utf8');
+  const track = (t: string) => /@media \(max-width:900px\)\{#c01 \.stage\{grid-template-columns:([^}]*)\}/.exec(t)?.[1];
+  assert.equal(track(css), 'minmax(0,1fr)', 'a bare 1fr is minmax(auto,1fr): the widest unbreakable label sets the column (354px at a 320px viewport)');
+  assert.ok(/@media \(max-width:359px\)\{\.buy\{white-space:normal/.test(css), 'below 360 every button may wrap');
+  assert.ok(/@media \(max-width:369px\)\{html:not\(\.fx\) \.ctas \.buy\{white-space:normal/.test(css), 'the Spanish pair needs 370px: from 360 to 369 the labels wrap as well');
+  // the rule can fail
+  assert.notEqual(track('@media (max-width:900px){#c01 .stage{grid-template-columns:1fr}.pstat{grid-column:1}'), 'minmax(0,1fr)');
+});

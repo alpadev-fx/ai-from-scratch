@@ -151,7 +151,9 @@ html:not([data-theme="paper"]) .plate{box-shadow:0 0 70px rgba(10,132,255,.14);b
 .steps .t{margin-top:8px;font:500 11px/1.2 var(--m);letter-spacing:.2em;color:var(--l1)}
 .steps .h{margin-top:10px;font:700 18px/1.2 var(--f);letter-spacing:-.02em}
 .steps .d{margin-top:8px;font:400 14px/1.45 var(--f);color:var(--l2)}
-@media (max-width:900px){#c01 .stage{grid-template-columns:1fr}.pstat{grid-column:1;grid-row:auto;order:2}.card{order:3;max-width:none}.steps{grid-template-columns:1fr 1fr}.crow{grid-template-columns:96px minmax(0,1fr) 48px}}
+/* minmax(0,1fr), not 1fr: a bare 1fr is minmax(auto,1fr) and «auto» is the widest unbreakable thing in the column (the hero's width:max-content button pair),
+   which stretched the unscrolled hero to 354px at a 320px viewport; the body clips it, so nothing scrolled, but the copy sat 34px off the screen */
+@media (max-width:900px){#c01 .stage{grid-template-columns:minmax(0,1fr)}.pstat{grid-column:1;grid-row:auto;order:2}.card{order:3;max-width:none}.steps{grid-template-columns:1fr 1fr}.crow{grid-template-columns:96px minmax(0,1fr) 48px}}
 /* ---------- static sections ---------- */
 .sec{position:relative;z-index:2;margin:0;padding:86px max(var(--gut),calc(50% - 620px + var(--gut))) 0;background:var(--bg)}
 .sh{display:flex;align-items:baseline;flex-wrap:wrap;gap:12px 18px;padding-bottom:28px}
@@ -338,7 +340,9 @@ html[data-ch="cL"] .cue{display:none}
 }
 @media (prefers-reduced-motion:reduce){html.fx *{animation:none!important}}
 /* very small phones (320): the nowrap buttons may wrap instead of being clipped by the stage */
-@media (max-width:359px){.buy{white-space:normal;text-align:center;line-height:1.35;padding:10px 14px;max-width:100%}}
+@media (max-width:359px){.buy{white-space:normal;text-align:center;line-height:1.35;text-wrap:balance;padding:10px 14px;max-width:100%}}
+/* the Spanish hero pair is 338px wide and needs a 370px viewport: from 360 to 369 the unscrolled page lets its two labels wrap as well (the engine lays the hero out on its own and fits) */
+@media (max-width:369px){html:not(.fx) .ctas .buy{white-space:normal;text-align:center;line-height:1.35;text-wrap:balance}}
 /* short phones: the hero copy needs the room the scroll cue would take (the stack carries two buttons now, so «short» reaches 820px of height) */
 @media (max-width:900px) and (max-height:820px){html.fx .cue{display:none}}
 /* The hero stack (eyebrow, three-line headline, bold line, sub, CTA, trust line) now ends where the scroll cue used to stand on wide

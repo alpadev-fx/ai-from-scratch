@@ -14,6 +14,7 @@
     "check:astro": "astro check",
     "scenes:check": "node scripts/scenes-check.mjs",
     "test": "node --experimental-strip-types --test test/attribution.test.mts test/proxy-guard.test.mts test/hsts.test.mts test/v3-guard.test.mts",
+    "fps:v3": "node scripts/v3-fps.mjs",
     "e2e": "playwright test"
   },
   "dependencies": {

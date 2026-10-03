@@ -35,38 +35,64 @@ export function initC06() {
     const colours = () => { c1 = rgb(token('--l1')); c2 = rgb(token('--l2')); ca = rgb(token('--ac')); paper = A.paper(); last = -1; };
 
     /** Samples the particles from the words as they are laid out now: every character is drawn on a hidden canvas at the rectangle the browser gave it (so wrapping and letter
-     *  spacing are the real ones), plus the strike of each line; the opaque pixels of a grid become the particles. */
-    const build = () => {
+     *  spacing are the real ones), plus the strike of each line; the opaque pixels of a grid become the particles.
+     *  It is a JOB, not a function: a generator the frames pump one small step at a time (pump()), because done at once it was one frame of 40+ ms on a throttled CPU, the hitch a
+     *  reader felt as the previous chapter ended. Two things keep it small: only the box the words occupy is drawn and read back (the particles are the same: nothing outside it is ink),
+     *  and every layout read happens in the FIRST slice, together (the stage and the characters move with the scroll as one; read in different frames they would not agree). */
+    const build = function* (): Generator<void> {
       const sr = stage.getBoundingClientRect(); W = Math.round(sr.width); Hh = Math.round(sr.height);
-      dpr = Math.min(devicePixelRatio || 1, 1.5); cv.width = Math.round(W * dpr); cv.height = Math.round(Hh * dpr);
-      const off = document.createElement('canvas'); off.width = W; off.height = Hh;
-      const g = off.getContext('2d', { willReadFrequently: true })!; g.fillStyle = '#fff'; g.textBaseline = 'alphabetic';
+      type Word = { font: string; chars: Array<[string, number, number, number]>; strikes: Array<[number, number, number, number]> };
+      const items: Word[] = []; let bx0 = Infinity, by0 = Infinity, bx1 = -Infinity, by1 = -Infinity;
+      const grow = (l: number, t: number, r: number, b: number) => { bx0 = Math.min(bx0, l); by0 = Math.min(by0, t); bx1 = Math.max(bx1, r); by1 = Math.max(by1, b); };
       const range = document.createRange();
       for (const w of words) {
         const cs = getComputedStyle(w), node = w.firstChild; if (!node || node.nodeType !== 3) throw new Error('c06: a [data-word] is not plain text');
-        g.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
-        const txt = node.textContent || '';
+        const txt = node.textContent || '', it: Word = { font: `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`, chars: [], strikes: [] };
         for (let i = 0; i < txt.length; i++) {
           if (txt[i] === ' ') continue;
           range.setStart(node, i); range.setEnd(node, i + 1); const q = range.getBoundingClientRect(); if (!q.width) continue;
-          const asc = g.measureText(txt[i]).fontBoundingBoxAscent || q.height * 0.8;
-          g.fillText(txt[i], q.left - sr.left, q.top - sr.top + asc);
+          it.chars.push([txt[i], q.left - sr.left, q.top - sr.top, q.height]); grow(q.left - sr.left, q.top - sr.top, q.right - sr.left, q.bottom - sr.top);
         }
-        for (const q of Array.from(w.getClientRects())) g.fillRect(q.left - sr.left, q.top - sr.top + q.height * 0.58 - 1, q.width, 2);
+        for (const q of Array.from(w.getClientRects())) { it.strikes.push([q.left - sr.left, q.top - sr.top + q.height * 0.58 - 1, q.width, 2]); grow(q.left - sr.left, q.top - sr.top, q.right - sr.left, q.bottom - sr.top); }
+        items.push(it);
       }
-      const data = g.getImageData(0, 0, W, Hh).data, MAX = A.mobile ? 800 : 1700;
-      const count = (gap: number) => { let c = 0; for (let y = 0; y < Hh; y += gap) for (let x = 0; x < W; x += gap) if (data[(y * W + x) * 4 + 3] > 120) c++; return c; };
-      const gap = clamp(Math.ceil(3 * Math.sqrt(count(3) / MAX)), 3, 10);
+      dpr = Math.min(devicePixelRatio || 1, 1.5); cv.width = Math.round(W * dpr); cv.height = Math.round(Hh * dpr);
+      yield;
+      // the box the words occupy, a margin round it for the ink that leaves a character's advance box (accents, italics) and the antialiasing
+      const M = 12, bx = clamp(Math.floor(bx0 - M), 0, W), by = clamp(Math.floor(by0 - M), 0, Hh), bw = clamp(Math.ceil(bx1 + M), 0, W) - bx, bh = clamp(Math.ceil(by1 + M), 0, Hh) - by;
+      const off = document.createElement('canvas'); off.width = Math.max(1, bw); off.height = Math.max(1, bh);
+      const g = off.getContext('2d', { willReadFrequently: true })!; g.fillStyle = '#fff'; g.textBaseline = 'alphabetic';
+      for (const it of items) {
+        g.font = it.font;
+        for (const [c, x, y, h] of it.chars) { const asc = g.measureText(c).fontBoundingBoxAscent || h * 0.8; g.fillText(c, x - bx, y - by + asc); }
+        for (const [x, y, w, h] of it.strikes) g.fillRect(x - bx, y - by, w, h);
+        yield;
+      }
+      const data = g.getImageData(0, 0, off.width, off.height).data, MAX = A.mobile ? 800 : 1700;
+      yield;
+      // the grid is anchored at the stage's corner, as it always was: only its points inside the box are looked at (outside it nothing is ink)
+      const ink = (x: number, y: number) => data[((y - by) * off.width + (x - bx)) * 4 + 3] > 120;
+      let c3 = 0;
+      for (let y = Math.ceil(by / 3) * 3, k = 0; y < by + bh; y += 3) { for (let x = Math.ceil(bx / 3) * 3; x < bx + bw; x += 3) if (ink(x, y)) c3++; if (++k % 48 === 0) yield; }
+      const gap = clamp(Math.ceil(3 * Math.sqrt(c3 / MAX)), 3, 10);
       const xs: number[] = [], ys: number[] = [];
-      for (let y = 0; y < Hh; y += gap) for (let x = 0; x < W; x += gap) if (data[(y * W + x) * 4 + 3] > 120) { xs.push(x); ys.push(y); }
+      for (let y = Math.ceil(by / gap) * gap, k = 0; y < by + bh; y += gap) { for (let x = Math.ceil(bx / gap) * gap; x < bx + bw; x += gap) if (ink(x, y)) { xs.push(x); ys.push(y); } if (++k % 24 === 0) yield; }
       n = xs.length; bk = Array.from({ length: 8 }, () => new Float32Array(n * 3)); px = new Float32Array(n); py = new Float32Array(n); pd = new Float32Array(n); pk = new Float32Array(n); ps = new Float32Array(n);
+      yield;
       let far = 1; for (let i = 0; i < n; i++) far = Math.max(far, Math.hypot(xs[i] - tx, ys[i] - ty));
       for (let i = 0; i < n; i++) {
         px[i] = xs[i] + (hash(i * 3 + 1) - 0.5) * gap * 0.8; py[i] = ys[i] + (hash(i * 3 + 2) - 0.5) * gap * 0.8;
         pd[i] = 0.34 * (0.6 * hash(i * 3 + 3) + 0.4 * (1 - Math.hypot(xs[i] - tx, ys[i] - ty) / far));     // the nearer to the point, the later it starts: a stream, not a wall
         pk[i] = (hash(i * 7 + 5) - 0.5) * 0.7; ps[i] = 1.6 + hash(i * 11 + 9) * 1.4;
+        if (i % 400 === 399) yield;
       }
-      built = true;
+    };
+    let job: Generator<void> | null = null;
+    undo(() => { job = null; });
+    /** One step of the build per frame (a step is a word drawn, the read-back, a few dozen rows of the grid: none is more than a millisecond of real work); the frame after it carries on where it stopped. */
+    const pump = () => {
+      if (!job) job = build();
+      if (job.next().done) { job = null; built = true; }
     };
 
     /** The layout as it is now: where the pinned stage is on the page, where the line will have landed (the vertical middle of the stage) and so where the particles gather. */
@@ -79,12 +105,12 @@ export function initC06() {
       const sr = stage.getBoundingClientRect(), hr = h2.getBoundingClientRect(), cs = getComputedStyle(stage);
       const mid = (parseFloat(cs.paddingTop) + sr.height - parseFloat(cs.paddingBottom)) / 2;
       dy = hr.top - sr.top + hr.height / 2 - mid; tx = hr.left - sr.left + hr.width / 2; ty = mid;
-      built = false; last = -1; frame();
+      built = false; job = null; last = -1; frame();                // a new layout: whatever was half built is of the old one
     };
 
     const frame = () => {
       if (!on) return;
-      if (!built && A.st.y + A.H * 3.5 > top) build();               // the pixels are read once, when the chapter is about to come up (not at attach, not while it is on screen)
+      if (!built && A.st.y + A.H * 3.5 > top) pump();                // the pixels are read once, when the chapter is about to come up (not at attach, not while it is on screen), a few ms a frame
       if (!built) return;
       const p = clamp((A.st.y - top) / span); if (p === last) return; last = p;
       const hand = ss(seg(p, A0, A1)), q = seg(p, B0, B1), land = ss(seg(p, L0, L1));

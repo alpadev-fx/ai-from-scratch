@@ -622,7 +622,30 @@ function judge(html, lang) {
   for (const m of chatRule(html, lang)) f.push(`chat: ${m}`);
   for (const m of sharpRule(html, lang)) f.push(`sharp: ${m}`);
   for (const m of vizRule(html, lang)) f.push(`viz: ${m}`);
+  for (const m of gifRule(html)) f.push(`gif: ${m}`);
   return f;
+}
+
+// ---------- no GIF, no APNG ----------
+// The owner's rule is 60 fps everywhere: «movimiento, videos, gif, todos». An animated image is decoded and paced by the browser, not by the engine, and scripts/v3-fps.mjs cannot see it
+// drop frames; the footage is WebP stills the engine draws itself (seq.ts) and the motion is the effects'. Nothing on /v3 may reference one: not an <img>, not a url() in the styles, not
+// a data: URI, not a path in the data the page ships. (web/test/v3-guard.test.mts also reads public/v3 and the sources.)
+const GIF_RE = /\.(?:gif|apng)(?![\w-])|image\/(?:gif|apng)/i;
+function gifRule(html) {
+  const m = GIF_RE.exec(html);
+  return m ? [`the page references an animated image: «${html.slice(Math.max(0, m.index - 36), m.index + m[0].length + 6).replace(/\s+/g, ' ')}» (no GIF, no APNG: the engine paces the motion, the fps harness measures it)`] : [];
+}
+function gifSelfTest(html) {
+  if (gifRule(html).length) return [0, 0];                           // the real page is judged by the loop below
+  const at = html.indexOf('<section id="c02"'), mut = {
+    'a GIF in an <img>': html.slice(0, at) + '<img src="/v3/lens/a.gif" alt="">' + html.slice(at),
+    'an APNG in a url() of the styles': html.replace('</style>', '.x{background:url(/v3/x.apng)}</style>'),
+    'a GIF as a data: URI': html.replace('<section id="c02"', '<img src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" alt=""><section id="c02"'),
+    'an upper-case path in the data the page ships': html.replace('<script type="application/json" id="v3-data">{', '<script type="application/json" id="v3-data">{"poster":"/v3/p.GIF",'),
+  };
+  let bad = 0;
+  for (const [what, m] of Object.entries(mut)) if (m === html || !gifRule(m).length) { console.error(`FAIL self-test: the no-GIF rule does not catch "${what}"`); bad++; }
+  return [bad, Object.keys(mut).length];
 }
 
 // ---------- the footer plate and the wordmark (/v3 only) ----------
@@ -1145,7 +1168,7 @@ for (const m of fxSource(fxFiles)) { console.error(`FAIL fx: ${m}`); fail++; }
 for (const lang of LANGS) {
   const html = pages.get(`${lang}/none`);
   fail += selfTest(html, lang); mutantCount += mutants(html, lang).length;
-  for (const t of [deltaSelfTest, tokensSelfTest, chatSelfTest, sharpSelfTest, vizSelfTest]) { const [bad, n] = t(html, lang); fail += bad; mutantCount += n; }
+  for (const t of [deltaSelfTest, tokensSelfTest, chatSelfTest, sharpSelfTest, vizSelfTest, gifSelfTest]) { const [bad, n] = t(html, lang); fail += bad; mutantCount += n; }
 }
 for (const lang of LANGS) for (const cc of MARKETS) {
   const tag = `${lang}/${cc ?? 'none'}`, html = pages.get(tag);

@@ -1,12 +1,26 @@
-// Frame sequences: WebP files fetched progressively (nearest the playhead first),
-// decoded to ImageBitmaps on demand inside a small window. Compressed blobs stay
+// Frame sequences: WebP files fetched progressively (nearest the playhead first, the ones in the direction of travel before the ones behind it),
+// decoded to ImageBitmaps on demand inside a small window that leans the way the reader is going. Compressed blobs stay
 // in memory (~20 KB each); decoded bitmaps are bounded so a phone never holds
 // 72 full-size frames at once.
+
+/** The frames to have decoded for a playhead at frame `i0` (the shader blends i0 and i0 + 1) travelling in direction `dir` (+1 forward, -1 backward), most urgent first: the two it
+ *  draws, then the `lead` frames that come next in the direction of travel, then the one it just left. Always inside 0..n-1, never twice. Forward that is i0, i0 + 1, i0 + 2 .. i0 + 5
+ *  and i0 - 1 (the old window had no i0 + 5, and had no mirror: backward it fed i0 - 1 and nothing else), backward it is i0, i0 + 1, i0 - 1 .. i0 - 4 and i0 + 2. Seven frames either
+ *  way, inside the 8 bitmaps a phone keeps (Seq.cap): scrolling back up the hero is as well fed as scrolling down it. */
+export function ahead(i0: number, dir: number, n: number, lead = 4): number[] {
+  const d = dir < 0 ? -1 : 1, out: number[] = [];
+  const add = (j: number) => { if (j >= 0 && j < n && !out.includes(j)) out.push(j); };
+  add(i0); add(i0 + 1);
+  for (let k = 1; k <= lead; k++) add(d > 0 ? i0 + 1 + k : i0 - k);
+  add(d > 0 ? i0 - 1 : i0 + 2);
+  return out;
+}
+
 export class Seq {
   n: number; parts: Array<[string, number]>; variant: 'd' | 'm';
   blobs: (Blob | null)[]; bmp = new Map<number, ImageBitmap>();
   pend = new Set<number>(); queued = false; started = false; loaded = 0;
-  focus = 0; cap: number; fetching = 0;
+  focus = 0; dir = 1; cap: number; fetching = 0;
   onProgress?: () => void;
   /** parts: clips played back to back, e.g. [['n1', 72], ['n2', 72]] (mobile packs have 48 each). */
   constructor(parts: Array<[string, number]>, variant: 'd' | 'm') {
@@ -22,7 +36,7 @@ export class Seq {
   private pump() {
     while (this.fetching < 4) {
       let best = -1, bd = 1e9;
-      for (let i = 0; i < this.n; i++) if (!this.blobs[i] && !this.pend.has(i)) { const d = Math.abs(i - this.focus) + (i < this.focus ? 0.5 : 0); if (d < bd) { bd = d; best = i; } }
+      for (let i = 0; i < this.n; i++) if (!this.blobs[i] && !this.pend.has(i)) { const d = Math.abs(i - this.focus) + ((i - this.focus) * this.dir < 0 ? 0.5 : 0); if (d < bd) { bd = d; best = i; } }
       if (best < 0) return;
       this.pend.add(best); this.fetching++;
       fetch(this.url(best)).then(r => (r.ok ? r.blob() : Promise.reject(r.status))).then(b => { this.blobs[best] = b; this.loaded++; })
@@ -41,10 +55,10 @@ export class Seq {
   }
   private trim() {
     while (this.bmp.size > this.cap) {
-      let far = -1, fd = -1; this.bmp.forEach((_, k) => { const d = Math.abs(k - this.focus); if (d > fd) { fd = d; far = k; } });
+      let far = -1, fd = -1; this.bmp.forEach((_, k) => { const d = Math.abs(k - this.focus) + ((k - this.focus) * this.dir < 0 ? 1.5 : 0); if (d > fd) { fd = d; far = k; } });   // what is behind goes first
       if (far < 0) break; const b = this.bmp.get(far); this.bmp.delete(far); try { b!.close(); } catch { /* */ }
     }
   }
   nearest(i: number) { let best = -1, bd = 1e9; this.bmp.forEach((_, k) => { const d = Math.abs(k - i); if (d < bd) { bd = d; best = k; } }); return best; }
-  setFocus(f: number) { this.focus = f; }
+  setFocus(f: number, dir = 1) { this.focus = f; this.dir = dir < 0 ? -1 : 1; }
 }

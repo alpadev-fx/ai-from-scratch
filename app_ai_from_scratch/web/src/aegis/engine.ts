@@ -10,7 +10,8 @@
 // receives the namespace, so nothing here touches window at import time.
 import type * as ThreeNS from 'three';
 import { A } from './state';
-import type { Seq } from './seq';
+import { ahead, type Seq } from './seq';
+import { createRatchet, WHAT, type Step } from './quality';
 import { clamp, seg } from './util';
 
 type T = typeof ThreeNS;
@@ -44,7 +45,8 @@ export function createEngine(THREE: T, cv: HTMLCanvasElement): GL | null {
   if (!R.capabilities.isWebGL2) return null;
   THREE.ColorManagement.enabled = false;
   R.autoClear = false; R.setPixelRatio(1);
-  const PR = Math.min(A.dpr, 1.5), LOW = A.mobile;
+  let PR = Math.min(A.dpr, 1.5);                                    // the ratchet (quality.ts) can only lower it
+  const LOW = A.mobile, ratchet = createRatchet(PR), Q = { blur: true, ca: true, bloom: true };
   const rt: Record<string, ThreeNS.WebGLRenderTarget> = {};
   let W = 2, H = 2;
   const RT = (w: number, h: number, o: Partial<ThreeNS.RenderTargetOptions> = {}) =>
@@ -142,12 +144,12 @@ export function createEngine(THREE: T, cv: HTMLCanvasElement): GL | null {
   const MF = mk(HEAD + `uniform sampler2D tBase, tB4, tB8, tSt; uniform vec2 res; uniform vec3 bg;
     uniform float ca, mb, grain, vign, bloom, streak, paper, fade;
     ${NOISE}
-    vec3 samp(vec2 u){ vec2 o = (u - 0.5) * ca; return vec3(texture(tBase, u + o).r, texture(tBase, u).g, texture(tBase, u - o).b); }
+    vec3 samp(vec2 u){ if (ca < 0.00002) return texture(tBase, u).rgb; vec2 o = (u - 0.5) * ca; return vec3(texture(tBase, u + o).r, texture(tBase, u).g, texture(tBase, u - o).b); }
     void main(){
       vec2 u = vUv; float asp = res.x / res.y;
       vec3 c;
       if (mb > 0.0004){ c = vec3(0.0); for (int i = 0; i < 7; i++) c += samp(u + vec2(0.0, (float(i)/6.0 - 0.5) * mb)); c /= 7.0; } else c = samp(u);
-      float h = (texture(tB4, u).r * 0.55 + texture(tB8, u).r * 0.85) * bloom + texture(tSt, u).r * streak;
+      float h = (bloom + streak) < 0.0005 ? 0.0 : (texture(tB4, u).r * 0.55 + texture(tB8, u).r * 0.85) * bloom + texture(tSt, u).r * streak;
       if (paper > 0.5) c *= 1.0 - clamp(h * 0.55, 0.0, 0.6);     // dark halo: ink bleeds into the paper
       else c += vec3(h);
       float v = length((vUv - 0.5) * vec2(asp, 1.0) * 0.92);
@@ -178,13 +180,19 @@ export function createEngine(THREE: T, cv: HTMLCanvasElement): GL | null {
     return tex;
   }
   function nearestTex(seq: Seq, i: number) { let best: { tex: ThreeNS.Texture; at: number } | null = null, bd = 1e9; poolOf(seq).forEach((v, k) => { const d = Math.abs(k - i); if (d < bd) { bd = d; best = v; } }); if (best) (best as any).at = clock; return best ? (best as any).tex as ThreeNS.Texture : null; }
+  // the direction the playhead is travelling in, per sequence: the sign of the last real move of the frame index (a hair of noise, 0.02 of a frame, keeps the last direction)
+  const way = new WeakMap<Seq, { f: number; dir: number }>();
+  let drawn = 0, missed = 0;                                       // frames drawn from footage, and how many of them had to show a stand-in for a frame that was not ready (__v3Q)
   function frames(seq: Seq, f: number): [ThreeNS.Texture, ThreeNS.Texture, number] {
     const n = seq.n, i0 = clamp(Math.floor(f), 0, n - 1), i1 = Math.min(n - 1, i0 + 1);
     let fm = clamp(f - i0);
-    seq.setFocus(f);
-    const dir = 1; const pool = poolOf(seq);
-    [i0, i1, i0 + 2 * dir, i0 + 3 * dir, i0 - 1, i0 + 4].forEach(j => { if (j >= 0 && j < n && !pool.has(j)) seq.decode(j); });
+    let w = way.get(seq); if (!w) { w = { f, dir: 1 }; way.set(seq, w); }
+    if (f - w.f > 0.02) { w.dir = 1; w.f = f; } else if (f - w.f < -0.02) { w.dir = -1; w.f = f; }
+    seq.setFocus(f, w.dir);
+    const pool = poolOf(seq);
+    ahead(i0, w.dir, n).forEach(j => { if (!pool.has(j)) seq.decode(j); });
     let t0 = texFor(seq, i0), t1 = texFor(seq, i1);
+    drawn++; if (!t0 || !t1) missed++;
     if (!t0) { t0 = nearestTex(seq, i0); fm = 0; }
     if (!t1) { t1 = t0; fm = 0; }
     return [t0 || BLACK, t1 || BLACK, fm];
@@ -211,14 +219,29 @@ export function createEngine(THREE: T, cv: HTMLCanvasElement): GL | null {
   const show = (on: boolean) => { if (on !== shown) { shown = on; cv.style.visibility = on ? 'visible' : 'hidden'; } };
   const bgc = (): [number, number, number] => (A.paper() ? [0xF2 / 255, 0xF2 / 255, 0xF2 / 255] : [0, 0, 0]);
 
+  // ---- quality ratchet (quality.ts): down only, one step at a time, each one said once ---------------------
+  let lastDraw = 0;
+  function feed() {
+    const t = performance.now(), ms = lastDraw ? t - lastDraw : 0; lastDraw = t;   // time since the previous DRAWN frame: frames the canvas sat out (hidden, another chapter) are not slow frames
+    if (!ms) return;
+    const step = ratchet.frame(ms); if (!step) return;
+    if (step === 'pr125') PR = 1.25; else if (step === 'pr100') PR = 1; else Q[step] = false;
+    if (step === 'pr125' || step === 'pr100') size();
+    document.documentElement.dataset.q = String(ratchet.taken.length);
+    console.info(`[v3] quality ${ratchet.taken.length}/${ratchet.size}: ${WHAT[step]} (this device is not holding the frame rate; it will not go back up this visit)`);
+  }
+  // review hook, read only: the ratchet's state and how often the footage had to show a stand-in frame (scripts/v3-fps.mjs reads it)
+  (globalThis as any).__v3Q = () => ({ q: ratchet.taken.length, steps: [...ratchet.taken], of: ratchet.size, pr: PR, drawn, missed });
+
   function render(dt: number) {
     clock++; uploads = 0;
     const sh = A.shot, t = sh ? clamp(sh.t || 0) : 0;
     let la = sh && sh.a ? fresh(sh.a.id) : null, lb = sh && sh.b ? fresh(sh.b.id) : null;
     let type = la && lb && sh && sh.b ? (TRANS[sh.a.id + '>' + sh.b.id] || 1) : 0;
     if (!la && lb) { la = lb; lb = null; type = 0; }
-    if (!la) { show(false); return; }
+    if (!la) { show(false); lastDraw = 0; return; }
     show(true);
+    feed();
     const u = MB.uniforms, now = A.st.t, paper = A.paper() ? 1 : 0, [r, g, b] = bgc();
     (u.bg.value as ThreeNS.Vector3).set(r, g, b); u.paper.value = paper;
     R.setClearColor(new THREE.Color(r, g, b), 1);
@@ -231,24 +254,26 @@ export function createEngine(THREE: T, cv: HTMLCanvasElement): GL | null {
     // post parameters: the active chapter's, blended into the next one's across a boundary
     const pa = { ...DEF, ...(la.post || {}) }, pb = lb ? { ...DEF, ...(lb.post || {}) } : pa;
     const P = {} as Post; (Object.keys(DEF) as (keyof Post)[]).forEach(k => { P[k] = pa[k] + (pb[k] - pa[k]) * (type ? clamp((t - 0.3) / 0.4) : 0); });
-    MBright.uniforms.tIn.value = rt.base.texture; (MBright.uniforms.px.value as ThreeNS.Vector2).set(0.5 / rt.bright.width, 0.5 / rt.bright.height);
-    MBright.uniforms.thr.value = P.thr; MBright.uniforms.paper.value = paper; (MBright.uniforms.bg.value as ThreeNS.Vector3).set(r, g, b);
-    pass(MBright, rt.bright);
-    const blur = (src: ThreeNS.WebGLRenderTarget, dst: ThreeNS.WebGLRenderTarget, dx: number, dy: number) => { MBlur.uniforms.tIn.value = src.texture; (MBlur.uniforms.dir.value as ThreeNS.Vector2).set(dx / src.width, dy / src.height); pass(MBlur, dst); };
-    blur(rt.bright, rt.b4a, 1, 0); blur(rt.b4a, rt.b4b, 0, 1); blur(rt.b4b, rt.b8a, 1.5, 0); blur(rt.b8a, rt.b8b, 0, 1.5);
-    blur(rt.b8b, rt.s8a, 5, 0); blur(rt.s8a, rt.s8b, 14, 0);
+    if (Q.bloom) {                                                // the halo: the bright pass and six blurs (the last step of the ratchet gives it up)
+      MBright.uniforms.tIn.value = rt.base.texture; (MBright.uniforms.px.value as ThreeNS.Vector2).set(0.5 / rt.bright.width, 0.5 / rt.bright.height);
+      MBright.uniforms.thr.value = P.thr; MBright.uniforms.paper.value = paper; (MBright.uniforms.bg.value as ThreeNS.Vector3).set(r, g, b);
+      pass(MBright, rt.bright);
+      const blur = (src: ThreeNS.WebGLRenderTarget, dst: ThreeNS.WebGLRenderTarget, dx: number, dy: number) => { MBlur.uniforms.tIn.value = src.texture; (MBlur.uniforms.dir.value as ThreeNS.Vector2).set(dx / src.width, dy / src.height); pass(MBlur, dst); };
+      blur(rt.bright, rt.b4a, 1, 0); blur(rt.b4a, rt.b4b, 0, 1); blur(rt.b4b, rt.b8a, 1.5, 0); blur(rt.b8a, rt.b8b, 0, 1.5);
+      blur(rt.b8b, rt.s8a, 5, 0); blur(rt.s8a, rt.s8b, 14, 0);
+    }
     const f = MF.uniforms;
     vS += (Math.abs(A.st.v) - vS) * Math.min(1, dt * 8);
     const pulse = type === 2 ? Math.sin(Math.PI * t) : 0;
     f.tBase.value = rt.base.texture; f.tB4.value = rt.b4b.texture; f.tB8.value = rt.b8b.texture; f.tSt.value = rt.s8b.texture;
     f.paper.value = paper; (f.bg.value as ThreeNS.Vector3).set(r, g, b);
-    f.mb.value = A.rm ? 0 : Math.min(0.024, vS / 110000) * P.mb;
-    f.ca.value = P.ca + Math.min(0.006, vS / 700000) + pulse * 0.006;
-    f.grain.value = P.grain; f.vign.value = P.vign; f.bloom.value = P.bloom; f.streak.value = P.streak;
+    f.mb.value = A.rm || !Q.blur ? 0 : Math.min(0.024, vS / 110000) * P.mb;
+    f.ca.value = Q.ca ? P.ca + Math.min(0.006, vS / 700000) + pulse * 0.006 : 0;
+    f.grain.value = P.grain; f.vign.value = P.vign; f.bloom.value = Q.bloom ? P.bloom : 0; f.streak.value = Q.bloom ? P.streak : 0;
     pass(MF, null);
   }
   function resize() { size(); (MB.uniforms.res.value as ThreeNS.Vector2).set(innerWidth, innerHeight); (MF.uniforms.res.value as ThreeNS.Vector2).set(innerWidth, innerHeight); }
   resize(); addEventListener('resize', resize);
-  return { R, THREE, PR, LOW, set(id, l) { l.at = A.st.t; st[id] = l; }, render, resize, newRT: (w, h, s = 0) => RT(w, h, { depthBuffer: true, samples: s }), size: () => [W, H], bg: bgc };
+  return { R, THREE, get PR() { return PR; }, LOW, set(id, l) { l.at = A.st.t; st[id] = l; }, render, resize, newRT: (w, h, s = 0) => RT(w, h, { depthBuffer: true, samples: s }), size: () => [W, H], bg: bgc };
 }
 export const _seg = seg;

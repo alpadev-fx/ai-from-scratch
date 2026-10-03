@@ -10,6 +10,8 @@ import { KU, LAP, lap, lit } from '../src/aegis/fx/wordmark-phase.ts';
 import { chipStrings, type ChipSources } from '../src/aegis/token-strings.ts';
 import { piecesOf, show, wordsOf, type TokenFile } from '../src/aegis/tokens.ts';
 import { ANSWERS, CURVE, DIALS, END, NODES, NODE_BUDGET, T, TRACK_NODES, VIZ, WEIGHTS, curveOf, dialAngles, figureInts, stackOf, weightHeights } from '../src/aegis/c05-data.ts';
+import { DEFAULTS, LADDER, WHAT, createRatchet, type Step } from '../src/aegis/quality.ts';
+import { ahead } from '../src/aegis/seq.ts';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 
 test('guard throws on a city, on plural courses, and lets the tokenizer sentence through', () => {
@@ -629,4 +631,126 @@ test('chapter 02: no avatar, no visible YOU / AI label, nobody else\'s mark: the
   assert.equal((sec.match(/<span class="sr">\{V\.chat(?:Tu|Ia)\}<\/span>/g) ?? []).length, 5, 'the labels are sr-only spans: the first instruction of window 2, then a pill and an answer in each of the two branches of the markup (window 2 inside its bracket, the others without)');
   const sr = /\.sr\{([^}]*)\}/.exec(css)?.[1] ?? '';
   assert.ok(/position:absolute/.test(sr) && /width:1px/.test(sr) && /clip:rect\(0 0 0 0\)/.test(sr), '.sr is the visually-hidden pattern');
+});
+
+// ---------- the 60 fps pass: the engine's quality ratchet, the footage's decode window, no GIF ----------
+/** Feed a ratchet `n` frames of `ms` each and return the steps it asked for, with the frame each came at. */
+const feed = (r: ReturnType<typeof createRatchet>, n: number, ms: number | ((i: number) => number)) => {
+  const out: Array<[number, Step]> = [];
+  for (let i = 0; i < n; i++) { const st = r.frame(typeof ms === 'function' ? ms(i) : ms); if (st) out.push([i, st]); }
+  return out;
+};
+
+test('quality ratchet: a device that cannot hold the frame rate gives up one step at a time, in order, each once, and the ladder stops', () => {
+  const r = createRatchet(1.5);
+  assert.deepEqual([...LADDER], ['pr125', 'pr100', 'blur', 'ca', 'bloom']); assert.equal(r.size, 5);
+  const steps = feed(r, 3000, 40);                                  // 25 fps for 2 minutes
+  assert.deepEqual(steps.map((x) => x[1]), [...LADDER], 'every step, in the order of the ladder, once');
+  assert.deepEqual([...r.taken], [...LADDER]); assert.ok(r.done);
+  assert.equal(r.frame(40), null, 'nothing is left to give up');
+  // it is not in a hurry: it waits out the warm-up first, and every step has `settle` frames to be judged on its own
+  assert.ok(steps[0][0] >= DEFAULTS.warm + DEFAULTS.win, `the first step came at frame ${steps[0][0]}, after the warm-up and a full window`);
+  for (let i = 1; i < steps.length; i++) assert.ok(steps[i][0] - steps[i - 1][0] >= DEFAULTS.settle + DEFAULTS.win, `steps ${i - 1} and ${i} are ${steps[i][0] - steps[i - 1][0]} frames apart`);
+  // the names the console says
+  for (const s of LADDER) assert.ok(WHAT[s].length > 5, `${s} has a name`);
+});
+
+test('quality ratchet: it never goes back up, and one hitch is not a slow device', () => {
+  const r = createRatchet(1.5);
+  feed(r, 400, 40); assert.ok(r.taken.length >= 2);
+  const before = [...r.taken];
+  assert.deepEqual(feed(r, 5000, 8), [], 'a device that recovered is left where it is: no step comes back');
+  assert.deepEqual([...r.taken], before);
+  // 60 fps with one 250 ms hitch in every window of 60 frames (a decode, a GC): neither the average nor the share of slow frames moves enough
+  const h = createRatchet(1.5);
+  assert.deepEqual(feed(h, 6000, (i) => (i % 60 === 30 ? 250 : 16.7)), [], 'one hitch per window is not a reason to give anything up');
+  // the same device with three of them in every window is
+  const bad = createRatchet(1.5);
+  assert.ok(feed(bad, 6000, (i) => (i % 20 === 10 ? 250 : 16.7)).length >= 1, 'three hitches per window is');
+  // 60 fps with the odd dropped frame (33 ms, one in 30) is a healthy device
+  const ok = createRatchet(1.5);
+  assert.deepEqual(feed(ok, 6000, (i) => (i % 30 === 0 ? 33.3 : 16.7)), []);
+  // one frame in five dropped (about 48 fps) is not
+  const slow = createRatchet(1.5);
+  assert.ok(feed(slow, 3000, (i) => (i % 5 === 0 ? 33.3 : 16.7)).length >= 1);
+});
+
+test('quality ratchet: a step that would do nothing on this device is not a step, and a pause is not a slow device', () => {
+  assert.deepEqual([...createRatchet(1).taken], []); assert.equal(createRatchet(1).size, 3, 'a 1x screen starts at the motion blur');
+  assert.equal(createRatchet(1.25).size, 4); assert.equal(createRatchet(1.5).size, 5); assert.equal(createRatchet(1.75).size, 5);
+  assert.deepEqual(feed(createRatchet(1), 3000, 40).map((x) => x[1]), ['blur', 'ca', 'bloom']);
+  assert.deepEqual(feed(createRatchet(1.25), 3000, 40).map((x) => x[1]), ['pr100', 'blur', 'ca', 'bloom']);
+  // a hidden tab: every gap is a few seconds. The history is cleared each time, so it never fills
+  assert.deepEqual(feed(createRatchet(1.5), 500, 5000), []);
+  // numbers that are not times are not frames
+  const r = createRatchet(1.5);
+  assert.deepEqual(feed(r, 500, () => NaN).concat(feed(r, 500, -1)), []);
+  // random streams: never more than one step per frame, never a step twice, always a prefix of the ladder
+  let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (let k = 0; k < 40; k++) {
+    const q = createRatchet(rnd() < 0.5 ? 1.5 : 1), mean = 10 + rnd() * 40; const got: Step[] = [];
+    for (let i = 0; i < 2500; i++) { const st = q.frame(Math.max(1, mean * (0.5 + rnd()))); if (st) got.push(st); }
+    assert.deepEqual(got, [...q.taken]); assert.equal(new Set(got).size, got.length);
+    assert.deepEqual(got, LADDER.filter((x) => got.includes(x)).slice(0, got.length), 'in the order of the ladder');
+  }
+});
+
+test('the engine feeds the ratchet only the frames it drew, lowers the pixel ratio and nothing else in the same breath, says each step once and lets nothing raise it', () => {
+  const src = readFileSync(new URL('../src/aegis/engine.ts', import.meta.url), 'utf8'), code = src.replace(/\/\/.*$/gm, '');
+  assert.ok(/const step = ratchet\.frame\(ms\)/.test(code) && /if \(!la\) \{ show\(false\); lastDraw = 0; return; \}\s*show\(true\);\s*feed\(\);/.test(code), 'only drawn frames are fed, and a frame the canvas sat out breaks the interval');
+  const assigns = [...code.matchAll(/\bPR = ([^;]+);/g)].map((m) => m[1].trim());
+  assert.deepEqual(assigns.sort(), ['1', '1.25', 'Math.min(A.dpr, 1.5)'].sort(), 'PR is set once from the display and then only ever to 1.25 or 1');
+  assert.equal((code.match(/console\.info\(`\[v3\] quality/g) ?? []).length, 1, 'one line says every step (it runs once per step: the ratchet gives each step once)');
+  assert.ok(/Q\.bloom\) \{/.test(code) && /Q\.ca \?/.test(code) && /!Q\.blur \?/.test(code), 'the three effects the ladder gives up are the ones switched by Q');
+  assert.ok(!/Q\.(?:blur|ca|bloom) = true/.test(code.slice(code.indexOf('function feed'))), 'nothing turns a given-up effect back on');
+  assert.ok(/get PR\(\) \{ return PR; \}/.test(code), 'the engine hands out its CURRENT pixel ratio');
+  const llm = readFileSync(new URL('../src/aegis/llm.ts', import.meta.url), 'utf8');
+  assert.ok(/uPR\.value = gl\.PR/.test(llm), 'the chapter that sizes points by the pixel ratio follows it');
+  assert.ok(/dataset\.q = String\(ratchet\.taken\.length\)/.test(code), 'the step the visit is at is on <html data-q> (the fps harness reads it)');
+});
+
+test('footage decode window: it leans the way the reader is going, in both directions, and stays inside the pack and the bitmaps a phone keeps', () => {
+  assert.deepEqual(ahead(10, 1, 128), [10, 11, 12, 13, 14, 15, 9], 'forward: the pair, four ahead, the one just left');
+  assert.deepEqual(ahead(10, -1, 128), [10, 11, 9, 8, 7, 6, 12], 'backward: the mirror');
+  assert.deepEqual(ahead(0, -1, 128), [0, 1, 2], 'at the start going back there is nothing behind the pair but the one it just left');
+  assert.deepEqual(ahead(127, 1, 128), [127, 126], 'at the end going forward');
+  assert.deepEqual(ahead(126, 1, 128), [126, 127, 125]);
+  for (const dir of [1, -1]) for (const n of [1, 2, 48, 128]) for (let i = 0; i < n; i++) {
+    const w = ahead(i, dir, n);
+    assert.equal(new Set(w).size, w.length, 'no frame twice'); assert.ok(w.every((j) => j >= 0 && j < n), 'inside the pack'); assert.ok(w.length <= 8, 'inside the 8 bitmaps a phone keeps');
+    assert.equal(w[0], i, 'the frame it draws comes first'); if (i + 1 < n) assert.equal(w[1], i + 1, 'then the one it blends with');
+  }
+  const seq = readFileSync(new URL('../src/aegis/seq.ts', import.meta.url), 'utf8').replace(/\/\/.*$/gm, ''), eng = readFileSync(new URL('../src/aegis/engine.ts', import.meta.url), 'utf8').replace(/\/\/.*$/gm, '');
+  assert.ok(/ahead\(i0, w\.dir, n\)/.test(eng) && /seq\.setFocus\(f, w\.dir\)/.test(eng), 'the engine asks for the window of the direction it measured');
+  assert.ok(!/const dir = 1;/.test(eng), 'no direction hard-wired to forward');
+  assert.ok(/\(i - this\.focus\) \* this\.dir < 0/.test(seq) && /\(k - this\.focus\) \* this\.dir < 0/.test(seq), 'the fetch order and the eviction order both know which frames are behind');
+  // the rule can fail: the old window had one frame behind it and nothing mirrored
+  const old = (i0: number, dir: number) => [i0, i0 + 1, i0 + 2 * dir, i0 + 3 * dir, i0 - 1, i0 + 4];
+  assert.notDeepEqual(old(10, -1).slice().sort((a, b) => a - b), ahead(10, -1, 128).slice().sort((a, b) => a - b));
+});
+
+test('no GIF, no APNG: not a file under public/v3, not a reference in the page, its styles or its scripts', () => {
+  const walk = (d: URL): string[] => readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(new URL(`${e.name}/`, d)) : [new URL(e.name, d).pathname]));
+  const files = walk(new URL('../public/v3/', import.meta.url));
+  assert.ok(files.length > 100, `the media are found (${files.length})`);
+  assert.deepEqual(files.filter((f) => /\.(?:gif|apng)$/i.test(f)), [], 'no GIF or APNG file under public/v3');
+  assert.ok(files.every((f) => /\.(?:webp|jpg|jpeg|png|svg|json|woff2?)$/i.test(f)), `every file under public/v3 is a still or a font (${[...new Set(files.map((f) => f.split('.').pop()))]})`);
+  const src = ['../src/pages/v3.astro', '../src/aegis/v3.css', '../src/aegis/main.ts', '../src/aegis/seq.ts', '../src/aegis/engine.ts'].map((f) => readFileSync(new URL(f, import.meta.url), 'utf8')).join('\n');
+  assert.ok(!/\.gif\b|\.apng\b|image\/(?:gif|apng)/i.test(src), 'no reference to one in the sources');
+  // the rule can fail
+  assert.ok(/\.gif\b/i.test('<img src="/v3/a.gif">') && /image\/apng/i.test('data:image/apng;base64,AA'));
+});
+
+test('the two hitches the fps pass found stay fixed (chapter 06 samples its words as a job, one step a frame; chapter L compiles its shader before it is seen), and the harness is wired', () => {
+  const c06 = readFileSync(new URL('../src/aegis/fx/c06.ts', import.meta.url), 'utf8').replace(/\/\/.*$/gm, ''), llm = readFileSync(new URL('../src/aegis/llm.ts', import.meta.url), 'utf8').replace(/\/\/.*$/gm, '');
+  assert.ok(/const build = function\* \(\): Generator<void>/.test(c06), 'the sampling of the words is a generator');
+  assert.ok(/job\.next\(\)\.done/.test(c06) && /if \(!job\) job = build\(\);/.test(c06), 'and a frame pumps ONE step of it');
+  assert.equal((c06.match(/\bbuild\(\)/g) ?? []).length, 1, 'nothing runs the whole sampling in one go: the only call makes the job');
+  assert.ok(/!built && A\.st\.y \+ A\.H \* 3\.5 > top\) pump\(\);/.test(c06), 'it is the frame that pumps it, from 3.5 screens before the chapter');
+  assert.ok(/built = false; job = null;/.test(c06), 'a new layout drops a half-built job');
+  assert.ok(/R\.compileAsync\(scene, cam\)/.test(llm) && /ch\.warm = /.test(llm), 'chapter L compiles its shader (async) when it warms, not in the frame it first draws');
+  assert.ok(/if \(R\.extensions\.has\('KHR_parallel_shader_compile'\)\) R\.compileAsync/.test(llm), 'and only where the browser can compile in parallel (Firefox cannot: asking would only put a warning in its console)');
+  const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { scripts: Record<string, string> };
+  assert.equal(pkg.scripts['fps:v3'], 'node scripts/v3-fps.mjs');
+  assert.ok(/fps:v3/.test(readFileSync(new URL('../../RUNBOOK.md', import.meta.url), 'utf8')), 'the RUNBOOK says how to run it');
 });

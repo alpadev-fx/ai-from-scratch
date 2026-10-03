@@ -188,12 +188,16 @@ export function initLLM(gl: GL) {
   const _q = V3(), _ea = V3(), _eb = V3();          // reused: the arcs run every frame and must not allocate
 
   ch.resize = () => { lastW = 0; };
+  // the programs of this scene (points, squares, lines, the ring, the glow sprite) are compiled when the chapter comes near, in parallel with the page (KHR_parallel_shader_compile), not in
+  // the frame that first draws it: compiled there they were one frame of 20+ ms on a throttled CPU, felt as the chapter began. A browser without the extension (Firefox) is left as it was:
+  // asking three for it anyway would put a warning in its console and compile on the main thread, which is what the first draw does
+  ch.warm = () => { if (R.extensions.has('KHR_parallel_shader_compile')) R.compileAsync(scene, cam).catch(() => { /* the first draw compiles them, as it always did */ }); };
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { lastW = 0; });      // the chips' widths and the copy's height are those of the loaded fonts
   ch.frame = (pRaw, dt, t) => {
     const p = pRaw * END;
     theme();
     if (lastW !== A.W || lastH !== A.H) { lastW = A.W; lastH = A.H; measure(); }
-    uTime.value = t;
+    uTime.value = t; uPR.value = gl.PR;                  // the quality ratchet may have lowered the pixel ratio: a point keeps its size in CSS px
     const mob = A.mobile, s = S(), paper = A.paper();
     // ----- copy + panels
     head.set(seg(p, 0, 0.07), seg(p, 0.1, 0.15));

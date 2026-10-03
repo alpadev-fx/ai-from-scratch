@@ -30,7 +30,7 @@ export function initC02() {
       for (const q of Array.from(r.getClientRects())) {
         if (q.width < 2) continue;
         const i = el('i', 'sk'); i.setAttribute('aria-hidden', 'true');
-        i.style.setProperty('--x', (q.left - o.left).toFixed(2) + 'px'); i.style.setProperty('--y', (q.top - o.top + q.height * 0.58).toFixed(2) + 'px'); i.style.setProperty('--w', q.width.toFixed(2) + 'px');
+        i.style.setProperty('--fx-x', (q.left - o.left).toFixed(2) + 'px'); i.style.setProperty('--fx-y', (q.top - o.top + q.height * 0.58).toFixed(2) + 'px'); i.style.setProperty('--fx-w', q.width.toFixed(2) + 'px');
         b.ia.appendChild(i); b.sk.push(i);
       }
     };
@@ -48,7 +48,7 @@ export function initC02() {
       const tl = gsap.timeline({ onComplete: () => settle(b) }); b.tl = tl; REG['c02:' + b.i] = tl;
       tl.call(() => {                                                    // the overlay starts after the «IA» label, as the answer does
         const who = $('.who', b.ia), w = who ? who.getBoundingClientRect().width + (parseFloat(getComputedStyle(who).marginRight) || 0) : 0;
-        sp.style.setProperty('--w', w.toFixed(2) + 'px'); b.ia.appendChild(ty); b.el.dataset.fxS = 'type';
+        sp.style.setProperty('--fx-w', w.toFixed(2) + 'px'); b.ia.appendChild(ty); b.el.dataset.fxS = 'type';
       });
       tl.to(tt, { duration: dur, ease: 'none', scrambleText: { text: b.text, chars: SCR, speed: 0.85, revealDelay: 0.1 } });
       tl.call(() => { b.el.dataset.fxS = 'strike'; ty.remove(); b.ty = undefined; strikes(b); });

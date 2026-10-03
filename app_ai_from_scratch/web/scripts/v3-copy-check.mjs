@@ -17,7 +17,7 @@
 //     clip-path and filter, pre-arm only what is below the fold, and are built after html.fxl and undone with it (main.ts).
 // Before it judges the real pages it proves, on MUTATED copies of the page, that every one of these rules CAN fail (and that the
 // two exemptions stay narrow). If the page cannot be fetched or a self-test cannot fail, the gate FAILS: it never skips.
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { STR } from '../src/lib/i18n.ts';
 import { PRECIO_VISUAL, PRECIO_TEXTO } from '../src/lib/price.ts';
 import { preguntas, modulos, candidatos } from '../src/data/landing.ts';
@@ -37,9 +37,10 @@ const LEGACY = ['especimenes', 'indice', 'ventajas', 'quien', 'vivo', 'precio', 
 // goes missing makes its effect throw at attach (the chapter stays static, with a console warning): this catches it before it ships.
 const FX_HOOKS = {
   c02: { fx: 'type-strike', hooks: [['data-chat', 1], ['data-beat', 3], ['data-type', 3], ['data-strike', 3], ['data-tag', 3]] },
+  c03: { fx: 'lens', hooks: [['data-lens', 3]] },
 };
 // the parts that exist only because an effect added them (they must hang on html.fxl) · the selectors that name the copy of an effect chapter · what hides it
-const FX_ONLY = /\.(?:sk|ty|sp)\b|\[data-fx-/;
+const FX_ONLY = /\.(?:sk|ty|sp|lens|lc|lr)\b|\[data-fx-/;
 const FX_COPY = /\.(?:rp|tag|you|ia|who|shout|bt|beat|chat|trio|tri|figs|fig|big|cap|ie|nots|hx|ctr|specs|srow|tcopy|lede|clock)\b|\bs\[data-word\]|\bdt\b|\bdd\b|#c0[2-7]\b/;
 const FX_HIDES = /(?:^|;)\s*(?:opacity\s*:\s*0(?![.\d])|visibility\s*:\s*hidden|display\s*:\s*none|clip-path\s*:|color\s*:\s*transparent|font-size\s*:\s*0\b|transform\s*:\s*scale\(0\b)/;
 const CTA_CHAPTERS = ['c03', 'c07', 'c10', 'c11'];       // CTA rows with the price label + the guarantee line; c14 has its in-card button; c16 closes
@@ -296,6 +297,18 @@ function judge(html, lang) {
     const beats = ch.c02.html.split(/\sdata-beat=/).slice(1);
     for (const [i, b] of beats.entries()) for (const hook of ['data-type', 'data-tag']) if ((b.match(new RegExp(`\\s${hook}(?=[\\s=>])`, 'g')) ?? []).length !== 1) f.push(`fx: #c02 beat ${i + 1} does not carry exactly one ${hook}`);
   }
+  // each card names a footage pack that is really in public/v3/lens (a name with no file would be a lens that never opens, and nothing would say so)
+  const packs = [...ch.c03.html.matchAll(/\sdata-lens="([^"]*)"/g)].map((m) => m[1]);
+  if (packs.join() !== 'v1,v2,n5') f.push(`fx: #c03's lens packs are [${packs}], expected v1,v2,n5 (V1 the report, V2 the gears, N5 the knobs)`);
+  for (const id of packs) if (!existsSync(new URL(`../public/v3/lens/${id}.webp`, import.meta.url))) f.push(`fx: #c03 names the lens pack "${id}" but public/v3/lens/${id}.webp does not exist`);
+  // the effects' custom properties live in their own namespace: a bare --lg (the logo size) once resized the header brand when an effect reused the name
+  for (const r of rules) if (/\bhtml\.fxl\b/.test(r.sel)) for (const m of r.body.matchAll(/(?:^|;)\s*(--[\w-]+)\s*:/g)) if (!m[1].startsWith('--fx-')) f.push(`fx: "${r.sel}" declares ${m[1]}: a custom property of the effects must start with --fx- (it would collide with the page's own)`);
+  // everything in the stage-2B block of v3.css must hang on a part that only an effect adds (a class it creates, an attribute it sets) or be a --fx- variable: a rule
+  // on a plain element would stay after dispose() and change the static chapter it gives back (.ia{position:relative} did)
+  const b2at = css.indexOf('STAGE 2B · chapter effects');
+  if (b2at < 0) f.push('fx: the stage-2B block of v3.css is gone');
+  else for (const r of [...css.slice(css.lastIndexOf('/*', b2at)).replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ sel: m[1].trim(), body: m[2] })))
+    if (!r.sel.startsWith('@') && !r.sel.split(',').every((sel) => FX_ONLY.test(sel)) && !r.body.split(';').filter((d) => d.trim()).every((d) => /^\s*--fx-/.test(d))) f.push(`fx: "${r.sel}" is in the stage-2B block but styles an element no effect owns (it would outlive dispose())`);
   for (const r of rules) for (const sel of r.sel.split(',').map((x) => x.trim())) {
     if (FX_ONLY.test(sel) && !/\bhtml\.fxl\b/.test(sel)) f.push(`fx: "${sel}" styles a part that only an effect adds, but is not keyed to html.fxl`);
     if (FX_COPY.test(sel) && FX_HIDES.test(r.body) && !(/\bhtml\.fxl\b/.test(sel) && /\[data-fx-/.test(sel))) f.push(`fx: "${sel}" hides the copy of an effect chapter by default (only html.fxl [data-fx-…], an attribute the armed effect sets, may)`);
@@ -402,6 +415,13 @@ function mutants(html, lang) {
     ['the typed answer hidden under html.fxl without the armed attribute', html.replace('html.fxl [data-fx-s="arm"] .rp,', 'html.fxl .rp,'), /fx: "html\.fxl \.rp" hides the copy/],
     ['a CSS rule that hides a lesson tag by default', html.replace('</head>', '<style>.tag{opacity:0}</style></head>'), /fx: "\.tag" hides the copy/],
     ['a CSS rule that makes a figure transparent by default', html.replace('</head>', '<style>.clock .ctr b{color:transparent}</style></head>'), /fx: "\.clock \.ctr b" hides the copy/],
+    ['chapter 03 without its data-fx name', html.replace('data-fx="lens"', 'data-fx="x"'), /fx: #c03 lost its data-fx/],
+    ['a chapter 03 card without its footage hook', html.replace(' data-lens="n5"', ''), /fx: #c03 has 2 data-lens|fx: #c03's lens packs/],
+    ['a chapter 03 card naming a pack that does not exist', html.replace('data-lens="n5"', 'data-lens="zz"'), /fx: #c03 names the lens pack "zz"/],
+    ['chapter 03 packs in another order', html.replace('data-lens="v1"', 'data-lens="__"').replace('data-lens="v2"', 'data-lens="v1"').replace('data-lens="__"', 'data-lens="v2"'), /fx: #c03's lens packs are \[v2,v1,n5\]/],
+    ['the lens ring styled without html.fxl', html.replace('html.fxl .lr{', '.lr{'), /fx: "\.lr" styles a part that only an effect adds/],
+    ['a stage-2B rule on a plain element (it would outlive dispose)', html.replace('html.fxl [data-fx-s] .ia{position:relative}', 'html.fxl .ia{position:relative}'), /fx: "html\.fxl \.ia" is in the stage-2B block but styles an element no effect owns/],
+    ['the lens glow back on the logo-size custom property', html.replace('html.fxl{--fx-glow:', 'html.fxl{--lg:'), /fx: "html\.fxl" declares --lg/],
     ['chapter 02 with the pin class in the markup', html.replace('<section id="c02" class="sec cx s02"', '<section id="c02" class="sec cx s02 pin"'), /layout: #c02 carries the effects' `pin` class/],
     ['no noindex', html.replace(/<meta name="robots"[^>]*>/, ''), /meta: no noindex/],
     ['a Meta Pixel', html.replace('</head>', '<script>fbq("init")</script></head>'), /meta: Meta Pixel/],
@@ -499,8 +519,8 @@ function engineBootSelfTest(src) {
 // The effects are code that touches a page whose copy is its own gate's business. They write no copy (text comes from the DOM), they animate only transform,
 // opacity, clip-path and filter (layout is CSS under html.fxl, decided once at attach), and an effect that pre-arms something (hides it, waiting) does it only to
 // what is below the fold. `files` is { 'c02.ts': source, ... }.
-const FX_PREARM = ['c02.ts'];                                        // modules that arm pre-states for play-once effects: they must ask belowFold() first
-const FX_MODULES = ['index.ts', 'common.ts', 'c02.ts'];
+const FX_PREARM = ['c02.ts', 'c03.ts'];                              // modules that arm pre-states for play-once effects: they must ask belowFold() first
+const FX_MODULES = ['index.ts', 'common.ts', 'c02.ts', 'c03.ts'];
 const ANIMATED = new Set(['transform', 'opacity', 'clipPath', 'filter', 'willChange']);
 function fxSource(files) {
   const f = [];
@@ -511,7 +531,10 @@ function fxSource(files) {
     if (/\b(?:createTextNode|insertAdjacentText|insertAdjacentHTML|document\.write)\s*\(/.test(code)) f.push(`${name}: writes text or markup into the page (an effect adds empty, aria-hidden parts only)`);
     if (/\bel\(\s*['"][a-z0-9]+['"]\s*,\s*(?:['"][^'"]*['"]|undefined|null)\s*,\s*['"`]/.test(code)) f.push(`${name}: builds an element with literal content`);
     for (const m of code.matchAll(/\.style\.(\w+)\s*=(?!=)/g)) if (!ANIMATED.has(m[1])) f.push(`${name}: sets style.${m[1]} (an effect changes transform, opacity, clip-path and filter; layout is CSS under html.fxl)`);
-    for (const m of code.matchAll(/\.style\.setProperty\(\s*['"`]([^'"`]*)/g)) if (!m[1].startsWith('--') && !['transform', 'opacity', 'clip-path', 'filter', 'will-change'].includes(m[1])) f.push(`${name}: sets the CSS property ${m[1]} (an effect changes transform, opacity, clip-path and filter)`);
+    for (const m of code.matchAll(/\.style\.setProperty\(\s*['"`]([^'"`]*)/g)) {
+      if (m[1].startsWith('--')) { if (!m[1].startsWith('--fx-')) f.push(`${name}: sets the custom property ${m[1]}: the effects' own start with --fx- (a bare name can collide with the page's, as --lg did)`); }
+      else if (!['transform', 'opacity', 'clip-path', 'filter', 'will-change'].includes(m[1])) f.push(`${name}: sets the CSS property ${m[1]} (an effect changes transform, opacity, clip-path and filter)`);
+    }
     if (/\bclassList\.(?:add|toggle)\(\s*['"](?:fx|fxl|ready|eng-off|nogl|rm)['"]/.test(code)) f.push(`${name}: switches an engine mode class (only main.ts decides the mode)`);
   }
   for (const name of FX_PREARM) if (typeof files[name] === 'string' && !/\bbelowFold\(/.test(files[name])) f.push(`${name}: arms a pre-state without asking belowFold() (a section in view or above must stay final)`);
@@ -529,6 +552,9 @@ function fxSourceSelfTest(files) {
     ['a layout property animated (style.width)', { ...files, 'c02.ts': files['c02.ts'].replace('export function initC02', "document.body.style.width = '1px';\nexport function initC02") }, /sets style\.width/],
     ['a layout property animated (style.top)', { ...files, 'c02.ts': files['c02.ts'].replace('export function initC02', "document.body.style.top = '1px';\nexport function initC02") }, /sets style\.top/],
     ['a layout property set with setProperty', { ...files, 'c02.ts': files['c02.ts'].replace('export function initC02', "document.body.style.setProperty('height', '1px');\nexport function initC02") }, /sets the CSS property height/],
+    ['a custom property of the page reused (--lg)', { ...files, 'c02.ts': files['c02.ts'].replace('export function initC02', "document.body.style.setProperty('--lg', '1px');\nexport function initC02") }, /sets the custom property --lg/],
+    ['a template literal written into the page', { ...files, 'c03.ts': files['c03.ts'].replace('export function initC03', "document.body.innerHTML = `<b>${1}</b>`;\nexport function initC03") }, /writes a string literal/],
+    ['a pre-state armed without belowFold() (chapter 03)', { ...files, 'c03.ts': files['c03.ts'].replace('l.armed = belowFold(l.tri);', 'l.armed = true;') }, /c03\.ts: arms a pre-state without asking belowFold/],
     ['an engine mode class switched by an effect', { ...files, 'c02.ts': files['c02.ts'].replace('export function initC02', "document.documentElement.classList.add('nogl');\nexport function initC02") }, /switches an engine mode class/],
     ['a pre-state armed without belowFold()', { ...files, 'c02.ts': files['c02.ts'].replace('if (!belowFold(b.el)) continue;', '') }, /arms a pre-state without asking belowFold/],
     ['a module gone', { ...files, 'c02.ts': undefined }, /c02\.ts: the module is missing/],

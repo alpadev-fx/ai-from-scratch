@@ -3,8 +3,9 @@
 // missing from the markup, anything that throws) is undone and says so in the console, and its chapter stays the static one; the others and the engine go on.
 import { effect, REG, type Fx } from './common';
 import { initC02 } from './c02';
+import { initC03 } from './c03';
 
-const CHAPTERS: Array<[string, () => Fx]> = [['c02', initC02]];
+const CHAPTERS: Array<[string, () => Fx]> = [['c02', initC02], ['c03', initC03]];
 
 export function initFx(): Fx {
   const live: Fx[] = [];

@@ -4,8 +4,8 @@
 // the render (like a stale price does) instead of drawing something else. Everything else a drawing shows (the other options of a bar, the angle of a dial, the height of a weight) is a
 // drawing, and the card says so: every drawing carries ILUSTRATIVO.
 
-/** The drawing of each of the six cards, in order. Card 5 («3 palabras = 5 tokens») has none yet: the real o200k tokens of its sentence are 4, not 5, and the owner has not decided what the
- *  card should say. It stays the static card it was until then. */
+/** The drawing of each of the six cards, in order. Card 5 («3 palabras = 4 tokens», the real o200k count of its sentence by the owner's decision of 2026-10-04; it
+ *  read 5 before) has none yet. It stays the static card it was until a drawing is made for it. */
 export const VIZ = ['eg', 'curve', 'dials', 'freeze', null, 'stack'] as const;
 export type VizKind = Exclude<(typeof VIZ)[number], null>;
 

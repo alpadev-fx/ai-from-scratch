@@ -119,7 +119,7 @@ const tagParts = (tag: string): [string, string] => {
   if (k < 1) throw new Error(`[v3] a chapter 02 tag has no « → LESSON» part to link: «${tag}»`);
   return [tag.slice(0, k), tag.slice(k + 3)];
 };
-// The size class of a figure comes from its length, not from the eye: «1 vez» is 5 characters and «3 palabras = 5 tokens» is 21.
+// The size class of a figure comes from its length, not from the eye: «1 vez» is 5 characters and «3 palabras = 4 tokens» is 21.
 const escala = (k: string): string => (k.length <= 6 ? 'k-xs' : k.length <= 10 ? 'k-s' : k.length <= 15 ? 'k-m' : 'k-l');
 // 10 · the offer stack: the five Hormozi items, «lo que publique después» (its description is the published vivoV), the guarantee.
 const offer = [
@@ -375,7 +375,7 @@ setTimeout(function(){
      (.pstage is the wrapper its pinned stage is made of: it has no style until the engine adds `pin` to the section).
      A card is the figure and what it measures (eyebrow, number, caption, lesson number) and nothing else: each lesson's title and description are
      chapter 09's, and saying them twice on the way down only made the page longer. Under the figure of five of the six sits a drawing of the process it measures (V3Viz, aria-hidden,
-     ILUSTRATIVO; card 5 has none until the owner decides what «3 palabras = 5 tokens» says: the real o200k tokens of its sentence are 4). The HUD label is this chapter's heading (h2). ===== -->
+     ILUSTRATIVO; card 5 has none yet: it reads «3 palabras = 4 tokens», the real o200k count of its sentence, by the owner's decision of 2026-10-04). The HUD label is this chapter's heading (h2). ===== -->
 <section id="c05" class="sec cx figs-sec" aria-labelledby="c05n" data-fx="track">
   <div class="pstage">
     <div class="sh"><h2 class="sn" id="c05n">■ {label('05', V.ch05)}</h2><div class="sx">{cnt('05')}</div></div>

@@ -319,7 +319,7 @@ function sharpSelfTest(html, lang) {
 // ---------- chapter 05: a drawing of the process under five of the six figures ----------
 // The owner's brief: the figures stop being only numbers: each card shows the process it measures, as a small motion graphic in the same square, flat, hairline language, and what is not
 // measured says ILUSTRATIVO. A drawing has no text of its own; every number it draws from its card (the curve's three values, the first segment of the stacked bar and the 100 it adds up to)
-// comes FROM the card's figure; nothing in it is round; and card 5 («3 palabras = 5 tokens») has none until the owner decides what it says: the real o200k tokens of its sentence are 4, not 5.
+// comes FROM the card's figure; nothing in it is round; and card 5 («3 palabras = 4 tokens», the real o200k count since the owner's decision of 2026-10-04) has none yet.
 const C05_KINDS = ['eg', 'curve', 'dials', 'freeze', null, 'stack'];
 const C05_CSS = /(?:^|[\s,>+~])(?:\.viz|\.fig|\.figs|\.big|\.cap|\.ie)(?![\w-])|\.vz-[\w-]+|\.vx(?![\w-])|\[data-viz/;
 function vizRule(html, lang) {

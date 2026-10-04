@@ -14,7 +14,7 @@ import { card as _c, headline } from './hud';
 import { softmax, pctText } from './specimens';
 import { piecesOf, show, tokensFromPage } from './tokens';
 import type { GL } from './engine';
-import { $, $$, clamp, eio, eo, lerp, rng, seg, ss } from './util';
+import { $, $$, clamp, eio, eo, lerp, rng, seg, ss, toward } from './util';
 
 const SP = [0.1, 0.32, 0.56, 0.78, 0.94];          // stage boundaries (progress)
 // The timeline below was authored over a 6.4-screen chapter and ends at p = 0.96, where the panel and the card have faded. The chapter no longer
@@ -96,12 +96,20 @@ export function initLLM(gl: GL) {
   for (let i = 0; i < NQ * VC; i++) vcS[i] = Math.max(-1, Math.min(1, gauss() * 0.6));
   const vg = new THREE.BufferGeometry(); vg.setAttribute('position', new THREE.BufferAttribute(vcP, 3)); vg.setAttribute('aS', new THREE.BufferAttribute(vcS, 1)); vg.setAttribute('aA', new THREE.BufferAttribute(vcA, 1));
   const vecs = new THREE.Points(vg, dotMat(true)); vecs.frustumCulled = false; scene.add(vecs);
-  // attention arcs, one line per pair
-  const AS = 28, arcs: Array<{ i: number; j: number; line: ThreeNS.Line; pos: ThreeNS.BufferAttribute }> = [];
-  for (let i = 1; i < NT; i++) for (let j = 0; j < i; j++) {
-    const pos = new THREE.BufferAttribute(new Float32Array((AS + 1) * 3), 3), g = new THREE.BufferGeometry().setAttribute('position', pos);
-    const line = new THREE.Line(g, lineMat(0)); line.frustumCulled = false; line.visible = false; scene.add(line); arcs.push({ i, j, line, pos });
-  }
+  // attention arcs, one curve per pair, ALL in one draw call: one position buffer (AS + 1 points per arc), one alpha per vertex (an arc's own opacity, 0 while it is hidden) and an index
+  // buffer that draws each curve as AS segments, in the order the arcs were made. They were 45 Line objects with a material each (45 draw calls and 45 uniform uploads every frame).
+  // The fragment is the one LineBasicMaterial made: the shared line colour and the arc's opacity.
+  const AS = 28, arcs: Array<{ i: number; j: number; base: number }> = [];
+  for (let i = 1; i < NT; i++) for (let j = 0; j < i; j++) arcs.push({ i, j, base: arcs.length * (AS + 1) });
+  const arcPos = new Float32Array(arcs.length * (AS + 1) * 3), arcAlpha = new Float32Array(arcs.length * (AS + 1)), arcIdx = new Uint16Array(arcs.length * AS * 2);
+  arcs.forEach((a, k) => { for (let m = 0; m < AS; m++) { arcIdx[(k * AS + m) * 2] = a.base + m; arcIdx[(k * AS + m) * 2 + 1] = a.base + m + 1; } });
+  const arcPosA = new THREE.BufferAttribute(arcPos, 3), arcAlphaA = new THREE.BufferAttribute(arcAlpha, 1);
+  const arcGeo = new THREE.BufferGeometry().setAttribute('position', arcPosA).setAttribute('aA', arcAlphaA).setIndex(new THREE.BufferAttribute(arcIdx, 1));
+  const arcMat = new THREE.ShaderMaterial({ uniforms: { uCol }, transparent: true, depthWrite: false,
+    vertexShader: `attribute float aA; flat varying float vA; void main(){ vA = aA; vec4 mv = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * mv; }`,
+    fragmentShader: `uniform vec3 uCol; flat varying float vA; void main(){ gl_FragColor = vec4(uCol, vA); }` });
+  mats.push({ m: arcMat as any, add: true });
+  const arcLines = new THREE.LineSegments(arcGeo, arcMat); arcLines.frustumCulled = false; arcLines.visible = false; scene.add(arcLines);
   const pulseGeo = new THREE.BufferGeometry(); const pulseP = new Float32Array(arcs.length * 3), pulseS = new Float32Array(arcs.length).fill(1), pulseA = new Float32Array(arcs.length);
   pulseGeo.setAttribute('position', new THREE.BufferAttribute(pulseP, 3)); pulseGeo.setAttribute('aS', new THREE.BufferAttribute(pulseS, 1)); pulseGeo.setAttribute('aA', new THREE.BufferAttribute(pulseA, 1));
   const pulses = new THREE.Points(pulseGeo, dotMat()); pulses.frustumCulled = false; scene.add(pulses);
@@ -171,7 +179,8 @@ export function initLLM(gl: GL) {
   const sample = (T: number) => { const pr = softmax(cands, T); let c = 0; for (let i = 0; i < pr.length; i++) { c += pr[i]; if (U0 <= c) return i; } return 0; };
   const winChars = (() => { let m = 0; for (let T = 0.3; T <= 1.6001; T += 0.05) m = Math.max(m, nextTxt[sample(T)].length); return m; })();
 
-  let paperPrev: boolean | null = null, tShown = -1, winShown = -1;
+  let paperPrev: boolean | null = null, tShown = -1, winShown = -1, padA = -1, padFrame = -1;
+  const PAD_STEP = 2.4;
   function theme() {
     const paper = A.paper(); if (paper === paperPrev) return; paperPrev = paper;
     uPaper.value = paper ? 1 : 0; uCol.value.set(paper ? 0x15171b : 0xe6edf8);
@@ -179,7 +188,7 @@ export function initLLM(gl: GL) {
     accents.forEach(m => m.color.set(paper ? 0x0A5AD6 : 0x0A84FF));
     lines.forEach(m => m.color.set(paper ? 0x15171b : 0xe6edf8));
   }
-  const lines = [nearL.material, planes.material, ...arcs.map(a => a.line.material)] as ThreeNS.LineBasicMaterial[];
+  const lines = [nearL.material, planes.material] as ThreeNS.LineBasicMaterial[];       // the arcs' colour is the shared uCol
   const Y = V3(0, 1, 0);
   const bez = (a: ThreeNS.Vector3, b: ThreeNS.Vector3, h: number, t: number, out: ThreeNS.Vector3) => {
     const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2 + 2 * h, u = 1 - t;
@@ -205,6 +214,11 @@ export function initLLM(gl: GL) {
     steps.forEach((li, i) => { const a = SP[i], b = SP[i + 1], on = p >= a && p < b, done = p >= b; li.classList.toggle('on', on); li.classList.toggle('done', done); const u = $('u i', li) as HTMLElement; u.style.transform = `scaleX(${seg(p, a, b).toFixed(3)})`; });
     // ----- the two rows of chips: A = Cartagena tokens (they split off the sentence at p .10), B = the dog context + the sampled token
     const tpA = eo(seg(p, 0.1, 0.17));
+    // Row A's padding (--pad) follows the split, but never by more than PAD_STEP px between two RENDERED frames: padding is layout, so a jump of the scroll (a link, a flick) that
+    // moved it 5 px in one frame moved the text of every chip with it, and the browser counts a move of 3 px or more as a layout shift (CLS 2.8e-5 over a pass). A reader's own scroll
+    // never gets there (the padding changes at most 0.08 px per scrolled px, so it takes about 1800 px/s of scroll to move it 2.4 px in a frame): the picture is the same unless the page jumps.
+    const padT = (mob ? 6 : 9) * tpA;
+    if (padA < 0) padA = padT; else if (A.st.f !== padFrame) { padFrame = A.st.f; padA = toward(padA, padT, PAD_STEP); }
     const kA = rowLayout(NQ, widthsA, posA, tpA, copyBot ? copyBot + 34 : 0), kB = rowLayout(NT, widthsB, posB, 1, 0, true);   // A drops below the headline copy when that runs long (EN on a phone)
     const T0 = 0.3;
     // temperature dial over stage 4: 0.30 → 1.60 → 0.70
@@ -275,17 +289,19 @@ export function initLLM(gl: GL) {
     const foc = p > 0.6 && p < 0.73 ? Math.min(NT - 1, 1 + Math.floor(aP * (NT - 1))) : -1;
     const allDim = seg(p, 0.58, 0.62) * (1 - seg(p, 0.72, 0.78)) * 0.08 + 0.02;
     const old = seg(p, 0.72, 0.78);              // the oldest tokens fall off the table
+    let anyArc = false;
     arcs.forEach(a => {
       const v = Math.min(visB(a.i), visB(a.j)), w = ATT[a.i][a.j];
       const oldGone = (wd[a.j] < 2 ? 1 - 0.85 * old : 1);   // the first two WORDS
       const o = env * v * oldGone * ((a.i === foc ? w * 3.2 : 0) + allDim * (0.3 + w));
-      a.line.visible = o > 0.004; if (!a.line.visible) return;
-      (a.line.material as ThreeNS.LineBasicMaterial).opacity = Math.min(1, o);
+      const shown = o > 0.004;
+      arcAlpha.fill(shown ? Math.min(1, o) : 0, a.base, a.base + AS + 1); if (!shown) return;     // an arc below the threshold is not drawn: its alpha is exactly 0
+      anyArc = true;
       const h = 0.26 + 0.2 * Math.min(8, a.i - a.j);
       _ea.set(ancB[a.i].x, ancB[a.i].y + lift, 0); _eb.set(ancB[a.j].x, ancB[a.j].y + lift, 0);
-      for (let k = 0; k <= AS; k++) { bez(_ea, _eb, h, k / AS, _q); a.pos.setXYZ(k, _q.x, _q.y, _q.z); }
-      a.pos.needsUpdate = true;
+      for (let k = 0; k <= AS; k++) { bez(_ea, _eb, h, k / AS, _q); arcPosA.setXYZ(a.base + k, _q.x, _q.y, _q.z); }
     });
+    arcLines.visible = anyArc; if (anyArc) { arcPosA.needsUpdate = true; arcAlphaA.needsUpdate = true; }
     pulses.visible = env > 0.02;
     if (pulses.visible) arcs.forEach((a, k) => { const w = ATT[a.i][a.j], on = a.i === foc ? 1 : 0, h = 0.26 + 0.2 * Math.min(8, a.i - a.j), tt = 1 - ((t * 0.55 + (k * 0.37) % 1) % 1);
       _ea.set(ancB[a.i].x, ancB[a.i].y + lift, 0); _eb.set(ancB[a.j].x, ancB[a.j].y + lift, 0);
@@ -302,7 +318,7 @@ export function initLLM(gl: GL) {
     elA.forEach((c, i) => {                       // row A: the Cartagena tokens, gone before the context arrives
       let o = visV * outA; if (p < 0.02 + i * 0.008) o = 0;
       proj(ancA[i]); if (tmp.z > 1) o = 0;
-      c.style.setProperty('--pad', ((mob ? 6 : 9) * tpA).toFixed(1) + 'px');
+      c.style.setProperty('--pad', padA.toFixed(1) + 'px');
       c.style.transform = `translate3d(${tmp.x.toFixed(1)}px,${tmp.y.toFixed(1)}px,0) translate(-50%,-50%) scale(${(clamp(12 / Math.max(1, tmp.d), 0.7, 1.12) * kA).toFixed(3)})`;
       c.style.opacity = o.toFixed(3); c.style.visibility = o > 0.005 ? 'visible' : 'hidden';
       c.classList.toggle('on', tpA > 0.5);

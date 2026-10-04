@@ -12,6 +12,7 @@ import { piecesOf, show, wordsOf, type TokenFile } from '../src/aegis/tokens.ts'
 import { ANSWERS, CURVE, DIALS, END, NODES, NODE_BUDGET, T, TRACK_NODES, VIZ, WEIGHTS, curveOf, dialAngles, figureInts, stackOf, weightHeights } from '../src/aegis/c05-data.ts';
 import { DEFAULTS, LADDER, WHAT, createRatchet, type Step } from '../src/aegis/quality.ts';
 import { ahead } from '../src/aegis/seq.ts';
+import { toward } from '../src/aegis/util.ts';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 
 test('guard throws on a city, on plural courses, and lets the tokenizer sentence through', () => {
@@ -753,4 +754,24 @@ test('the two hitches the fps pass found stay fixed (chapter 06 samples its word
   const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { scripts: Record<string, string> };
   assert.equal(pkg.scripts['fps:v3'], 'node scripts/v3-fps.mjs');
   assert.ok(/fps:v3/.test(readFileSync(new URL('../../RUNBOOK.md', import.meta.url), 'utf8')), 'the RUNBOOK says how to run it');
+});
+
+test('chapter 04: the arcs are one draw call in the order they were made, and row A\'s padding never jumps by 3 px or more between two rendered frames', () => {
+  const llm = readFileSync(new URL('../src/aegis/llm.ts', import.meta.url), 'utf8').replace(/\/\/.*$/gm, ''), core = readFileSync(new URL('../src/aegis/core.ts', import.meta.url), 'utf8').replace(/\/\/.*$/gm, '');
+  // the arcs: one LineSegments, one index buffer, an alpha per vertex (0 while an arc is hidden), none of the old per-arc Line objects or materials
+  assert.ok(/new THREE\.LineSegments\(arcGeo, arcMat\)/.test(llm) && /setIndex\(new THREE\.BufferAttribute\(arcIdx, 1\)\)/.test(llm), 'the 45 curves are one LineSegments with an index buffer');
+  assert.ok(!/new THREE\.Line\(/.test(llm) && !/a\.line\b/.test(llm) && !/\.line\.material/.test(llm), 'no per-arc Line object or material is left');
+  assert.ok(/arcAlpha\.fill\(shown \? Math\.min\(1, o\) : 0, a\.base, a\.base \+ AS \+ 1\)/.test(llm), 'an arc that is not drawn has alpha exactly 0');
+  assert.ok(/flat varying float vA/.test(llm), 'the alpha is flat: the arc\'s own opacity to the last bit, not an interpolation of it');
+  // the padding: written from a value that follows its target by at most PAD_STEP per rendered frame (A.st.f counts the real ticker's frames; a forced tick for a review jump is not one)
+  assert.ok(/c\.style\.setProperty\('--pad', padA\.toFixed\(1\) \+ 'px'\)/.test(llm) && /padA = toward\(padA, padT, PAD_STEP\)/.test(llm) && /A\.st\.f !== padFrame/.test(llm), 'row A reads padA, which moves once per rendered frame');
+  const PAD_STEP = Number(/const PAD_STEP = ([0-9.]+);/.exec(llm)?.[1]);
+  assert.ok(PAD_STEP > 0 && PAD_STEP < 3, `PAD_STEP is under the 3 px a layout shift needs (${PAD_STEP})`);
+  assert.equal((core.match(/A\.st\.f\+\+/g) ?? []).length, 2, 'the two ticker callbacks (smooth scroll and reduced motion) count rendered frames, and nothing else does');
+  // the follower itself: never past its target, never more than a step, and it gets there
+  for (const [cur, tgt] of [[0, 9], [9, 0], [4.5, 4.5], [0, 1], [8.9, 9], [3, -3]]) {
+    let c = cur, n = 0; while (c !== tgt && n < 100) { const nx = toward(c, tgt, PAD_STEP); assert.ok(Math.abs(nx - c) <= PAD_STEP + 1e-9, 'a step is at most PAD_STEP'); assert.ok((nx - tgt) * (c - tgt) >= 0, 'never past the target'); c = nx; n++; }
+    assert.equal(c, tgt, `${cur} -> ${tgt} arrives`); assert.ok(n <= Math.ceil(Math.abs(cur - tgt) / PAD_STEP) + 1);
+  }
+  assert.equal(toward(0, 9, 2.4), 2.4); assert.equal(toward(9, 0, 2.4), 6.6);
 });

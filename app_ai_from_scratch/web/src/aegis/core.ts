@@ -76,8 +76,8 @@ export function tick(now = performance.now(), force = false) {
 export function startScroll() {
   if (!A.rm) {
     A.lenis = new Lenis({ lerp: 0.085, smoothWheel: true, wheelMultiplier: 0.9, autoRaf: false });
-    gsap.ticker.add((t: number) => { A.lenis!.raf(t * 1000); tick(); });
-  } else gsap.ticker.add(() => tick());
+    gsap.ticker.add((t: number) => { A.st.f++; A.lenis!.raf(t * 1000); tick(); });
+  } else gsap.ticker.add(() => { A.st.f++; tick(); });
   gsap.ticker.lagSmoothing(0);
   addEventListener('pointermove', e => { A.st.mouse.x = e.clientX; A.st.mouse.y = e.clientY; A.st.mouse.has = true; }, { passive: true });
   let rt = 0;

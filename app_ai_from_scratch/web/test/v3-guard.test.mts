@@ -17,6 +17,7 @@ import { END as C12_END, GEO as C12_GEO, LAP as C12_LAP, LAPS, LAPS_END, NODES a
 import { NODE_BUDGET as C07_BUDGET, ROWS as C07_ROWS, T as C07_T, count as c07Count, fall as c07Fall, nodeCount as c07Nodes, plan as c07Plan } from '../src/aegis/c07-data.ts';
 import { NODE_BUDGET as C09_BUDGET, T as C09_T, chip as c09Chip, flight as c09Flight, nodeCount as c09Nodes, plain as c09Plain, plan as c09Plan, title as c09Title, wrap as c09Wrap } from '../src/aegis/c09-data.ts';
 import { CAP as C13_CAP, NODE_BUDGET as C13_BUDGET, PILE_SEED as C13_SEED, T as C13_T, STAND as C13_STAND, flowOf as c13Flow, nodeCount as c13Nodes, pileIn as c13PileIn, pileOf as c13Pile, plan as c13Plan, standTop as c13StandTop, text as c13Text, unit as c13Unit, unitsOf as c13Units, type Geo as C13Geo, type Rect as C13Rect, type UnitSpec as C13Spec } from '../src/aegis/c13-data.ts';
+import { NODE_BUDGET as C14_BUDGET, PAD as C14_PAD, SEGS as C14_SEGS, T as C14_T, TURN as C14_TURN, boxes as c14Boxes, figure as c14Figure, nodeCount as c14Nodes, overlay as c14Overlay, plan as c14Plan, rows as c14Rows, seg as c14Seg, strip as c14Strip, tokensOf as c14Tokens, travel as c14Travel, wheelsOf as c14Wheels, type Geo as C14Geo } from '../src/aegis/c14-data.ts';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 
 test('guard throws on a city, on plural courses, and lets the tokenizer sentence through', () => {
@@ -1616,4 +1617,181 @@ test('chapter 13: the effect writes only transform and opacity, adds no element 
   assert.ok(/Y\.right <= N\.left \+ 1 && Math\.abs\(Y\.top - N\.top\) < 2/.test(code) && /\{ hx: clamp\(B\.width \* 0\.14, 90, 150\), hy: clamp\(B\.height \* 0\.22, 70, 110\) \}, innerHeight \* 0\.72\)/.test(code), 'the lists are side by side or stacked as the page lays them out, the pile is asked for the size it has always had, and it is always in view');
   assert.ok(/createRange\(\)/.test(code) && /getClientRects\(\)/.test(code), 'each unit\'s place is where its words are (a Range over them)');
   assert.ok(/const size = boxes\.map\(\(b\) => \{ const q = b\.getBoundingClientRect\(\); return \{ w: q\.width, h: q\.height \}; \}\)/.test(code) && !/offsetWidth|offsetHeight/.test(code), 'every unit is measured as it is drawn, exact, never in whole pixels (offsetWidth rounds a 10px chip down by up to half a pixel): a row is never wider than the text and two units are never closer than the gap');
+});
+
+// ---------- chapter 14: the price made by its real tokens, rolling up to itself ----------
+const c14Price = (lang: 'es' | 'en') => { const text = PRECIO_VISUAL[lang]!, pieces = piecesOf(TOKENS[lang], text); return { text, pieces, tokens: c14Tokens(pieces) }; };
+
+test('chapter 14: the price\'s tokens are its real o200k pieces with their places in the figure, the numeric ones have a wheel per digit, and a wheel rolls once round and on to its digit', () => {
+  const es = c14Price('es'), en = c14Price('en');
+  // if the published price changes, this is the test that says what the roll becomes
+  assert.deepEqual(es.tokens.map((t) => [t.text, t.start, t.end, t.digits]), [['$', 0, 1, []], ['39', 1, 3, [3, 9]], ['.', 3, 4, []], ['990', 4, 7, [9, 9, 0]]]);
+  assert.deepEqual(en.tokens.map((t) => [t.text, t.start, t.end, t.digits]), [['39', 0, 2, [3, 9]], [',', 2, 3, []], ['990', 3, 6, [9, 9, 0]], [' COP', 6, 10, []]]);
+  for (const x of [es, en]) {
+    assert.equal(x.tokens.map((t) => t.text).join(''), x.text, 'the tokens are the figure');
+    const w = c14Wheels(x.tokens);
+    assert.deepEqual(w.map((v) => v.digit), [3, 9, 9, 9, 0]);
+    for (const v of w) assert.equal(x.text[v.at], String(v.digit), 'a wheel stands over its own digit');
+    assert.deepEqual(w.map((v) => v.token), x.tokens.flatMap((t, i) => t.digits.map(() => i)), 'and belongs to its own token');
+  }
+  for (let d = 0; d <= 9; d++) {
+    const s = c14Strip(d);
+    assert.equal(s.length, C14_TURN + d + 1); assert.equal(c14Travel(d), s.length - 1); assert.equal(s[0], 0, 'a wheel starts at zero'); assert.equal(s[s.length - 1], d, 'and stops on its digit');
+    s.forEach((v, i) => { if (i) assert.equal(v, (s[i - 1]! + 1) % 10, 'the rows count up, nine to zero'); });
+    assert.ok(s.slice(0, 10).join('') === '0123456789', 'once round first');
+  }
+  for (const bad of [-1, 10, 1.5, NaN]) assert.throws(() => c14Strip(bad), /c14:/);
+  assert.throws(() => c14Tokens([]), /c14:/);
+  assert.deepEqual(c14Tokens([['a'], ['12'], [' 3']]).map((t) => t.digits), [[], [1, 2], []], 'a token with a letter or a space in it is a symbol');
+  assert.equal(C14_TURN, 10); assert.equal(C14_SEGS, 30);
+});
+
+test('chapter 14: the schedule (the real price, both languages): the wheels set off left to right and roll to their digits easing in and out, the price stands as its tokens, the real figure comes in under the chips and only then do they fade, and the segments light up in order', () => {
+  for (const lang of ['es', 'en'] as const) {
+    const { tokens } = c14Price(lang), P = c14Plan(tokens, C14_SEGS), W = P.wheels;
+    W.forEach((w, k) => {
+      assert.ok(Math.abs(w.start - (C14_T.pop + k * C14_T.cascade)) < 1e-12 && Math.abs(w.stop - (w.start + C14_T.spin)) < 1e-12, 'a wheel sets off a cascade after the one on its left and rolls for T.spin');
+      assert.equal(c14Rows(P, k, 0), 0); assert.equal(c14Rows(P, k, w.start), 0, 'zeros until it sets off');
+      assert.ok(Math.abs(c14Rows(P, k, w.stop) - c14Travel(w.digit)) < 1e-9, 'it has travelled to its digit when it stops'); assert.equal(c14Rows(P, k, P.end + 5), c14Travel(w.digit), 'and stays');
+      let prev = 0, prevV = 0, peak = 0, rising = true;
+      for (let x = w.start; x <= w.stop + 0.004; x += 0.004) {
+        const r = c14Rows(P, k, x), v = r - prev;
+        assert.ok(r >= prev - 1e-9, `wheel ${k} never turns back`);
+        if (x > w.start + 0.0041) { if (rising && v < prevV - 1e-9) rising = false; if (!rising) assert.ok(v <= prevV + 1e-9, `wheel ${k} slows into its stop`); }
+        peak = Math.max(peak, v); prev = r; prevV = v;
+      }
+      assert.ok(peak / 0.004 / 60 < 0.5, `wheel ${k} (a ${w.digit}) never covers half a row a frame at 60 fps (${(peak / 0.004 / 60).toFixed(2)}): no row is skipped between two frames`);
+    });
+    assert.ok(W.every((w, k) => !k || (w.start > W[k - 1]!.start && w.stop > W[k - 1]!.stop)), 'left to right');
+    assert.ok(Math.abs(P.rest - W[W.length - 1]!.stop) < 1e-12 && Math.abs(P.swapAt - (P.rest + C14_T.hold)) < 1e-12 && Math.abs(P.fadeAt - (P.swapAt + C14_T.swap)) < 1e-12, 'the last wheel stops, the price stands for T.hold, the figure comes in over T.swap');
+    const lastSeg = P.seg[P.seg.length - 1]! + C14_T.seg;
+    assert.ok(Math.abs(P.end - Math.max(P.fadeAt + C14_T.dissolve, lastSeg)) < 1e-12 && P.end > 2 && P.end < 2.6, `${lang}: it plays for ${P.end.toFixed(2)} s, once`);
+    // the overlay: not there at 0, whole from T.pop, whole until the figure is whole under it, gone at the end, never coming back
+    assert.equal(c14Overlay(P, 0), 0); assert.ok(Math.abs(c14Overlay(P, C14_T.pop / 2) - 0.5) < 1e-12 && c14Overlay(P, C14_T.pop) === 1);
+    let prevO = 0, prevF = 0;
+    for (let x = 0; x <= P.end + 0.004; x += 0.004) {
+      const o = c14Overlay(P, x), f = c14Figure(P, x);
+      assert.ok(o >= 0 && o <= 1 && f >= 0 && f <= 1, 'opacities are shares');
+      if (x <= P.swapAt) assert.equal(f, 0, 'the real figure waits until the price has stood');
+      if (x >= P.fadeAt) assert.equal(f, 1, 'and is whole before a chip fades');
+      if (x >= C14_T.pop && x <= P.fadeAt) assert.equal(o, 1, 'the chips are whole from T.pop until then');
+      if (x >= C14_T.pop) assert.ok(Math.abs((1 - (1 - o) * (1 - f)) - 1) < 1e-12, 'the price is never less than whole after it has come in: no dip while one fades over the other');
+      if (x > P.fadeAt) assert.ok(o <= prevO + 1e-12, 'once fading, never back'); if (x > P.swapAt) assert.ok(f >= prevF - 1e-12);
+      prevO = o; prevF = f;
+    }
+    assert.equal(c14Overlay(P, P.end + 1), 0); assert.equal(c14Figure(P, P.end + 1), 1);
+    // the segments: one after the other, in order, each 0 -> 1, the whole bar before the end
+    P.seg.forEach((t, j) => {
+      assert.equal(P.seg.length, C14_SEGS); assert.ok(j === 0 ? t >= C14_T.pop : t > P.seg[j - 1]!, 'in order');
+      assert.equal(c14Seg(P, j, t), 0); assert.equal(c14Seg(P, j, t + C14_T.seg), 1); assert.equal(c14Seg(P, j, P.end + 1), 1);
+      let prev = 0; for (let x = t; x <= t + C14_T.seg; x += 0.004) { const a = c14Seg(P, j, x); assert.ok(a >= prev - 1e-12); prev = a; }
+    });
+    assert.ok(lastSeg <= P.end, 'the whole bar is lit by the end');
+    // the clocks are where the design needs them
+    assert.ok(C14_T.pop >= 0.1 && C14_T.spin >= 0.8 && C14_T.spin <= 1.5 && C14_T.cascade >= 0.03 && C14_T.hold >= 0.25 && C14_T.swap > 0 && C14_T.dissolve >= 0.2 && C14_T.seg >= 0.1 && C14_T.segGap >= 0.01, 'the clocks');
+  }
+  // the rule can fail: a roll that took 4 s to settle would not leave the 2.6 s the whole is allowed
+  assert.ok(C14_T.pop + 4 * C14_T.cascade + 4 + C14_T.hold + C14_T.swap + C14_T.dissolve > 2.6);
+});
+
+test('chapter 14: the clocks of one wheel and the geometry of the chips, and what the schedule and the geometry refuse', () => {
+  const { tokens } = c14Price('es'), P = c14Plan(tokens, C14_SEGS), k = 1, w = P.wheels[k]!, T = C14_T;
+  const mid = (a: number, b: number) => Math.abs(a - b) < 1e-9, e = (u: number) => u * u * (3 - 2 * u);
+  assert.ok(mid(c14Rows(P, k, w.start + T.spin / 2), c14Travel(w.digit) / 2), 'halfway through its roll a wheel is halfway there (an ease in and out)');
+  assert.ok(mid(c14Rows(P, k, w.start + T.spin * 0.25), c14Travel(w.digit) * e(0.25)), 'a smooth step: slow off the line, slow into its stop');
+  assert.ok(c14Rows(P, k, w.start + T.spin * 0.05) < 0.05 * c14Travel(w.digit), 'it leaves zero slowly: a twentieth of the way through its roll it has covered less than a twentieth of the way');
+  assert.ok(mid(c14Figure(P, P.swapAt + T.swap / 2), 0.5) && mid(c14Seg(P, 3, P.seg[3]! + T.seg / 2), 0.5) && mid(c14Overlay(P, P.fadeAt + T.dissolve / 2), 0.5 * 1));
+  // fail closed
+  assert.throws(() => c14Plan([], C14_SEGS), /c14:/);
+  assert.throws(() => c14Plan(c14Tokens([['$'], ['.']]), C14_SEGS), /c14:/, 'a price with no digit has nothing to roll');
+  assert.throws(() => c14Plan(tokens, 0), /c14:/); assert.throws(() => c14Plan(tokens, 2.5), /c14:/);
+  { const long = c14Plan(tokens, 200); assert.ok(long.end >= long.seg[199]! + T.seg - 1e-12 && long.end > P.end, 'a longer bar ends the plan later: it is over when the last segment is lit, whatever the bar'); }
+  assert.doesNotThrow(() => c14Plan(tokens, C14_SEGS));
+  // the geometry: a made-up figure 68px high in its font, 4 tokens, 5 digits
+  const FS = 68, H = FS * 0.9, cw = [30, 36, 18, 36], tl = cw.map((_, i) => 40 + cw.slice(0, i).reduce((a, b) => a + b, 0)), tr = tl.map((l, i) => l + cw[i]!);
+  const dig = [{ l: tl[1]!, r: tl[1]! + 18 }, { l: tl[1]! + 18, r: tr[1]! }, { l: tl[3]!, r: tl[3]! + 12 }, { l: tl[3]! + 12, r: tl[3]! + 24 }, { l: tl[3]! + 24, r: tr[3]! }];
+  const geo: C14Geo = { fig: { y: 120, h: H, fs: FS }, tok: tl.map((l, i) => ({ l, r: tr[i]! })), dig };
+  const B = c14Boxes(tokens, geo), pad = C14_PAD * FS;
+  assert.equal(B.chips.length, 4); assert.equal(B.cols.length, 5);
+  B.chips.forEach((c, i) => {
+    assert.ok(mid(c.x, tl[i]! - 1) && mid(c.w, cw[i]! + 2), 'a chip is its token\'s characters and the border on each side');
+    assert.ok(mid(c.y, 120 - pad - 1) && mid(c.h, H + 2 * pad + 2) && mid(c.pad, pad), 'a little taller than the figure\'s line, so the «$» stands inside it');
+    if (i) assert.ok(mid(c.x, B.chips[i - 1]!.x + B.chips[i - 1]!.w - 2), 'the chips touch: the border of one is the border of the next');
+  });
+  B.cols.forEach((c, j) => { assert.ok(mid(c.x, dig[j]!.l) && mid(c.y, 120), 'a column is where its digit stands, on the figure\'s line'); });
+  assert.ok(pad + 1 < 6, 'the chip is clear of the line under the figure (6px under it at every size)');
+  assert.ok(C14_PAD >= 0.05 && pad > 3, 'and over it by enough for the «$» (it stands a little taller than the digits) to be inside the chip: at least 0.05 em');
+  const bad = (f: (g: { fig: { y: number; h: number; fs: number }; tok: Array<{ l: number; r: number }>; dig: Array<{ l: number; r: number }> }) => void) => { const g = { fig: { ...geo.fig }, tok: geo.tok.map((t) => ({ ...t })), dig: geo.dig.map((d) => ({ ...d })) }; f(g); assert.throws(() => c14Boxes(tokens, g), /c14:/); };
+  bad((g) => { g.tok.pop(); }); bad((g) => { g.dig.pop(); }); bad((g) => { g.tok[1]!.l = NaN; }); bad((g) => { g.dig[2]!.r = Infinity; }); bad((g) => { g.dig[0]!.r = g.dig[0]!.l; }); bad((g) => { g.tok[0]!.r = g.tok[0]!.l - 1; });
+  bad((g) => { g.fig.h = 0; }); bad((g) => { g.fig.fs = NaN; }); bad((g) => { g.fig.y = Infinity; });
+});
+
+test('chapter 14: a pass adds one layer, a chip per token and a column and a wheel per digit and writes a style on those, on the figure and on the 30 segments (46 of the contract\'s 80), and the markup is the price block as it was: nothing added to it', () => {
+  assert.equal(C14_BUDGET, 80, 'the budget of the contract');
+  assert.equal(c14Nodes(1, 1, 1), 1 + 1 + 2 + 1 + 1, 'the layer, a chip, a column and a wheel, the figure, a segment');
+  for (const lang of ['es', 'en'] as const) {
+    const { tokens } = c14Price(lang), n = c14Nodes(tokens.length, c14Wheels(tokens).length, C14_SEGS);
+    assert.equal(n, 46, `${lang}: 4 chips, 5 wheels, 30 segments`); assert.ok(n <= C14_BUDGET);
+    assert.ok(c14Nodes(tokens.length, c14Wheels(tokens).length, C14_SEGS) < c14Nodes(tokens.length + 7, c14Wheels(tokens).length, C14_SEGS), 'a count that grows with what is added');
+  }
+  const page = readFileSync(new URL('../src/pages/v3.astro', import.meta.url), 'utf8'), a = page.indexOf('<section id="c14"'), b = page.indexOf('<section id="c15"'), sec = page.slice(a, b);
+  assert.ok(a > 0 && b > a, 'chapter 14 is where this test looks for it');
+  assert.ok(/data-fx="odometer"/.test(sec), 'the effect\'s name');
+  assert.ok(/<div class="pbig"><b data-odo>\{precioBig\}<\/b><span>\{P\.preUnidad\}<\/span><\/div>/.test(sec), 'the figure: the published price in one text node, with its unit next to it');
+  assert.ok(/<div class="segbar" aria-hidden="true" data-segbar>\{Array\.from\(\{ length: (\d+) \}, \(\) => \(<i><\/i>\)\)\}<\/div>/.exec(sec)?.[1] === String(C14_SEGS), 'the bar: one empty segment per day, 30 of them');
+  assert.ok(!/\bodv\b|\bodc\b|\bodw\b|\bods\b|fxk/.test(sec), 'the layer, the chips and the wheels are the effect\'s: the server renders none of them');
+  assert.ok(!/<circle|<canvas|<img|border-radius/.test(sec.replace(/<svg[\s\S]*?<\/svg>/g, '')), 'nothing round, no image');
+});
+
+test('chapter 14 is square and its class names are its own: no round shape in an `odv`, `odc`, `odw` or `ods` rule, the figure\'s typeface is shared with the layer (so the wheels are the figure\'s own glyphs), the custom properties are the effects\' own, and every rule of them hangs on html.fxl', () => {
+  const css = readFileSync(new URL('../src/aegis/v3.css', import.meta.url), 'utf8').replace(/\/\*(?!!)[\s\S]*?\*\//g, '');
+  const NAMES = /\.odv(?![\w-])|\.odc(?![\w-])|\.odw(?![\w-])|\.ods(?![\w-])/;
+  const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ sel: m[1]!.trim(), body: m[2]! })), mine = rules.filter((r) => r.sel.split(',').some((x) => NAMES.test(x)));
+  assert.equal(mine.length, 5, 'the figure\'s typeface shared with the layer, the layer, the chip, the column and the wheel');
+  const round = (b: string) => /border-radius\s*:\s*(?!0(?:px)?\s*(?:;|$))|clip-path\s*:\s*(?:circle|ellipse)/i.test(b);
+  const shared = mine.find((r) => r.sel === '.pbig b,html.fxl .pbig .odv'), others = mine.filter((r) => r !== shared);
+  for (const r of mine) { assert.ok(!round(r.body), `«${r.sel}» is round`); assert.ok(!/transition|animation|will-change|filter|box-shadow|text-shadow/.test(r.body), `«${r.sel}» has a transition, an animation or an effect of its own`); }
+  for (const r of others) assert.ok(r.sel.split(',').every((x) => x.trim().startsWith('html.fxl .pbig ')), `«${r.sel}» is not keyed to html.fxl inside the figure's block (it would outlive dispose())`);
+  assert.ok(shared && /font:700 clamp\((\d+)px,5vw,(\d+)px\)\/\.9 var\(--f\)/.test(shared.body) && /letter-spacing:-\.055em/.test(shared.body) && /white-space:nowrap/.test(shared.body), 'the figure and the layer are set in the same face, size, line height and tracking');
+  assert.ok(+(/clamp\((\d+)px/.exec(shared!.body)?.[1] ?? 0) >= 10, 'and the text is 10px or more at every width');
+  assert.ok(!/\.pbig b\{/.test(css), 'the figure\'s rule is the shared one: there is no second copy of its typeface to drift');
+  const layer = others.find((r) => /\.odv$/.test(r.sel)), chip = others.find((r) => /\.odc$/.test(r.sel)), col = others.find((r) => /\.odw$/.test(r.sel)), wheel = others.find((r) => /\.ods$/.test(r.sel));
+  assert.ok(layer && /position:absolute/.test(layer.body) && /width:0/.test(layer.body) && /height:0/.test(layer.body) && /pointer-events:none/.test(layer.body), 'the layer is a point at the corner of its box, and never takes a click');
+  assert.ok(chip && /position:absolute/.test(chip.body) && /box-sizing:border-box/.test(chip.body) && /width:var\(--fx-w\)/.test(chip.body) && /height:var\(--fx-h\)/.test(chip.body) && /padding-top:var\(--fx-p\)/.test(chip.body) && /border:1px solid var\(--ac\)/.test(chip.body) && /background:var\(--panel\)/.test(chip.body) && /white-space:pre/.test(chip.body), 'a chip: a square hairline box in the accent, sized by the effect, its text set on the figure\'s line, its blanks kept (a leading space is the figure\'s own)');
+  assert.ok(col && /position:absolute/.test(col.body) && /height:\.9em/.test(col.body) && /clip-path:inset\(0 -\.3em\)/.test(col.body), 'a column is one row of the figure\'s line height, clipped above and below and not at the sides (the tracking is negative)');
+  assert.ok(wheel && /display:block/.test(wheel.body) && /white-space:pre/.test(wheel.body), 'a wheel is a strip of rows, one digit to a line');
+  assert.ok(!mine.some((r) => /(?:^|[;{\s])content\s*:/.test(r.body)), 'no generated content: a chip\'s text is text in the chip, never typed in the stylesheet');
+  const vars = [...new Set(mine.flatMap((r) => [...r.body.matchAll(/var\((--[\w-]+)\)/g)].map((m) => m[1]!)))].sort();
+  assert.deepEqual(vars, ['--ac', '--f', '--fx-h', '--fx-p', '--fx-w', '--panel'], 'the page\'s own variables and the effect\'s --fx- ones, nothing else');
+  const stray = (t: string) => [...t.matchAll(/([^{}]+)\{([^{}]*)\}/g)].flatMap((m) => m[1]!.split(',').map((x) => x.trim())).filter((x) => NAMES.test(x));
+  assert.deepEqual(stray(css), ['html.fxl .pbig .odv', 'html.fxl .pbig .odv', 'html.fxl .pbig .odc', 'html.fxl .pbig .odw', 'html.fxl .pbig .ods'], 'no other rule of the stylesheet styles an `odv`, `odc`, `odw` or `ods`');
+  const page = readFileSync(new URL('../src/pages/v3.astro', import.meta.url), 'utf8');
+  assert.ok(!/class="[^"]*\b(?:odv|odc|odw|ods)\b/.test(page), 'and the page uses none of the classes: they are the effect\'s');
+  // the rule can fail
+  assert.deepEqual(stray('.odc{padding:8px}.x .odv{y:1}.foo{z:1}.odcx{a:1}'), ['.odc', '.x .odv']);
+  assert.ok(round('border-radius:50%;width:1px') && round('clip-path:circle(50%)') && !round('clip-path:inset(0 -.3em)'));
+});
+
+test('chapter 14: the effect writes only transform and opacity, adds no element but its layer, chips, columns and wheels, writes no copy but a token\'s own text and the digits it counts, plays once on c14-data\'s clocks, gives the price back whole when anything fails, and is registered', () => {
+  const src = readFileSync(new URL('../src/aegis/fx/c14.ts', import.meta.url), 'utf8'), code = src.replace(/\/\/.*$/gm, '');
+  assert.ok(!/\.style\.(?!opacity\b|transform\b)\w+\s*=(?!=)/.test(code), 'it sets only style.opacity and style.transform');
+  assert.deepEqual([...code.matchAll(/setProperty\('([^']+)'/g)].map((m) => m[1]), ['--fx-w', '--fx-h', '--fx-p'], 'the only custom properties are the effects\' own, a chip\'s box');
+  assert.deepEqual([...new Set([...code.matchAll(/style\.removeProperty\('([^']+)'\)/g)].map((m) => m[1]))], ['opacity'], 'what it gives back is opacity');
+  assert.deepEqual([...code.matchAll(/\.textContent\s*=\s*([^;]+);/g)].map((m) => m[1]), ['t.text', "strip(w.digit).join('\\n')"], 'the only text it writes: a token piece read from the page\'s own token file (as it is, a leading space stays a space: no «·» in its place, whose advance is not the space\'s in every browser), and the digits a wheel passes (counted, never typed)');
+  assert.ok(/piecesOf\(tokensFromPage\(\), text\)/.test(code) && /tokensOf\(pieces\)/.test(code) && /wheelsOf\(tokens\)/.test(code), 'the chips are the real pieces of the figure\'s own text');
+  assert.deepEqual([...code.matchAll(/\bel\('([a-z]+)', ([^)]+)\)/g)].map((m) => `${m[1]}.${m[2]}`), ["div.'fxk odv'", "div.'fxk odc'", "div.'fxk odw'", "div.'fxk ods'"], 'the elements it adds: its layer, its chips, its columns and its wheels, all marked fxk');
+  assert.ok(/layer\.setAttribute\('aria-hidden', 'true'\)/.test(code) && /pbig\.appendChild\(layer\)/.test(code), 'the layer is a decoration (aria-hidden) inside the figure\'s block');
+  assert.ok(!/innerHTML|innerText|insertAdjacent|\.prepend\(|cloneNode|replaceWith|createElement|createTextNode/.test(code), 'it moves no node and writes no markup');
+  assert.ok(!/canvas|drawImage|fetch\(|\.webp|\.gif|\.apng/i.test(code), 'no footage, no sprite, no animated image');
+  assert.ok(/import \{[^}]*\bplan\b[^}]*\} from '\.\.\/c14-data'/.test(src) && /duration: P!\.end\b/.test(code) && /x: P!\.end\b/.test(code), 'it plays for the end of c14-data\'s plan');
+  assert.ok(/nodeCount\(tokens\.length, wheels\.length, segs\.length\) <= NODE_BUDGET/.test(code) && /segs\.length === SEGS/.test(code), 'it refuses more nodes than the contract allows, and a bar that is not 30 segments');
+  assert.ok(/once\(pbig, undo/.test(code) && /REG\['c14:roll'\]/.test(code) && /margin:/.test(code), 'a play-once effect that asks once(), and shows itself to the review hooks');
+  assert.ok(/CHAPTERS[^\n]*\['c14', initC14\]/.test(readFileSync(new URL('../src/aegis/fx/index.ts', import.meta.url), 'utf8')), 'the effect is registered in the list of chapters');
+  assert.ok(/arm: \(\) => \{ pbig\.dataset\.fxS = 'arm'; fig\.style\.opacity = '0'; segs\.forEach\(\(s\) => \{ s\.style\.opacity = '0'; \}\); \}/.test(code), 'waiting, only the figure and the 30 segments are transparent');
+  assert.ok(/catch \(e\) \{ off\(e\); \}/.test(code) && /const off = \(e: unknown\) => \{ console\.warn\([^;]*; done\(\); \}/.test(code), 'a failure is a warning and the price given back whole');
+  assert.ok(/onWidth\(\(\) => \{ if \(o\.state\(\) === 'run'\) o\.clear\(\); \}\)/.test(code), 'a width change gives back a roll that is playing');
+  assert.ok(/layer && layer\.remove\(\)/.test(code) && /onComplete: done/.test(code), 'the layer goes in the very task it is done');
+  assert.ok(/createRange\(\)/.test(code) && /getClientRects\(\)/.test(code) && /fig\.childNodes\.length === 1/.test(code), 'each character\'s place is where the figure draws it (a Range over its one text node)');
+  assert.ok(/tok: tokens\.map\(\(t, i\) => \(\{ l: rect\(t\.start, t\.start \+ 1\)\.l, r: i \+ 1 < tokens\.length \? rect\(t\.end, t\.end \+ 1\)\.l : rect\(t\.end - 1, t\.end\)\.r \}\)\)/.test(code) && !/\bshow\(/.test(code), 'a chip ends where the next token\'s first character begins (a browser\'s rect of a glyph can be a pixel wider than its advance, so the chips would overlap by more than their borders), and the last one at the right of its last character');
+  assert.ok(/fig\.style\.removeProperty\('opacity'\); segs\.forEach\(\(s\) => s\.style\.removeProperty\('opacity'\)\)/.test(code), 'and the figure and the segments are given back with no inline style');
 });

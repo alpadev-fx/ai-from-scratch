@@ -55,10 +55,11 @@ const FX_HOOKS = {
   c07: { fx: 'stack', hooks: [['data-pile', 1], ['data-row', 12], ['data-count', 1]] },   // one counter only: the four figures under the pile never count
   c08: { fx: 'bars-once', hooks: [['data-bars', 1]] },
   c09: { fx: 'group', hooks: [['data-lesson', 12]] },   // the twelve rows of the temario, in the lessons' order: each plays its own river of tokens
+  c13: { fx: 'separate', hooks: [['data-col', 2]] },   // the two lists' columns: the pile of their tokens separates into them (the yes tokens into the first, the no tokens into the second)
   c12: { fx: 'plate-parallax', hooks: [['data-loop', 1]] },   // the loop drawing under the heading (the plate's parallax is the engine's own)
 };
 // the parts that exist only because an effect added them (they must hang on html.fxl) · the selectors that name the copy of an effect chapter · what hides it
-const FX_ONLY = /\.(?:ty|gh|pin|rail|imp|pen|num|wrs?|vx|irv|irt)\b|\[data-fx-/;
+const FX_ONLY = /\.(?:ty|gh|pin|rail|imp|pen|num|wrs?|vx|irv|irt|ssv|ssu|sst)\b|\[data-fx-/;
 const FX_COPY = /\.(?:rp|tag|you|ia|who|shout|bt|beat|chat|trio|tri|figs|fig|big|cap|ie|nots|hx|ctr|specs|srow|tcopy|lede|clock)\b|cb|cn|cp|crow|cands|spec|\bs\[data-word\]|\bdt\b|\bdd\b|#c(?:0[2-9]|1[0-6])\b/;
 const FX_HIDES = /(?:^|;)\s*(?:opacity\s*:\s*0(?![.\d])|visibility\s*:\s*hidden|display\s*:\s*none|clip-path\s*:|color\s*:\s*transparent|font-size\s*:\s*0\b|transform\s*:\s*scale\(0\b)/;
 const CTA_CHAPTERS = ['c03', 'c07', 'c10', 'c11'];       // CTA rows with the price label + the guarantee line; c14 has its in-card button; c16 closes
@@ -541,6 +542,92 @@ function groupSelfTest(html, lang) {
   return [bad, Object.keys(mut).length + Object.keys(size).length + Object.keys(css).length];
 }
 
+// ---------- chapter 13: the two lists, made by sorting a pile of their real tokens ----------
+// The plan's verb for chapter 13 is «separar»: when the two lists come into view the REAL o200k tokens of their seven lines are a mixed pile in the middle of them, and the pile separates, each token running
+// to the place of its own words, the yes tokens into the yes column and the no tokens into the no column (src/aegis/fx/c13.ts). The server renders only the two lists as they always were: the yes column then the
+// no column, each with its heading and one plain line per item of the page's own copy (the effect reads each line as ONE text node and finds its tokens in the page's own token file, so a line that is not
+// in it would stop the effect at attach, and this gate says so before it ships). The units are the effect's own, and a unit's chips are its two pseudo-elements (one element per unit: the contract's counter
+// counts every element a chapter adds), their text read from the unit's own data attributes and never typed in the stylesheet. They are never under the page's floor for mono labels, nothing in it is round, and
+// the yes list's are outlined in the accent: in a pile of chips that is what tells the two lists apart.
+const C13_CSS = /\.ssv(?![\w-])|\.ssu(?![\w-])|\.sst(?![\w-])/;
+const C13_CHIPS = 'html\\.fxl \\.ssu::before,html\\.fxl \\.ssu\\[data-t2\\]::after';          // the selector of a chip: the two pseudo-elements of a unit
+function sortRule(html, lang) {
+  const out = [], V = STR[lang].pub.v3, map = TOKEN_FILE[lang], c13 = (html.match(/<section id="c13"[\s\S]*?<\/section>/) ?? [''])[0];
+  if (!c13) return ['chapter 13 is missing'];
+  const cols = [...c13.matchAll(/<div class="pcol (yes|no)" data-col="(yes|no)"><h2>([\s\S]*?)<\/h2><ul>([\s\S]*?)<\/ul><\/div>/g)];
+  if (cols.length !== 2 || cols[0][1] !== 'yes' || cols[1][1] !== 'no' || cols.some((m) => m[1] !== m[2])) out.push('chapter 13 is not the yes column then the no column, each with its data-col');
+  [['yes', V.s10TituloSi, V.s10Si], ['no', V.s10TituloNo, V.s10No]].forEach(([k, h, items], i) => {
+    const m = cols[i]; if (!m) return;
+    if (norm(m[3]) !== norm(h)) out.push(`the ${k} column's heading is «${norm(m[3])}», expected «${norm(h)}»`);
+    const lis = [...m[4].matchAll(/<li>([^<]*)<\/li>/g)].map((x) => x[1]);                // a plain <li>: no attribute and no element inside it (one text node)
+    if (lis.length !== items.length || m[4].replace(/<li>[^<]*<\/li>/g, '') !== '') out.push(`the ${k} column is not ${items.length} plain lines (one text node each)`);
+    items.forEach((t, j) => {
+      if (lis[j] === undefined || norm(lis[j]) !== norm(t)) out.push(`the ${k} column's line ${j + 1} is «${lis[j] === undefined ? '' : norm(lis[j])}», expected «${norm(t)}» (the lists' order never changes)`);
+      try { piecesOf(map, t); } catch (e) { out.push(`the ${k} column's line ${j + 1} has no real tokens in the token file (the effect would stop at attach): ${e.message}`); }
+    });
+  });
+  if (/\bssu\b|\bsst\b|\bssv\b|fxk|split-in|data-t[12]\b/.test(c13)) out.push('chapter 13 carries a part only the effect adds (a unit, its layer, an fxk node, the text attribute of a chip) or the split-in it replaced');
+  if (/<img\b|<canvas\b|<video\b|<picture\b|<svg\b|<circle\b|<ellipse\b|\brx=|border-radius/i.test(c13)) out.push('chapter 13 carries an image, a canvas, a video, an svg or a round shape');
+  // the chips are the two pseudo-elements of a unit: their text 12px, and 10px on a phone (the page's floor for mono labels is 10px at every width), 24px tall with the border inside it
+  const chip = new RegExp(`${C13_CHIPS}\\{([^}]*)\\}`).exec(html), base = chip && /\bfont:\d+ (\d+(?:\.\d+)?)px\//.exec(chip[1]);
+  const narrow = new RegExp(`@media \\(max-width:480px\\)\\{${C13_CHIPS}\\{[^}]*\\bfont-size:(\\d+(?:\\.\\d+)?)px`).exec(html);
+  if (!base || +base[1] < 10) out.push(`the chips' text is ${base ? base[1] + 'px' : 'not sized in pixels'}: the page's floor for mono labels is 10px at every width`);
+  if (!narrow || +narrow[1] < 10) out.push(`the chips' text on a phone is ${narrow ? narrow[1] + 'px' : 'not set'}: the floor is 10px at every width`);
+  if (!chip || !/\bbox-sizing:border-box\b/.test(chip[1]) || !/\bheight:24px\b/.test(chip[1])) out.push("a chip is not 24px tall with its border inside (box-sizing:border-box: a pseudo-element does not get the page's border-box reset): it would be taller than the chips of chapter 09");
+  if (!new RegExp(`html\\.fxl \\.ssu\\.y::before,html\\.fxl \\.ssu\\.y\\[data-t2\\]::after\\{[^}]*border-color:var\\(--ac\\)`).test(html)) out.push("the yes list's chips are not outlined in the accent (in a pile of chips that is what tells the two lists apart)");
+  if (!html.includes('html.fxl .ssu::before{content:attr(data-t1)}') || !html.includes('html.fxl .ssu[data-t2]::after{content:attr(data-t2)}')) out.push("a chip's text is not read from its unit's data attributes (data-t1, data-t2), or a second chip is drawn on a unit that has only one");
+  const gen = [...html.matchAll(/html\.fxl \.ssu[^{}]*\{([^{}]*)\}/g)].flatMap((m) => [...m[1].matchAll(/\bcontent\s*:\s*([^;}]+)/g)].map((x) => x[1].trim()));
+  if (gen.length !== 2 || gen[0] !== 'attr(data-t1)' || gen[1] !== 'attr(data-t2)') out.push(`the stylesheet generates ${JSON.stringify(gen)} for the units: only the chips' text, read from data-t1 and data-t2, may be generated (the copy is the page's, never typed in CSS)`);
+  return out;
+}
+// A gate that cannot fail proves nothing: each way the two lists can stop being the page's own lines in their order, lose the real tokens of a line, carry what only the effect adds, or turn round must be caught.
+function sortSelfTest(html, lang) {
+  if (sortRule(html, lang).length) return [0, 0];                    // the real page is judged by the loop below
+  const V = STR[lang].pub.v3, inC13 = (fn) => { const at = html.indexOf('<section id="c13"'), end = html.indexOf('</section>', at); return html.slice(0, at) + fn(html.slice(at, end)) + html.slice(end); };
+  const colOf = (c, k) => balanced(c, c.indexOf(`<div class="pcol ${k}" data-col="${k}">`), 'div'), liOf = (t) => `<li>${esc(t)}</li>`;
+  const mut = {
+    'the two columns swapped': inC13((c) => c.replace(colOf(c, 'yes'), '\u0000').replace(colOf(c, 'no'), colOf(c, 'yes')).replace('\u0000', colOf(c, 'no'))),
+    'a yes line gone': inC13((c) => c.replace(liOf(V.s10Si[3]), '')),
+    'a no line gone': inC13((c) => c.replace(liOf(V.s10No[2]), '')),
+    'two yes lines swapped': inC13((c) => c.replace(liOf(V.s10Si[0]), '\u0000').replace(liOf(V.s10Si[1]), liOf(V.s10Si[0])).replace('\u0000', liOf(V.s10Si[1]))),
+    'a line with no real tokens (a letter more)': inC13((c) => c.replace(liOf(V.s10No[1]), `<li>${esc(V.s10No[1])}x</li>`)),
+    'a line that is not one text node (an element inside it)': inC13((c) => c.replace(liOf(V.s10Si[2]), `<li><b>${esc(V.s10Si[2])}</b></li>`)),
+    'a line with an attribute': inC13((c) => c.replace(liOf(V.s10Si[0]), `<li data-x="1">${esc(V.s10Si[0])}</li>`)),
+    'a heading changed': inC13((c) => c.replace(`<h2>${esc(V.s10TituloNo)}</h2>`, `<h2>${esc(V.s10TituloNo)} </h2>x`)),
+    'the split-in back (as the effect name)': html.replace('data-fx="separate"', 'data-fx="split-in"'),
+    'a chip rendered by the server': inC13((c) => c.replace(liOf(V.s10Si[0]), `<li>${esc(V.s10Si[0])}</li><i class="sst">x</i>`)),
+    'a unit rendered by the server': inC13((c) => c.replace(liOf(V.s10Si[0]), `<li>${esc(V.s10Si[0])}</li><div class="ssu y" data-t1="x"></div>`)),
+    'a chip text attribute in the markup': inC13((c) => c.replace('<div class="para">', '<div class="para" data-t1="x">')),
+    'an image in the lists': inC13((c) => c.replace('<div class="para">', '<div class="para"><img src="/x.png" alt="">')),
+    'a round part (an svg circle)': inC13((c) => c.replace('<div class="para">', '<div class="para"><svg><circle cx="1" cy="1" r="1"></circle></svg>')),
+    'no lists at all': html.replace('<section id="c13"', '<section id="c13x"'),
+  };
+  // the rule of a chip (the first one: the one a media query repeats comes after it), edited by `fn`
+  const CHIP_AT = 'html.fxl .ssu::before,html.fxl .ssu[data-t2]::after{box-sizing:border-box;', NARROW = '@media (max-width:480px){html.fxl .ssu::before,html.fxl .ssu[data-t2]::after{padding:0 .35em;font-size:10px}}', YES = 'html.fxl .ssu.y::before,html.fxl .ssu.y[data-t2]::after{';
+  const inChips = (fn) => { const at = html.indexOf(CHIP_AT), end = html.indexOf('}', at); return at < 0 ? html : html.slice(0, at) + fn(html.slice(at, end)) + html.slice(end); };
+  const css = {
+    'a round chip (border-radius on the chips)': inChips((r) => r.replace('{box-sizing', '{border-radius:50%;box-sizing')),
+    'a round outlined chip (border-radius on the yes chips)': html.replace(YES, YES + 'border-radius:50%;'),
+    'a circular clip on the layer': html.replace('html.fxl .ssv{position:absolute;', 'html.fxl .ssv{clip-path:circle(50%);position:absolute;'),
+  };
+  const size = {
+    'chips at 9px on a desktop': [inChips((r) => r.replace('font:500 12px/1', 'font:500 9px/1')), /^the chips' text is 9px/],
+    'chips with no pixel size (rem)': [inChips((r) => r.replace('font:500 12px/1', 'font:500 .6rem/1')), /^the chips' text is not sized in pixels/],
+    'chips at 8px on a phone': [html.replace(NARROW, NARROW.replace('font-size:10px', 'font-size:8px')), /^the chips' text on a phone is 8px/],
+    'the phone size gone': [html.replace(NARROW, ''), /^the chips' text on a phone is not set/],
+    'the yes list\'s accent outline gone': [html.replace(YES + 'border-color:var(--ac);', YES), /^the yes list's chips are not outlined in the accent/],
+    'chips 26px tall (no border-box)': [inChips((r) => r.replace('box-sizing:border-box;', '')), /^a chip is not 24px tall/],
+    'chip text typed in the stylesheet': [html.replace('content:attr(data-t1)', 'content:"x"'), /^a chip's text is not read from its unit's data attributes/],
+    'a second chip drawn on every unit': [html.replace('html.fxl .ssu[data-t2]::after{content:attr(data-t2)}', 'html.fxl .ssu::after{content:attr(data-t2)}'), /^a chip's text is not read from its unit's data attributes/],
+    'other generated content on a unit': [html.replace(YES, YES + 'content:"x";'), /^the stylesheet generates/],
+  };
+  let bad = 0;
+  for (const [what, m] of Object.entries(mut)) if (m === html || !sortRule(m, lang).length) { console.error(`FAIL self-test: sortRule does not catch "${what}"`); bad++; }
+  for (const [what, [m, re]] of Object.entries(size)) if (m === html || !sortRule(m, lang).some((x) => re.test(x))) { console.error(`FAIL self-test: sortRule does not catch "${what}"`); bad++; }
+  for (const [what, m] of Object.entries(css)) if (m === html || !judge(m, lang).some((x) => /^round: /.test(x))) { console.error(`FAIL self-test: the round-shape rule does not catch "${what}"`); bad++; }
+  return [bad, Object.keys(mut).length + Object.keys(size).length + Object.keys(css).length];
+}
+
 // ---------- chapter 12: the harness as a loop under the heading ----------
 // The owner's brief (stage 2C): «bucle de agente: plan → herramienta → observar → repetir, con hooks y skills disparándose; usa solo los términos del copy (skills, hooks, agentes, workflows)». The
 // instructor's closing sentence lists what his harness includes between two dashes; the drawing under the heading is made of exactly those five terms, and a token going round a track lights them
@@ -822,8 +909,8 @@ function judge(html, lang) {
     if (FX_COPY.test(sel) && FX_HIDES.test(r.body) && !(/\bhtml\.fxl\b/.test(sel) && /\[data-fx-/.test(sel))) f.push(`fx: "${sel}" hides the copy of an effect chapter by default (only html.fxl [data-fx-…], an attribute the armed effect sets, may)`);
   }
 
-  // chapters 03, 05, 07, 09 and 12 are square: no rule that styles one of their parts may round it or cut it into a circle (the circular lenses are gone and stay gone)
-  for (const [what, re] of [['chapter 03', C03_CSS], ['chapter 05', C05_CSS], ['chapter 07', C07_CSS], ['chapter 09', C09_CSS], ['chapter 12', C12_CSS]]) for (const r of rules) if (r.sel.split(',').some((sel) => re.test(sel)) && /border-radius\s*:\s*(?!0(?:px)?\s*(?:;|$))|clip-path\s*:\s*(?:circle|ellipse)/i.test(r.body)) f.push(`round: "${r.sel}" makes a round shape in ${what} (square HUD geometry, no circles, no rounded corners)`);
+  // chapters 03, 05, 07, 09, 12 and 13 are square: no rule that styles one of their parts may round it or cut it into a circle (the circular lenses are gone and stay gone)
+  for (const [what, re] of [['chapter 03', C03_CSS], ['chapter 05', C05_CSS], ['chapter 07', C07_CSS], ['chapter 09', C09_CSS], ['chapter 12', C12_CSS], ['chapter 13', C13_CSS]]) for (const r of rules) if (r.sel.split(',').some((sel) => re.test(sel)) && /border-radius\s*:\s*(?!0(?:px)?\s*(?:;|$))|clip-path\s*:\s*(?:circle|ellipse)/i.test(r.body)) f.push(`round: "${r.sel}" makes a round shape in ${what} (square HUD geometry, no circles, no rounded corners)`);
 
   // chapter 04 ends with its last tab: no closing line that points at specimens now living in chapter 08, and a scroll length the engine's
   // timeline is scaled for (llm.ts: GIVEN). A mismatch would change the pacing of every beat without any error.
@@ -840,6 +927,7 @@ function judge(html, lang) {
   for (const m of vizRule(html, lang)) f.push(`viz: ${m}`);
   for (const m of pileRule(html, lang)) f.push(`pile: ${m}`);
   for (const m of groupRule(html, lang)) f.push(`group: ${m}`);
+  for (const m of sortRule(html, lang)) f.push(`sort: ${m}`);
   for (const m of loopRule(html, lang)) f.push(`loop: ${m}`);
   for (const m of gifRule(html)) f.push(`gif: ${m}`);
   return f;
@@ -1116,6 +1204,13 @@ function mutants(html, lang) {
     ['the chapter 09 chips styled without html.fxl', html.replace('html.fxl .irt{position:absolute;', '.irt{position:absolute;'), /fx: "\.irt" styles a part that only an effect adds/],
     ['the chapter 09 layer styled without html.fxl', html.replace('html.fxl .irv{position:absolute;', '.irv{position:absolute;'), /fx: "\.irv" styles a part that only an effect adds/],
     ['a stage-2B rule on the temario list itself (it would outlive dispose)', html.replace('html.fxl .irv{position:absolute;', 'html.fxl .idx{position:absolute;'), /fx: "html\.fxl \.idx" is in the stage-2B block but styles an element no effect owns/],
+    ['chapter 13 without its data-fx name', html.replace('data-fx="separate"', 'data-fx="x"'), /fx: #c13 lost its data-fx/],
+    ['a chapter 13 column without its hook', inChapter('c13', (c) => c.replace(' data-col="no"', '')), /fx: #c13 has 1 data-col/],
+    ['chapter 13 with the pin class in the markup', html.replace('<section id="c13" class="sec cx"', '<section id="c13" class="sec cx pin"'), /layout: #c13 carries the effects' `pin` class/],
+    ['the chapter 13 chips styled without html.fxl', html.replace('html.fxl .ssu::before,html.fxl .ssu[data-t2]::after{box-sizing:border-box;', '.ssu::before,.ssu[data-t2]::after{box-sizing:border-box;'), /fx: "\.ssu::before" styles a part that only an effect adds/],
+    ['the chapter 13 units styled without html.fxl', html.replace('html.fxl .ssu{position:absolute;', '.ssu{position:absolute;'), /fx: "\.ssu" styles a part that only an effect adds/],
+    ['the chapter 13 layer styled without html.fxl', html.replace('html.fxl .ssv{position:absolute;', '.ssv{position:absolute;'), /fx: "\.ssv" styles a part that only an effect adds/],
+    ['a stage-2B rule on the lists\' block itself (it would outlive dispose)', html.replace('html.fxl .ssv{position:absolute;', 'html.fxl .para{position:absolute;'), /fx: "html\.fxl \.para" is in the stage-2B block but styles an element no effect owns/],
     ['chapter 08 without its bars hook', inChapter('c08', (c) => c.replace(' data-bars', '')), /fx: #c08 has 0 data-bars/],
     ['the chapter 08 bar pre-state styled without html.fxl', html.replace('html.fxl [data-fx-s] .cb i{', '[data-fx-s] .cb i{'), /fx: "\[data-fx-s\] \.cb i" styles a part that only an effect adds/],
     ['the chapter 08 bars hidden by default', html.replace('</head>', '<style>.cb i{opacity:0}</style></head>'), /fx: "\.cb i" hides the copy/],
@@ -1276,8 +1371,8 @@ function engineBootSelfTest(src) {
 // The effects are code that touches a page whose copy is its own gate's business. They write no copy (text comes from the DOM), they animate only transform,
 // opacity, clip-path and filter (layout is CSS under html.fxl, decided once at attach), and an effect that pre-arms something (hides it, waiting) does it only to
 // what is below the fold. `files` is { 'c02.ts': source, ... }.
-const FX_PREARM = ['c02.ts', 'c03.ts', 'c05v.ts', 'c07.ts', 'c08.ts', 'c09.ts', 'c12v.ts', 'wordmark.ts'];                              // modules that arm pre-states for play-once effects: they must ask belowFold() first (a scrubbed one is a function of the scroll position and arms nothing)
-const FX_MODULES = ['index.ts', 'common.ts', 'c02.ts', 'c03.ts', 'c05.ts', 'c05v.ts', 'c06.ts', 'c07.ts', 'c08.ts', 'c09.ts', 'c12v.ts', 'wordmark.ts'];
+const FX_PREARM = ['c02.ts', 'c03.ts', 'c05v.ts', 'c07.ts', 'c08.ts', 'c09.ts', 'c12v.ts', 'c13.ts', 'wordmark.ts'];                              // modules that arm pre-states for play-once effects: they must ask belowFold() first (a scrubbed one is a function of the scroll position and arms nothing)
+const FX_MODULES = ['index.ts', 'common.ts', 'c02.ts', 'c03.ts', 'c05.ts', 'c05v.ts', 'c06.ts', 'c07.ts', 'c08.ts', 'c09.ts', 'c12v.ts', 'c13.ts', 'wordmark.ts'];
 const ANIMATED = new Set(['transform', 'opacity', 'clipPath', 'filter', 'willChange']);
 function fxSource(files) {
   const f = [];
@@ -1285,6 +1380,7 @@ function fxSource(files) {
   for (const [name, src] of Object.entries(files)) {
     const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`])\/\/.*$/gm, '$1');
     if (/\.(?:textContent|innerText|innerHTML|outerHTML)\s*=\s*(?:'[^']|"[^"]|`)/.test(code)) f.push(`${name}: writes a string literal into the page (the copy is the HTML's; an effect only moves what is there)`);
+    if (/\.setAttribute\(\s*(?:'data-t\d'|"data-t\d"|`data-t(?:\d|\$\{[^}]*\})`)\s*,\s*(?:'[^']|"[^"]|`)/.test(code)) f.push(`${name}: writes a string literal into the text attribute of a chip (the chips' text is the page's own token pieces, never typed)`);
     if (/\b(?:createTextNode|insertAdjacentText|insertAdjacentHTML|document\.write)\s*\(/.test(code)) f.push(`${name}: writes text or markup into the page (an effect adds empty, aria-hidden parts only)`);
     if (/\bel\(\s*['"][a-z0-9]+['"]\s*,\s*(?:['"][^'"]*['"]|undefined|null)\s*,\s*['"`]/.test(code)) f.push(`${name}: builds an element with literal content`);
     for (const m of code.matchAll(/\.style\.(\w+)\s*=(?!=)/g)) if (!ANIMATED.has(m[1])) f.push(`${name}: sets style.${m[1]} (an effect changes transform, opacity, clip-path and filter; layout is CSS under html.fxl)`);
@@ -1334,6 +1430,11 @@ function fxSourceSelfTest(files) {
     ['a layout property animated (chapter 09, style.width)', { ...files, 'c09.ts': files['c09.ts'].replace('export function initC09', "document.body.style.width = '1px';\nexport function initC09") }, /c09\.ts: sets style\.width/],
     ['a literal written by the chapter 09 chips', { ...files, 'c09.ts': files['c09.ts'].replace('c.textContent = p;', "c.textContent = 'x';") }, /c09\.ts: writes a string literal/],
     ['a custom property of the page set by chapter 09 (--lg)', { ...files, 'c09.ts': files['c09.ts'].replace('export function initC09', "document.body.style.setProperty('--lg', '1px');\nexport function initC09") }, /c09\.ts: sets the custom property --lg/],
+    ['a pre-state armed without once() or belowFold() (chapter 13)', { ...files, 'c13.ts': files['c13.ts'].replace('once(para, undo', 'go(para, undo') }, /c13\.ts: arms a pre-state without asking belowFold/],
+    ['a layout property animated (chapter 13, style.width)', { ...files, 'c13.ts': files['c13.ts'].replace('export function initC13', "document.body.style.width = '1px';\nexport function initC13") }, /c13\.ts: sets style\.width/],
+    ['a literal written by the chapter 13 chips (their text attribute)', { ...files, 'c13.ts': files['c13.ts'].replace('b.setAttribute(`data-t${i + 1}`, t)', "b.setAttribute(`data-t${i + 1}`, 'x')") }, /c13\.ts: writes a string literal into the text attribute of a chip/],
+    ['a literal written by chapter 13 with textContent', { ...files, 'c13.ts': files['c13.ts'].replace('export function initC13', "document.body.textContent = 'x';\nexport function initC13") }, /c13\.ts: writes a string literal into the page/],
+    ['a custom property of the page set by chapter 13 (--lg)', { ...files, 'c13.ts': files['c13.ts'].replace('export function initC13', "document.body.style.setProperty('--lg', '1px');\nexport function initC13") }, /c13\.ts: sets the custom property --lg/],
     ['a pre-state armed without once() or belowFold() (chapter 12 loop)', { ...files, 'c12v.ts': files['c12v.ts'].replace('once(box!, undo', 'go(box!, undo') }, /c12v\.ts: arms a pre-state without asking belowFold/],
     ['a layout property animated (chapter 12 loop, style.width)', { ...files, 'c12v.ts': files['c12v.ts'].replace('export function initC12V', "document.body.style.width = '1px';\nexport function initC12V") }, /c12v\.ts: sets style\.width/],
     ['a literal written by the chapter 12 loop', { ...files, 'c12v.ts': files['c12v.ts'].replace('export function initC12V', "document.body.textContent = 'x';\nexport function initC12V") }, /c12v\.ts: writes a string literal/],
@@ -1401,7 +1502,7 @@ for (const m of fxSource(fxFiles)) { console.error(`FAIL fx: ${m}`); fail++; }
 for (const lang of LANGS) {
   const html = pages.get(`${lang}/none`);
   fail += selfTest(html, lang); mutantCount += mutants(html, lang).length;
-  for (const t of [deltaSelfTest, tokensSelfTest, chatSelfTest, sharpSelfTest, vizSelfTest, pileSelfTest, groupSelfTest, loopSelfTest, gifSelfTest]) { const [bad, n] = t(html, lang); fail += bad; mutantCount += n; }
+  for (const t of [deltaSelfTest, tokensSelfTest, chatSelfTest, sharpSelfTest, vizSelfTest, pileSelfTest, groupSelfTest, sortSelfTest, loopSelfTest, gifSelfTest]) { const [bad, n] = t(html, lang); fail += bad; mutantCount += n; }
 }
 for (const lang of LANGS) for (const cc of MARKETS) {
   const tag = `${lang}/${cc ?? 'none'}`, html = pages.get(tag);

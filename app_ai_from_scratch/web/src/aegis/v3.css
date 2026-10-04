@@ -810,6 +810,17 @@ html.fxl [data-fx-s] .cb i{transform-origin:0 50%;will-change:transform}
 html.fxl .irv{position:absolute;left:0;top:0;width:0;height:0;overflow:visible;pointer-events:none;z-index:2}
 html.fxl .irt{position:absolute;left:0;top:0;display:flex;align-items:center;height:24px;padding:0 .5em;border:1px solid var(--hair);background:var(--panel);font:500 12px/1 var(--m);color:var(--l2);white-space:nowrap}
 @media (max-width:480px){html.fxl .irt{padding:0 .35em;font-size:10px}}
+/* 13: the two lists are made by sorting a pile once, when they come up the screen (only if they were below the viewport when the engine attached: [data-fx-s] is on the block of the two lists while that is
+   pending). What the effect adds is a layer `ssv` and, in it, one element `ssu` per unit: a unit is up to two square mono chips of chapter 09 side by side, and its chips are the element's own
+   pseudo-elements (::before and ::after, the text of each read from data-t1 and data-t2), so a unit is one node for the contract's counter and the effect moves it with transform and opacity alone. The yes
+   list's chips are outlined in the accent so the two lists can be told apart in the pile. The layer is a point with no size at the corner of its containing block (the effect measures where that is). */
+html.fxl .ssv{position:absolute;left:0;top:0;width:0;height:0;overflow:visible;pointer-events:none;z-index:2}
+html.fxl .ssu{position:absolute;left:0;top:0;display:flex;gap:3px}
+html.fxl .ssu::before,html.fxl .ssu[data-t2]::after{box-sizing:border-box;display:flex;align-items:center;height:24px;padding:0 .5em;border:1px solid var(--hair);background:var(--panel);font:500 12px/1 var(--m);color:var(--l2);white-space:nowrap}
+html.fxl .ssu::before{content:attr(data-t1)}
+html.fxl .ssu[data-t2]::after{content:attr(data-t2)}
+html.fxl .ssu.y::before,html.fxl .ssu.y[data-t2]::after{border-color:var(--ac);color:var(--l1)}
+@media (max-width:480px){html.fxl .ssu::before,html.fxl .ssu[data-t2]::after{padding:0 .35em;font-size:10px}}
 
 /* 17 · the wordmark: the runners are an extra svg laid over each outline (`.wrs`, added by the effect, with one path `.wr` per contour of the letters): a short bright dash that laps its contour,
    every contour with a phase of its own, so lines are always running somewhere on the mark. Always white on the black plate. The glow is a drop-shadow on that one svg (WebKit does not paint

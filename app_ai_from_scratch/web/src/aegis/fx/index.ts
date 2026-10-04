@@ -11,9 +11,10 @@ import { initC07 } from './c07';
 import { initC08 } from './c08';
 import { initC09 } from './c09';
 import { initC12V } from './c12v';
+import { initC13 } from './c13';
 import { initWordmark } from './wordmark';
 
-const CHAPTERS: Array<[string, () => Fx]> = [['c02', initC02], ['c03', initC03], ['c05', initC05], ['c05v', initC05V], ['c06', initC06], ['c07', initC07], ['c08', initC08], ['c09', initC09], ['c12v', initC12V], ['wordmark', initWordmark]];
+const CHAPTERS: Array<[string, () => Fx]> = [['c02', initC02], ['c03', initC03], ['c05', initC05], ['c05v', initC05V], ['c06', initC06], ['c07', initC07], ['c08', initC08], ['c09', initC09], ['c12v', initC12V], ['c13', initC13], ['wordmark', initWordmark]];
 
 export function initFx(): Fx {
   const live: Fx[] = [];

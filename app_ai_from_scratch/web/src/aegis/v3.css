@@ -624,6 +624,42 @@ html[data-ch="cL"] .cue{display:none}
 .bio-body{font:400 clamp(16px,1.4vw,18px)/1.6 var(--f);color:var(--l2)}
 .bio-em{padding-left:16px;border-left:2px solid var(--ac);font:700 clamp(20px,2vw,28px)/1.2 var(--f);letter-spacing:-.03em}
 .bio-close{padding-top:20px;border-top:1px solid var(--hair2);font:500 15px/1.55 var(--f);color:var(--l2)}
+/* 12 · the harness as a loop (V3Loop.astro; src/aegis/fx/c12v.ts plays it once). The markup is the finished picture: the loop at rest. Square, flat, hairline; every class is lp- and styled only here.
+   On a wide screen it sits under the heading and the text takes both rows of the right column; on a narrow one it follows the text. */
+.bio{grid-template-rows:auto 1fr}
+.bio-l{grid-column:1;grid-row:1}
+.bio-h{grid-column:2;grid-row:1 / span 2}
+.lp{grid-column:1;grid-row:2;align-self:start;container-type:inline-size;display:flex;flex-direction:column;gap:14px;min-width:0;pointer-events:none;user-select:none}
+@media (max-width:900px){.bio{grid-template-rows:none}.bio-l,.bio-h,.lp{grid-column:1;grid-row:auto}}
+.lp-tag{margin:0;display:flex;align-items:center;gap:8px;font:500 10px/1 var(--m);letter-spacing:.18em;color:var(--ac)}
+.lp-tag em{font-style:normal}
+.lp-fig{position:relative;width:100%;aspect-ratio:16/10;--sq:clamp(8px,2.6cqw,12px);--tk:clamp(5px,1.7cqw,8px);--tg:clamp(3px,1.1cqw,6px)}
+.lp-fig > *{position:absolute}
+.lp-wf{inset:0;border:1px solid var(--hair)}
+.lp-c{display:block;padding:.5em .75em;border:1px solid var(--hair);background:var(--bg);font:500 clamp(8px,2.5cqw,10px)/1 var(--m);letter-spacing:.14em;text-transform:uppercase;color:var(--l2);white-space:nowrap}
+.lp-c::after{content:'';position:absolute;inset:-1px;border:1px solid var(--ac);opacity:var(--fx-l,0)}
+.lp-wl{left:3%;top:0;translate:0 -50%}
+.lp-ag{left:50%;top:calc(var(--y) + var(--h) / 2);translate:-50% -50%}
+.lp-sk{left:var(--x);top:8%}
+.lp-hk{right:calc(100% - var(--x) - var(--w));top:8%}
+.lp-e{background:var(--l3)}
+.lp-e0{left:var(--x);top:var(--y);width:var(--w);height:1px;transform-origin:0 0}
+.lp-e1{left:calc(var(--x) + var(--w));top:var(--y);width:1px;height:var(--h);transform-origin:0 0}
+.lp-e2{left:var(--x);top:calc(var(--y) + var(--h));width:var(--w);height:1px;transform-origin:100% 0}
+.lp-e3{left:var(--x);top:var(--y);width:1px;height:var(--h);transform-origin:0 100%}
+.lp-s,.lp-p,.lp-k,.lp-g{width:var(--sq);height:var(--sq);margin:calc(var(--sq) / -2) 0 0 calc(var(--sq) / -2)}
+.lp-s{border:1px solid var(--l1);background:var(--bg)}
+.lp-p{border:1px solid var(--ac);opacity:0}
+.lp-k,.lp-g{background:var(--ac)}
+.lp-g{left:var(--x);top:var(--y);opacity:0}
+.lp-s0,.lp-p0,.lp-k,.lp-s3,.lp-p3{left:var(--x)}
+.lp-s1,.lp-p1,.lp-s2,.lp-p2{left:calc(var(--x) + var(--w))}
+.lp-s0,.lp-p0,.lp-k,.lp-s1,.lp-p1{top:var(--y)}
+.lp-s2,.lp-p2,.lp-s3,.lp-p3{top:calc(var(--y) + var(--h))}
+.lp-b{left:var(--x);width:var(--w);bottom:5%;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.lp-q{display:flex;gap:var(--tg)}
+.lp-t{display:block;width:var(--tk);height:var(--tk);background:var(--ac)}
+.lp-pl{position:relative}
 
 /* 13 · para quién */
 .para{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));border:1px solid var(--hair);background:var(--panel)}

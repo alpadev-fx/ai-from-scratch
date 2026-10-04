@@ -9,9 +9,10 @@ import { initC05V } from './c05v';
 import { initC06 } from './c06';
 import { initC07 } from './c07';
 import { initC08 } from './c08';
+import { initC12V } from './c12v';
 import { initWordmark } from './wordmark';
 
-const CHAPTERS: Array<[string, () => Fx]> = [['c02', initC02], ['c03', initC03], ['c05', initC05], ['c05v', initC05V], ['c06', initC06], ['c07', initC07], ['c08', initC08], ['wordmark', initWordmark]];
+const CHAPTERS: Array<[string, () => Fx]> = [['c02', initC02], ['c03', initC03], ['c05', initC05], ['c05v', initC05V], ['c06', initC06], ['c07', initC07], ['c08', initC08], ['c12v', initC12V], ['wordmark', initWordmark]];
 
 export function initFx(): Fx {
   const live: Fx[] = [];

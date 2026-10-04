@@ -15,6 +15,8 @@
 //   · stage 2B (the chapters' motion): the hooks each effect drives are in the server-rendered markup, the effects' CSS hangs on html.fxl and on attributes
 //     the armed effect itself sets (never a default that hides copy), and the effect modules (src/aegis/fx) write no copy, animate only transform, opacity,
 //     clip-path and filter, pre-arm only what is below the fold, and are built after html.fxl and undone with it (main.ts).
+//   · stage 2C: chapter 12's loop (the five terms of the closing sentence, drawn as a token going round a track): its words are those terms, read from the sentence, and the page's own
+//     ILUSTRATIVO tag; it is a decoration (aria-hidden), made of no image and no round shape, and the number of its prompt ticks is the sentence's own.
 // Before it judges the real pages it proves, on MUTATED copies of the page, that every one of these rules CAN fail (and that the
 // two exemptions stay narrow). If the page cannot be fetched or a self-test cannot fail, the gate FAILS: it never skips.
 import { existsSync, readFileSync } from 'node:fs';
@@ -25,6 +27,7 @@ import { ctxOf } from '../src/aegis/specimens.ts';
 import { piecesOf, show, wordsOf } from '../src/aegis/tokens.ts';
 import { chipStrings } from '../src/aegis/token-strings.ts';
 import { CURVE, DIALS, WEIGHTS, ANSWERS, figureInts } from '../src/aegis/c05-data.ts';
+import { GEO as C12_GEO, NODES as C12_NODES, loopOf } from '../src/aegis/c12-data.ts';
 import { SANCTIONED, guard, violations, assertPriced } from '../src/aegis/copy-guard.ts';
 
 // The committed real tokens (o200k_base, cut with tiktoken by web/scripts/v3-tokens.py): every chip on the page must be one of these pieces.
@@ -49,6 +52,7 @@ const FX_HOOKS = {
   c06: { fx: 'implode', hooks: [['data-nots', 1], ['data-word', 6], ['data-final', 1]], stage: true },
   c07: { fx: 'ring', hooks: [['data-ring', 1], ['data-ring-stroke', 1], ['data-tick', 12], ['data-count', 1]] },   // one counter only: the four figures under the ring never count
   c08: { fx: 'bars-once', hooks: [['data-bars', 1]] },
+  c12: { fx: 'plate-parallax', hooks: [['data-loop', 1]] },   // the loop drawing under the heading (the plate's parallax is the engine's own)
 };
 // the parts that exist only because an effect added them (they must hang on html.fxl) · the selectors that name the copy of an effect chapter · what hides it
 const FX_ONLY = /\.(?:ty|gh|pin|rail|imp|pen|num|wrs?|vx)\b|\[data-fx-/;
@@ -119,7 +123,7 @@ function required(lang) {
     c10: [['label', lab('10', V.ch10)], ['h2', fill(V.s7H)], ...V.s7Items.flatMap((it, i) => [[`item ${i + 1}`, it.t], [`item ${i + 1} d`, fill(it.d)]]),
       ['item 6', V.s7Next], ['item 6 d', V.vivoV], ['item 7', V.s7Gar.t], ['item 7 d', fill(V.s7Gar.d)], ...cta],
     c11: [['label', lab('11', V.ch11)], ['h2', V.s8H], ['body', fill(V.s8Body)], ['seal text', V.s8Sello], ['seal core', '14'], ...cta],
-    c12: [['label', lab('12', V.instrEb)], ['h2', V.instrH], ['body', V.instrBody], ['emphasis', V.instrEnfasis], ['close', V.instrCierre]],
+    c12: [['label', lab('12', V.instrEb)], ['h2', V.instrH], ['body', V.instrBody], ['emphasis', V.instrEnfasis], ['close', V.instrCierre], ['drawing label', V.ilus]],
     c13: [['label', lab('13', V.ch13)], ['yes h', V.s10TituloSi], ...V.s10Si.map((x) => ['yes', x]), ['no h', V.s10TituloNo], ...V.s10No.map((x) => ['no', x])],
     c14: [['label', lab('14', V.ch14)], ['h2', P.preH2], ['price', big], ['unit', P.preUnidad], ['note', P.preNota], ['cta', P.preCta], ['why h', P.preWhyH],
       ['why 1', P.preWhy1], ['why 2', P.preWhy2], ['why 3', V.preWhy3V], ['why 4', P.preWhy4], ['guarantee', P.preGar], ['terms', P.preTerm],
@@ -403,6 +407,75 @@ function vizSelfTest(html, lang) {
   return [bad, Object.keys(mut).length + Object.keys(css).length];
 }
 
+// ---------- chapter 12: the harness as a loop under the heading ----------
+// The owner's brief (stage 2C): «bucle de agente: plan → herramienta → observar → repetir, con hooks y skills disparándose; usa solo los términos del copy (skills, hooks, agentes, workflows)». The
+// instructor's closing sentence lists what his harness includes between two dashes; the drawing under the heading is made of exactly those five terms, and a token going round a track lights them
+// (src/aegis/fx/c12v.ts plays it once). A drawing has no copy of its own: its words are the terms READ from the sentence (c12-data loopOf: a sentence that does not list five terms stops the render) and the
+// page's own ILUSTRATIVO tag; the number of its prompt ticks is the sentence's own 9; it is a decoration (aria-hidden), made of no image, canvas, video or round shape; it stands in chapter 12's plate, after the text.
+const C12_CSS = /(?:^|[\s,>+~])\.lp(?![\w-])|\.lp-[\w-]+/;
+const C12_TERMS = [['wl', 'workflows'], ['ag', 'agents'], ['sk', 'skills'], ['hk', 'hooks'], ['pl', 'prompts']];       // the class of each chip and the term of the sentence it says, in the order of the markup
+function loopRule(html, lang) {
+  const out = [], V = STR[lang].pub.v3, c12 = (html.match(/<section id="c12"[\s\S]*?<\/section>/) ?? [''])[0];
+  if (!c12) return ['chapter 12 is missing'];
+  let L; try { L = loopOf(V.instrCierre); } catch (e) { return [`the closing sentence cannot be drawn: ${e.message}`]; }
+  const at = c12.indexOf('<div class="lp" data-loop');
+  if (at < 0) return ['chapter 12 has no loop drawing under its heading (the five terms of the closing sentence, as a loop)'];
+  const box = balanced(c12, at, 'div');
+  if (!/^<div class="lp" data-loop aria-hidden="true">/.test(box)) out.push('the drawing is readable by a screen reader (it is a decoration: aria-hidden)');
+  const words = [V.ilus, ...C12_TERMS.map(([, t]) => L[t])].join(' '), text = norm(box.replace(/<[^>]+>/g, ' '));
+  if (text !== words) out.push(`the drawing carries the text «${text}», expected only «${words}» (the page's ${V.ilus} tag and the sentence's own five terms: a drawing has no copy of its own)`);
+  if (!box.includes(`<p class="lp-tag"><i class="dot"></i><em>${esc(V.ilus)}</em></p>`)) out.push(`the drawing does not carry its «${V.ilus}» tag`);
+  for (const [k, t] of C12_TERMS) if (!box.includes(`<b class="lp-c lp-${k}">${esc(L[t])}</b>`)) out.push(`the «${L[t]}» chip (.lp-${k}) is not there, or says something other than the sentence's term`);
+  const parts = [['lp-e lp-e\\d', C12_NODES.edges, 'track edges'], ['lp-s lp-s\\d', C12_NODES.corners, 'corners'], ['lp-p lp-p\\d', C12_NODES.pings, 'corner outlines'], ['lp-g lp-g\\d', C12_NODES.trail, 'followers of the token'],
+    ['lp-k', C12_NODES.token, 'tokens'], ['lp-wf', C12_NODES.frame, 'closing frames'], ['lp-c lp-(?:wl|ag|sk|hk|pl)', C12_NODES.terms, 'term chips'], ['lp-t', L.n, `prompt ticks (the sentence says «${L.prompts}»)`]];
+  for (const [cls, want, what] of parts) { const got = (box.match(new RegExp(`class="${cls}"`, 'g')) ?? []).length; if (got !== want) out.push(`the drawing has ${got} ${what}, expected ${want}`); }
+  if (!box.includes(`<div class="lp-fig" style="--x:${C12_GEO.x}%;--y:${C12_GEO.y}%;--w:${C12_GEO.w}%;--h:${C12_GEO.h}%">`)) out.push('the track does not stand where c12-data says (the effect reads the same numbers)');
+  if (/<img\b|<canvas\b|<video\b|<picture\b|<svg\b|<circle\b|<ellipse\b|\brx=|border-radius/i.test(box)) out.push('the drawing carries an image, a canvas, a video, an svg or a round shape');
+  const plate = c12.indexOf('<div class="bio">') < 0 ? '' : balanced(c12, c12.indexOf('<div class="bio">'), 'div');
+  if (!plate.includes('<div class="lp" data-loop')) out.push('the drawing is not inside the bio plate');
+  if (!(c12.indexOf('class="bio-close"') >= 0 && c12.indexOf('class="bio-close"') < at)) out.push('the drawing does not follow the closing sentence (on a phone it comes after the text; on a wide screen the grid puts it under the heading)');
+  return out;
+}
+// A gate that cannot fail proves nothing: each way the loop can start to say something the sentence does not, carry copy of its own, lose a part, leave its plate or turn round must be caught.
+function loopSelfTest(html, lang) {
+  if (loopRule(html, lang).length) return [0, 0];                    // the real page is judged by the loop below
+  const inC12 = (fn) => { const at = html.indexOf('<section id="c12"'), end = html.indexOf('</section>', at); return html.slice(0, at) + fn(html.slice(at, end)) + html.slice(end); };
+  const V = STR[lang].pub.v3, L = loopOf(V.instrCierre), take = (c) => { const a = c.indexOf('<div class="lp" data-loop'), box = balanced(c, a, 'div'); return [c.slice(0, a) + c.slice(a + box.length), box]; };
+  const mut = {
+    'a loop a screen reader can read': inC12((c) => c.replace('<div class="lp" data-loop aria-hidden="true">', '<div class="lp" data-loop>')),
+    'a loop without its ILUSTRATIVO tag': inC12((c) => c.replace(/<p class="lp-tag">[\s\S]*?<\/p>/, '')),
+    'text inside the loop': inC12((c) => c.replace('<i class="lp-wf"></i>', '<i class="lp-wf"></i><p>plan</p>')),
+    'a chip that says something other than the sentence': inC12((c) => c.replace(`lp-sk">${esc(L.skills)}<`, 'lp-sk">tools<')),
+    'two chips swapped (skills say hooks, hooks say skills)': inC12((c) => c.replace(`lp-sk">${esc(L.skills)}<`, `lp-sk">${esc(L.hooks)}<`).replace(`lp-hk">${esc(L.hooks)}<`, `lp-hk">${esc(L.skills)}<`)),
+    'a sixth chip of its own': inC12((c) => c.replace('<b class="lp-c lp-pl">', '<b class="lp-c lp-x">plan</b><b class="lp-c lp-pl">')),
+    'the agents chip gone': inC12((c) => c.replace(/<b class="lp-c lp-ag">[^<]*<\/b>/, '')),
+    'a prompt tick gone (not the sentence\'s count)': inC12((c) => c.replace('<i class="lp-t"></i>', '')),
+    'a prompt tick too many': inC12((c) => c.replace('<i class="lp-t"></i>', '<i class="lp-t"></i><i class="lp-t"></i>')),
+    'a track edge gone': inC12((c) => c.replace('<i class="lp-e lp-e3"></i>', '')),
+    'a corner gone': inC12((c) => c.replace('<i class="lp-s lp-s2"></i>', '')),
+    'the token gone': inC12((c) => c.replace('<i class="lp-k"></i>', '')),
+    'a follower of the token gone': inC12((c) => c.replace('<i class="lp-g lp-g2"></i>', '')),
+    'the closing frame gone': inC12((c) => c.replace('<i class="lp-wf"></i>', '')),
+    'a loop with an image': inC12((c) => c.replace('<i class="lp-wf"></i>', '<i class="lp-wf"></i><img src="/x.png" alt="">')),
+    'a loop with a canvas': inC12((c) => c.replace('<i class="lp-wf"></i>', '<i class="lp-wf"></i><canvas></canvas>')),
+    'a round part (an svg circle)': inC12((c) => c.replace('<i class="lp-wf"></i>', '<i class="lp-wf"></i><svg><circle cx="1" cy="1" r="1"></circle></svg>')),
+    'a track that is not where c12-data says': inC12((c) => c.replace(`--x:${C12_GEO.x}%`, '--x:10%')),
+    'a loop before the text of the plate': inC12((c) => { const [rest, box] = take(c); return rest.replace('<div class="bio-h">', box + '<div class="bio-h">'); }),
+    'a loop outside the plate': inC12((c) => { const [rest, box] = take(c); return rest + box; }),
+    'no loop at all': inC12((c) => take(c)[0]),
+  };
+  const css = {
+    'a round token (border-radius on .lp-k)': html.replace('.lp-k,.lp-g{background:var(--ac)}', '.lp-k,.lp-g{border-radius:50%;background:var(--ac)}'),
+    'a round corner (border-radius on .lp-s)': html.replace('.lp-s{border:1px solid var(--l1);', '.lp-s{border-radius:50%;border:1px solid var(--l1);'),
+    'a circular clip on the loop': html.replace('.lp-fig{position:relative;', '.lp-fig{clip-path:circle(50%);position:relative;'),
+    'a rounded chip (border-radius on .lp-c)': html.replace('.lp-c{display:block;', '.lp-c{border-radius:6px;display:block;'),
+  };
+  let bad = 0;
+  for (const [what, m] of Object.entries(mut)) if (m === html || !loopRule(m, lang).length) { console.error(`FAIL self-test: loopRule does not catch "${what}"`); bad++; }
+  for (const [what, m] of Object.entries(css)) if (m === html || !judge(m, lang).some((x) => /^round: /.test(x))) { console.error(`FAIL self-test: the round-shape rule does not catch "${what}"`); bad++; }
+  return [bad, Object.keys(mut).length + Object.keys(css).length];
+}
+
 // ---------- real tokens: what the page ships for the effects (#v3-tokens) ----------
 // Every string that is a chip must be in the committed file (the page answers 500 otherwise), the page must ship exactly the pieces of that file, those pieces must join back into
 // the strings, and every one of those strings must be on the page: a copy change with a stale file, or a file edited by hand into something that is not a cut, is red here and in
@@ -606,8 +679,8 @@ function judge(html, lang) {
     if (FX_COPY.test(sel) && FX_HIDES.test(r.body) && !(/\bhtml\.fxl\b/.test(sel) && /\[data-fx-/.test(sel))) f.push(`fx: "${sel}" hides the copy of an effect chapter by default (only html.fxl [data-fx-…], an attribute the armed effect sets, may)`);
   }
 
-  // chapters 03 and 05 are square: no rule that styles one of their parts may round it or cut it into a circle (the circular lenses are gone and stay gone)
-  for (const [what, re] of [['chapter 03', C03_CSS], ['chapter 05', C05_CSS]]) for (const r of rules) if (r.sel.split(',').some((sel) => re.test(sel)) && /border-radius\s*:\s*(?!0(?:px)?\s*(?:;|$))|clip-path\s*:\s*(?:circle|ellipse)/i.test(r.body)) f.push(`round: "${r.sel}" makes a round shape in ${what} (square HUD geometry, no circles, no rounded corners)`);
+  // chapters 03, 05 and 12 are square: no rule that styles one of their parts may round it or cut it into a circle (the circular lenses are gone and stay gone)
+  for (const [what, re] of [['chapter 03', C03_CSS], ['chapter 05', C05_CSS], ['chapter 12', C12_CSS]]) for (const r of rules) if (r.sel.split(',').some((sel) => re.test(sel)) && /border-radius\s*:\s*(?!0(?:px)?\s*(?:;|$))|clip-path\s*:\s*(?:circle|ellipse)/i.test(r.body)) f.push(`round: "${r.sel}" makes a round shape in ${what} (square HUD geometry, no circles, no rounded corners)`);
 
   // chapter 04 ends with its last tab: no closing line that points at specimens now living in chapter 08, and a scroll length the engine's
   // timeline is scaled for (llm.ts: GIVEN). A mismatch would change the pacing of every beat without any error.
@@ -622,6 +695,7 @@ function judge(html, lang) {
   for (const m of chatRule(html, lang)) f.push(`chat: ${m}`);
   for (const m of sharpRule(html, lang)) f.push(`sharp: ${m}`);
   for (const m of vizRule(html, lang)) f.push(`viz: ${m}`);
+  for (const m of loopRule(html, lang)) f.push(`loop: ${m}`);
   for (const m of gifRule(html)) f.push(`gif: ${m}`);
   return f;
 }
@@ -1052,8 +1126,8 @@ function engineBootSelfTest(src) {
 // The effects are code that touches a page whose copy is its own gate's business. They write no copy (text comes from the DOM), they animate only transform,
 // opacity, clip-path and filter (layout is CSS under html.fxl, decided once at attach), and an effect that pre-arms something (hides it, waiting) does it only to
 // what is below the fold. `files` is { 'c02.ts': source, ... }.
-const FX_PREARM = ['c02.ts', 'c03.ts', 'c05v.ts', 'c07.ts', 'c08.ts', 'wordmark.ts'];                              // modules that arm pre-states for play-once effects: they must ask belowFold() first (a scrubbed one is a function of the scroll position and arms nothing)
-const FX_MODULES = ['index.ts', 'common.ts', 'c02.ts', 'c03.ts', 'c05.ts', 'c05v.ts', 'c06.ts', 'c07.ts', 'c08.ts', 'wordmark.ts'];
+const FX_PREARM = ['c02.ts', 'c03.ts', 'c05v.ts', 'c07.ts', 'c08.ts', 'c12v.ts', 'wordmark.ts'];                              // modules that arm pre-states for play-once effects: they must ask belowFold() first (a scrubbed one is a function of the scroll position and arms nothing)
+const FX_MODULES = ['index.ts', 'common.ts', 'c02.ts', 'c03.ts', 'c05.ts', 'c05v.ts', 'c06.ts', 'c07.ts', 'c08.ts', 'c12v.ts', 'wordmark.ts'];
 const ANIMATED = new Set(['transform', 'opacity', 'clipPath', 'filter', 'willChange']);
 function fxSource(files) {
   const f = [];
@@ -1105,6 +1179,10 @@ function fxSourceSelfTest(files) {
     ['a layout property animated (chapter 07, style.width)', { ...files, 'c07.ts': files['c07.ts'].replace('export function initC07', "document.body.style.width = '1px';\nexport function initC07") }, /c07\.ts: sets style\.width/],
     ['a pre-state armed without once() or belowFold() (chapter 08)', { ...files, 'c08.ts': files['c08.ts'].replace('once(box, undo', 'go(box, undo') }, /c08\.ts: arms a pre-state without asking belowFold/],
     ['a layout property animated (chapter 08, style.width)', { ...files, 'c08.ts': files['c08.ts'].replace('export function initC08', "document.body.style.width = '1px';\nexport function initC08") }, /c08\.ts: sets style\.width/],
+    ['a pre-state armed without once() or belowFold() (chapter 12 loop)', { ...files, 'c12v.ts': files['c12v.ts'].replace('once(box!, undo', 'go(box!, undo') }, /c12v\.ts: arms a pre-state without asking belowFold/],
+    ['a layout property animated (chapter 12 loop, style.width)', { ...files, 'c12v.ts': files['c12v.ts'].replace('export function initC12V', "document.body.style.width = '1px';\nexport function initC12V") }, /c12v\.ts: sets style\.width/],
+    ['a literal written by the chapter 12 loop', { ...files, 'c12v.ts': files['c12v.ts'].replace('export function initC12V', "document.body.textContent = 'x';\nexport function initC12V") }, /c12v\.ts: writes a string literal/],
+    ['a custom property of the page reused by the chapter 12 loop (--lg)', { ...files, 'c12v.ts': files['c12v.ts'].replace("setProperty('--fx-l'", "setProperty('--lg'") }, /c12v\.ts: sets the custom property --lg/],
     ['a pre-state armed without once() or belowFold() (wordmark)', { ...files, 'wordmark.ts': files['wordmark.ts'].replace('once(box, undo', 'go(box, undo') }, /wordmark\.ts: arms a pre-state without asking belowFold/],
     ['a layout property animated (wordmark, style.width)', { ...files, 'wordmark.ts': files['wordmark.ts'].replace('export function initWordmark', "document.body.style.width = '1px';\nexport function initWordmark") }, /wordmark\.ts: sets style\.width/],
     ['a literal written by the wordmark', { ...files, 'wordmark.ts': files['wordmark.ts'].replace('export function initWordmark', "document.body.textContent = 'x';\nexport function initWordmark") }, /wordmark\.ts: writes a string literal/],
@@ -1168,7 +1246,7 @@ for (const m of fxSource(fxFiles)) { console.error(`FAIL fx: ${m}`); fail++; }
 for (const lang of LANGS) {
   const html = pages.get(`${lang}/none`);
   fail += selfTest(html, lang); mutantCount += mutants(html, lang).length;
-  for (const t of [deltaSelfTest, tokensSelfTest, chatSelfTest, sharpSelfTest, vizSelfTest, gifSelfTest]) { const [bad, n] = t(html, lang); fail += bad; mutantCount += n; }
+  for (const t of [deltaSelfTest, tokensSelfTest, chatSelfTest, sharpSelfTest, vizSelfTest, loopSelfTest, gifSelfTest]) { const [bad, n] = t(html, lang); fail += bad; mutantCount += n; }
 }
 for (const lang of LANGS) for (const cc of MARKETS) {
   const tag = `${lang}/${cc ?? 'none'}`, html = pages.get(tag);

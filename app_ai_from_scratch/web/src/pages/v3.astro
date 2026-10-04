@@ -30,6 +30,7 @@ import { jsonSafe } from '../lib/json-safe';
 import PrefToggles from '../components/PrefToggles.astro';
 import V3Cta from '../components/V3Cta.astro';
 import V3Viz from '../components/V3Viz.astro';
+import V3Loop from '../components/V3Loop.astro';
 import { TOKENS } from '../lib/theme-css';
 import { tokenize, candRowsHTML, ctxOf } from '../aegis/specimens';
 import { show, wordsOf, piecesOf } from '../aegis/tokens';
@@ -509,7 +510,8 @@ setTimeout(function(){
   <V3Cta label={P.preCta} micro={P.heroGar} />
 </section>
 
-<!-- ===== 12 · QUIÉN (Hormozi instr*, approved word for word on 2026-09-21; it backs «frontera» in the hero) ===== -->
+<!-- ===== 12 · QUIÉN (Hormozi instr*, approved word for word on 2026-09-21; it backs «frontera» in the hero). Under the heading sits a drawing of what the closing sentence lists, as a loop
+     (V3Loop, aria-hidden, ILUSTRATIVO; its only words are the five terms of that sentence, read from it). Stage 2C plays it once (fx/c12v.ts). ===== -->
 <section id="c12" class="sec cx" aria-labelledby="c12h" data-fx="plate-parallax">
   <div class="sh"><div class="sn">■ {label('12', V.instrEb)}</div><div class="sx">{cnt('12')}</div></div>
   <div class="bio">
@@ -520,6 +522,7 @@ setTimeout(function(){
       <p class="bio-em" data-line>{V.instrEnfasis}</p>
       <p class="bio-close" data-line>{V.instrCierre}</p>
     </div>
+    <V3Loop close={V.instrCierre} tag={V.ilus} />
   </div>
 </section>
 

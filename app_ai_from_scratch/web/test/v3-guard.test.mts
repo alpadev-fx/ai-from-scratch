@@ -13,6 +13,7 @@ import { ANSWERS, CURVE, DIALS, END, NODES, NODE_BUDGET, T, TRACK_NODES, VIZ, WE
 import { DEFAULTS, LADDER, WHAT, createRatchet, type Step } from '../src/aegis/quality.ts';
 import { ahead } from '../src/aegis/seq.ts';
 import { glowAlpha, squareFrame, squareGlow, toward } from '../src/aegis/util.ts';
+import { END as C12_END, GEO as C12_GEO, LAP as C12_LAP, LAPS, LAPS_END, NODES as C12_NODES, NODE_BUDGET as C12_BUDGET, T as C12_T, beat, loopOf, nodeCount, tickAt } from '../src/aegis/c12-data.ts';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 
 test('guard throws on a city, on plural courses, and lets the tokenizer sentence through', () => {
@@ -831,3 +832,128 @@ test('chapter 04: the output node\'s core is a light with a SQUARE falloff (the 
   assert.equal(squareGlow(1, 0.2, h), 0); assert.equal(squareGlow(0.2, -1, h), 0);                  // it dies out exactly on the sides of the sprite
 });
 
+// ---------- chapter 12: the harness as a loop ----------
+test('chapter 12: the loop is made of the five terms of the closing sentence, read from it in both languages, and a sentence that does not list them stops the render', () => {
+  const want = {
+    es: { skills: 'skills', hooks: 'hooks', agents: 'agentes', workflows: 'workflows', prompts: '9 prompts', n: 9 },
+    en: { skills: 'skills', hooks: 'hooks', agents: 'agents', workflows: 'workflows', prompts: '9 prompts', n: 9 },
+  };
+  for (const lang of ['es', 'en'] as const) {
+    const close = STR[lang].pub.v3.instrCierre, L = loopOf(close);
+    assert.deepEqual(L, want[lang], `${lang}: the five terms of «${close}»`);
+    const at = [L.skills, L.hooks, L.agents, L.workflows, L.prompts].map((t) => close.indexOf(t));
+    assert.ok(at.every((i) => i > 0) && at.every((i, k) => k === 0 || i > at[k - 1]!), `${lang}: every term is in the sentence, in the order it lists them`);
+    assert.equal(L.n, Number(L.prompts.split(' ')[0]), 'the number of prompt ticks is the sentence\'s own');
+  }
+  // a sentence that is not «… — a, b, c, d y N e — …» is not drawn: nothing is made from a guess
+  const bad = [
+    'Incluye mi harness, sin lista entre rayas.',
+    'Incluye mi harness — skills, hooks, agentes y 9 prompts — el mismo.',                                   // 4 terms
+    'Incluye mi harness — skills, hooks, agentes, workflows, evals y 9 prompts — el mismo.',                 // 6 terms
+    'Incluye mi harness — skills, hooks, agentes, workflows y prompts — el mismo.',                          // no count
+    'Incluye mi harness — skills, hooks, agentes, workflows y 2 prompts — el mismo.',                        // fewer prompts than laps
+    'Incluye mi harness — skills, hooks, agentes, workflows y 13 prompts — el mismo.',                       // more than it can light
+    'Incluye mi harness — skills, hooks, agentes, workflows y 9.5 prompts — el mismo.',
+    'Incluye mi harness — skills, hooks, agentes, workflows y nueve prompts — el mismo.',
+  ];
+  for (const s of bad) assert.throws(() => loopOf(s), /^Error: c12:/, s);
+  // the clean twin, in the other language and with the most ticks it can light
+  assert.deepEqual(loopOf('Includes my harness — skills, hooks, agents, workflows and 12 prompts — the same.'), { skills: 'skills', hooks: 'hooks', agents: 'agents', workflows: 'workflows', prompts: '12 prompts', n: 12 });
+});
+
+test('chapter 12: the loop\'s clocks hold together: three laps of four legs, the token home before the frame closes, every prompt lit before the loop is done', () => {
+  assert.equal(LAPS, 3); assert.equal(C12_LAP, 4 * C12_T.leg); assert.ok(Math.abs(LAPS_END - (C12_T.t0 + LAPS * C12_LAP)) < 1e-12);
+  assert.ok(Math.abs(C12_END - (LAPS_END + C12_T.frame0 + C12_T.frame + C12_T.tail)) < 1e-12);
+  assert.ok(C12_END >= 4 && C12_END <= 8, `it plays for ${C12_END.toFixed(2)} s, once`);
+  assert.equal(C12_T.dwell.length, 4, 'one dwell per corner');
+  assert.ok(C12_T.dwell.every((d) => d >= 0 && C12_T.leg - d >= 0.15), 'on every leg the token is on its way for at least 0.15 s');
+  assert.equal(Math.max(...C12_T.dwell), C12_T.dwell[1], 'it stands longest at the second corner, where the hooks fire around the work');
+  // the beats: lap-major, strictly increasing, one leg apart, the final return is the end of the last lap
+  const all: number[] = []; for (let k = 0; k < LAPS; k++) for (let j = 0; j < 4; j++) all.push(beat(k, j));
+  assert.ok(all.every((b, i) => i === 0 || Math.abs(b - all[i - 1]! - C12_T.leg) < 1e-9), 'a beat every leg');
+  assert.equal(beat(0, 0), C12_T.t0); assert.ok(Math.abs(beat(LAPS, 0) - LAPS_END) < 1e-12, 'lap 3\'s corner 0 is the final return');
+  assert.ok(C12_T.frame0 > 0 && LAPS_END + C12_T.frame0 < C12_END, 'the frame closes after the token is home, with a rest after it');
+  // the prompts: every size the sentence may have lights up in the laps, one after the other, at the third corner, and is lit before the loop is done
+  for (let n = LAPS; n <= 12; n++) {
+    const ts = Array.from({ length: n }, (_, i) => tickAt(i, n));
+    assert.ok(ts.every((t, i) => i === 0 || t > ts[i - 1]!), `${n} prompts: lit one after the other`);
+    ts.forEach((t, i) => { const k = Math.min(LAPS - 1, Math.floor((i * LAPS) / n)); assert.ok(t >= beat(k, 2) - 1e-9 && t < beat(k, 3), `${n} prompts: prompt ${i} lights while its lap's token is at or just past the third corner`); });
+    assert.ok(ts[n - 1]! + 0.25 <= LAPS_END + 1e-9, `${n} prompts: the last one is fully lit before the token is home`);
+  }
+  const nine = Array.from({ length: 9 }, (_, i) => tickAt(i, 9)), g = (k: number, o: number) => beat(k, 2) + o * C12_T.tick;
+  assert.deepEqual(nine.map((x) => +x.toFixed(6)), [g(0, 0), g(0, 1), g(0, 2), g(1, 0), g(1, 1), g(1, 2), g(2, 0), g(2, 1), g(2, 2)].map((x) => +x.toFixed(6)), '9 prompts light three by three, one group a lap');
+  // the rule can fail: a pace of 0.2 s a prompt does not fit twelve prompts in the leg
+  assert.ok(3 * 0.2 > C12_T.leg - 0.0001 || 11 * 0.2 > C12_T.leg);
+});
+
+test('chapter 12: the loop writes a style on 31 nodes in a whole pass (c12-data\'s table, one per prompt tick), under the 80 of the contract, and the markup holds the parts the table counts', () => {
+  assert.equal(C12_BUDGET, 80, 'the budget of the contract');
+  assert.equal(nodeCount(9), 31, 'the 22 of the table and the 9 ticks of the sentence');
+  assert.equal(Object.values(C12_NODES).reduce((a, b) => a + b, 0) + 9, nodeCount(9));
+  assert.ok(nodeCount(12) <= C12_BUDGET, 'even with the most ticks loopOf allows');
+  const comp = readFileSync(new URL('../src/components/V3Loop.astro', import.meta.url), 'utf8'), count = (re: RegExp) => (comp.match(re) ?? []).length;
+  assert.equal(count(/class="lp-e lp-e\d"/g), C12_NODES.edges); assert.equal(count(/class="lp-s lp-s\d"/g), C12_NODES.corners); assert.equal(count(/class="lp-p lp-p\d"/g), C12_NODES.pings);
+  assert.equal(count(/class="lp-g lp-g\d"/g), C12_NODES.trail); assert.equal(count(/class="lp-k"/g), C12_NODES.token); assert.equal(count(/class="lp-wf"/g), C12_NODES.frame);
+  assert.equal(count(/class="lp-c lp-(?:wl|ag|sk|hk|pl)"/g), C12_NODES.terms);
+  assert.equal(count(/class="lp-t"/g), 1, 'the ticks are one markup line, as many times as the sentence says');
+  // the rule can fail: a drawing of 60 ticks would go over (loopOf stops a sentence that asks for more than 12)
+  assert.ok(nodeCount(60) > C12_BUDGET);
+  assert.throws(() => loopOf('Includes my harness — skills, hooks, agents, workflows and 60 prompts — the same.'), /^Error: c12:/);
+});
+
+test('chapter 12: the drawing has no copy of its own (the component writes only the tag it is given and the terms it reads), it is a decoration, and nothing in it is round', () => {
+  const comp = readFileSync(new URL('../src/components/V3Loop.astro', import.meta.url), 'utf8'), body = comp.slice(comp.indexOf('<div class="lp"'));
+  let text = body; while (/\{[^{}]*\}/.test(text)) text = text.replace(/\{[^{}]*\}/g, '');
+  assert.equal(text.replace(/<[^>]+>/g, '').replace(/\s+/g, ''), '', 'the markup of the drawing holds no text but expressions (the tag is the page\'s own ILUSTRATIVO, the terms are the sentence\'s)');
+  assert.ok(/<p class="lp-tag"><i class="dot"><\/i><em>\{tag\}<\/em><\/p>/.test(comp) && /<div class="lp" data-loop aria-hidden="true">/.test(comp), 'the tag and aria-hidden are in the component');
+  assert.ok(/const L = loopOf\(close\)/.test(comp), 'the terms come from the closing sentence');
+  for (const t of ['workflows', 'agents', 'skills', 'hooks', 'prompts']) assert.ok(new RegExp(`>\\{L\\.${t}\\}<`).test(comp), `the ${t} chip says the sentence's term`);
+  assert.ok(new RegExp(`--x:\\$\\{GEO\\.x\\}%;--y:\\$\\{GEO\\.y\\}%;--w:\\$\\{GEO\\.w\\}%;--h:\\$\\{GEO\\.h\\}%`).test(comp), 'the track stands where c12-data says (the effect reads the same numbers)');
+  assert.deepEqual(C12_GEO, { x: 9, y: 27, w: 82, h: 44 });
+  assert.ok(!/<img|<canvas|<video|<picture|<svg|<circle|<ellipse|border-radius|rx=/.test(comp), 'no image, no canvas, no round shape');
+  const css = readFileSync(new URL('../src/aegis/v3.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  const mine = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ sel: m[1]!.trim(), body: m[2]! })).filter((r) => /\.lp(?![\w-])|\.lp-[\w-]+/.test(r.sel));
+  assert.ok(mine.length >= 28, `the drawing's rules are found (${mine.length})`);
+  const round = (b: string) => /border-radius\s*:\s*(?!0(?:px)?\s*(?:;|$))|clip-path\s*:\s*(?:circle|ellipse)/i.test(b);
+  for (const r of mine) assert.ok(!round(r.body), `«${r.sel}» is round`);
+  // the rule can fail
+  assert.ok(round('border-radius:50%;width:1px') && round('clip-path:circle(50%)') && !round('border:1px solid red;border-radius:0'));
+});
+
+test('chapter 12\'s class names are its own: no rule outside its block styles an `lp` class, and the plate\'s grid puts the loop under the heading (wide) or after the text (narrow)', () => {
+  const css = readFileSync(new URL('../src/aegis/v3.css', import.meta.url), 'utf8').replace(/\/\*(?!!)[\s\S]*?\*\//g, '');
+  const a = css.indexOf('.lp{grid-column:1'), tail = '.lp-pl{position:relative}', b = css.indexOf(tail);
+  assert.ok(a > 0 && b > a, 'the chapter 12 block is where this test looks for it');
+  const outside = css.slice(0, a) + css.slice(b + tail.length), inside = css.slice(a, b + tail.length);
+  const NAMES = /\.lp(?![\w-])|\.lp-[\w-]+/;
+  const stray = (t: string) => [...t.matchAll(/([^{}]+)\{([^{}]*)\}/g)].flatMap((m) => m[1]!.split(',').map((s) => s.trim())).filter((s) => NAMES.test(s));
+  assert.deepEqual(stray(outside), [], 'a rule outside chapter 12\'s block styles one of its classes');
+  const own = stray(inside).join(' ');
+  for (const c of ['.lp', '.lp-tag', '.lp-fig', '.lp-wf', '.lp-c', '.lp-wl', '.lp-ag', '.lp-sk', '.lp-hk', '.lp-e', '.lp-s', '.lp-p', '.lp-k', '.lp-g', '.lp-b', '.lp-q', '.lp-t', '.lp-pl'])
+    assert.ok(new RegExp(`${c.replace('.', '\\.')}(?![\\w-])`).test(own), `${c} is styled in the block`);
+  // every class the component writes starts with lp (but `dot`, the page's shared one), so the check above covers the whole drawing
+  const comp = readFileSync(new URL('../src/components/V3Loop.astro', import.meta.url), 'utf8'), cls = new Set([...comp.matchAll(/class="([^"]*)"/g)].flatMap((m) => m[1]!.split(/\s+/)));
+  cls.delete('dot'); assert.ok(cls.size >= 20 && [...cls].every((c) => /^lp(?:-|$)/.test(c)), `the component's classes are all lp-: ${[...cls].filter((c) => !/^lp(?:-|$)/.test(c))}`);
+  // the plate: on a wide screen the loop takes the left column's second row (under the heading) and the text spans both rows of the right column; on a narrow one everything follows the text
+  assert.ok(/\.bio-l\{grid-column:1;grid-row:1\}/.test(css) && /\.bio-h\{grid-column:2;grid-row:1 \/ span 2\}/.test(css) && /\.bio\{grid-template-rows:auto 1fr\}/.test(css), 'the wide plate\'s placement');
+  assert.ok(/\.lp\{grid-column:1;grid-row:2;/.test(css), 'the loop is in the left column, second row');
+  assert.ok(/@media \(max-width:900px\)\{\.bio\{grid-template-rows:none\}\.bio-l,\.bio-h,\.lp\{grid-column:1;grid-row:auto\}\}/.test(css), 'on a narrow screen the plate is one column again and every part flows in the order of the markup');
+  // the rule can fail
+  assert.deepEqual(stray('.lp-c{padding:8px}.x .lp-t{y:1}.foo{z:1}.lpx{a:1}'), ['.lp-c', '.x .lp-t']);
+});
+
+test('chapter 12: the effect writes only transform, opacity, clip-path and --fx-l, writes no copy and adds no node, plays once on c12-data\'s clocks, and is registered', () => {
+  const src = readFileSync(new URL('../src/aegis/fx/c12v.ts', import.meta.url), 'utf8'), code = src.replace(/\/\/.*$/gm, '');
+  assert.ok(!/\.style\.(?!opacity\b|transform\b|clipPath\b)\w+\s*=(?!=)/.test(code), 'it sets only style.opacity, style.transform and style.clipPath');
+  assert.deepEqual([...new Set([...code.matchAll(/setProperty\('([^']+)'/g)].map((m) => m[1]))], ['--fx-l'], 'the one custom property it sets is --fx-l, how lit a term is');
+  const wipes = [...code.matchAll(/wipe\(\[[^\]]*\]((?:,\s*'[^']+')+)\)/g)].flatMap((m) => [...m[1]!.matchAll(/'([^']+)'/g)].map((x) => x[1]!));
+  assert.ok(wipes.length >= 6 && wipes.every((p) => ['opacity', 'transform', 'clip-path', '--fx-l'].includes(p)), `what it gives back are only those four (${[...new Set(wipes)]})`);
+  assert.ok(!/textContent|innerText|innerHTML|insertAdjacent|createElement|appendChild|\.append\(|\.prepend\(|\.remove\(\)|cloneNode|replaceWith/.test(code), 'it writes no copy and adds, moves and removes no node');
+  assert.ok(!/canvas|drawImage|fetch\(|\.webp|\.gif|\.apng/i.test(code), 'no footage, no sprite, no animated image');
+  assert.ok(/import \{[^}]*\bEND\b[^}]*\bGEO\b[^}]*\} from '\.\.\/c12-data'/.test(src) && /duration: END\b/.test(code) && /x: END\b/.test(code), 'it plays for the END of c12-data');
+  assert.ok(/once\(box!, undo/.test(code) && /REG\['c12:loop'\]/.test(code) && /margin:/.test(code), 'a play-once effect that asks once(), and shows itself to the review hooks');
+  assert.ok(/CHAPTERS[^\n]*\['c12v', initC12V\]/.test(readFileSync(new URL('../src/aegis/fx/index.ts', import.meta.url), 'utf8')), 'the effect is registered in the list of chapters');
+  const page = readFileSync(new URL('../src/pages/v3.astro', import.meta.url), 'utf8'), s = page.indexOf('<section id="c12"'), e = page.indexOf('<section id="c13"'), use = page.indexOf('<V3Loop close={V.instrCierre} tag={V.ilus} />');
+  assert.ok(s > 0 && use > s && use < e, 'the page puts the drawing in chapter 12');
+  assert.ok(page.indexOf('<p class="bio-close"', s) < use && use < page.indexOf('</div>\n</section>', s) + 1, 'after the text of the plate, still inside it');
+});

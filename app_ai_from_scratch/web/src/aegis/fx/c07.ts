@@ -1,82 +1,74 @@
-// 07 · EL TIEMPO. The ring of twelve ticks draws itself clockwise from twelve o'clock, a bright pen at its head, one tick popping as the pen passes it, while the
-// number in its middle runs from 0 to 40 in step with the sweep (the ring is the course: 40 minutes all the way round, a tick for each of its twelve lessons). That one
-// counter is the only count on the page that runs: the four figures under it (12, 36, 9, 40) are never touched, and no other chapter counts up.
-// It plays once, when the clock comes into view, and only if the clock was fully below the viewport when the engine attached (belowFold): what a reader meets first is the
-// HTML's own final picture, and one who goes past before it played gets that.
-// The ring is revealed by a clip-path wedge on its <svg>. The number is an overlay on its element: the real text stays in the page, transparent while the overlay
-// runs (v3.css "07"), and is the text the reader ends with; the overlay is removed in the very task the last number lands. Nothing here changes layout: only
-// transform, opacity and clip-path move, and every picture is a pure function of the tween position (the harness seeks it).
+// 07 · EL TIEMPO. The twelve lesson titles are piled in twelve rows of their real tokens (the markup is the finished pile) and the course's «40 MIN» is under them. When the pile comes into view the
+// chips fall into it from its top edge: the bottom row first, each row on top of the one before, left to right inside a row, each chip in free fall (a row's fall takes the square root of its depth) and
+// landing with a small squash and an accent outline that fades, while the number under the pile runs from 0 to 40 in step with the chips that have landed (c07-data.ts has the clocks, the schedule and the
+// node budget). That one counter is the only count on the page that runs: the four figures under it (12, 36, 9, 40) are never touched, and no other chapter counts up.
+// It plays once, when the pile comes into view, and only if it was fully below the viewport when the engine attached (once()): what a reader meets first is the HTML's own final picture, and one who goes
+// past before it played gets that. The number is an overlay on its element: the real text stays in the page, transparent while the overlay runs (v3.css "07"), and is the text the reader ends with; the
+// overlay is removed in the very task the last number lands. Nothing here changes layout or writes copy: what moves is transform and opacity, plus --fx-l, how lit a landed chip's outline is, and every picture
+// is a pure function of the tween position (the harness seeks it).
 import { gsap } from '../hud';
-import { A } from '../state';
-import { $, $$, clamp, el, seg, ss } from '../util';
-import { belowFold, effect, onTick, onWidth, passed, REG, whenSeen } from './common';
+import { NODE_BUDGET, ROWS, T, count, fall, nodeCount, plan } from '../c07-data';
+import { $, $$, el } from '../util';
+import { effect, onWidth, once, REG } from './common';
 
-const D = 2.4;                                     // seconds the sweep takes (ease-out: it settles on 40)
-const X = 1.1;                                     // the tween runs to 1.1: 0..1 is the sweep, the rest lets the last tick finish popping and the pen fade
-const POP = 0.2;                                   // how long a tick takes to pop, in sweep units
-const sweep = (x: number) => 1 - Math.pow(1 - clamp(x), 2);          // 0..1: how much of the ring (and of the count) is done at tween position x
-const back = (u: number) => { const c1 = 1.9, c3 = c1 + 1; return 1 + c3 * Math.pow(u - 1, 3) + c1 * Math.pow(u - 1, 2); };   // a pop that overshoots, then settles on 1
-
-/** A pie slice from twelve o'clock, clockwise, `deg` wide, as a clip-path on the (square) <svg>. The two rays are exact; the arc is drawn outside the box (90 % radius, a vertex
- *  every 30 degrees: a chord never comes inside the corners, which are 71 % away). */
-const wedge = (deg: number) => {
-  const n = Math.max(1, Math.ceil(deg / 30)), pts = ['50% 50%'];
-  for (let k = 0; k <= n; k++) { const a = ((-90 + (deg * k) / n) * Math.PI) / 180; pts.push(`${(50 + 90 * Math.cos(a)).toFixed(2)}% ${(50 + 90 * Math.sin(a)).toFixed(2)}%`); }
-  return `polygon(${pts.join(',')})`;
-};
+const need = (cond: unknown, msg: string) => { if (!cond) throw new Error(`c07: ${msg}`); };
 
 export function initC07() {
   return effect((undo) => {
-    const sec = $('#c07'), clock = sec && $('[data-ring]', sec), svg = clock && $<SVGSVGElement>('svg', clock), stroke = clock && $<SVGElement>('[data-ring-stroke]', clock);
-    const ticks = clock ? $$<SVGElement>('[data-tick]', clock) : [], big = clock && $('[data-count]', clock);
-    if (!sec || !clock || !svg || !stroke || !big || ticks.length !== 12) throw new Error('c07: the [data-ring] / [data-ring-stroke] / twelve [data-tick] / [data-count] hooks are missing from the markup');
-    const vb = svg.viewBox.baseVal.width, R = +(stroke.getAttribute('r') || 0), cx = +(stroke.getAttribute('cx') || 0), cy = +(stroke.getAttribute('cy') || 0);
-    if (!(vb > 0 && R > 0)) throw new Error('c07: the ring has no radius');
+    const sec = $('#c07'), pile = sec && $<HTMLElement>('[data-pile]', sec), big = pile && $<HTMLElement>('[data-count]', pile);
+    const rows = pile ? $$<HTMLElement>('[data-row]', pile) : [], chips = rows.map((r) => $$<HTMLElement>('i', r));
+    need(sec && pile && big && rows.length === ROWS && chips.every((c) => c.length >= 1), `the [data-pile] / ${ROWS} [data-row] / [data-count] hooks are missing from the markup (or a row has no chip)`);
+    const items = rows.flatMap((_, r) => chips[r]!.map((c) => ({ c, r })));
+    need(nodeCount(items.length) <= NODE_BUDGET, `${items.length} chips are more nodes than the ${NODE_BUDGET} of the contract`);
 
     // the number the counter runs up to: it must be the one printed in the page (the count ends on it, exactly)
-    const to = Number(big.dataset.count);
-    if (!Number.isFinite(to) || (big.textContent || '').trim() !== String(to)) throw new Error('c07: the [data-count] is not the number printed in it');
+    const to = Number(big!.dataset.count);
+    need(Number.isFinite(to) && (big!.textContent || '').trim() === String(to), 'the [data-count] is not the number printed in it');
+    const P = plan(chips.map((c) => c.length)), when = rows.flatMap((_, r) => chips[r]!.map((_c, k) => P.land[r]![k]!));
     let ov: HTMLElement | undefined, shown = -1, tw: gsap.core.Tween | undefined;
     const show = (k: number) => { if (ov && k !== shown) { shown = k; ov.textContent = String(k); } };
 
-    let state: 'static' | 'arm' | 'run' = 'static', pen: HTMLElement | undefined, W = 0, stop: (() => void) | undefined;
-    const XK = ticks.map((_, k) => 1 - Math.sqrt(1 - k / 12));         // the sweep position at which the pen reaches tick k (the inverse of sweep())
-    const lastTick: string[] = [];
-    const geometry = () => { W = clock.clientWidth; };
+    // how far above its place a chip waits: its row's depth in px, plus a pixel or two (the pile's top edge clips what is above it, so a waiting chip is not seen)
+    let D: number[] = [];
+    const measure = () => { D = rows.map((r) => r.offsetTop + r.offsetHeight + 2); };
+    const last: string[] = [];                                         // what each chip was given last: a chip whose picture did not change is not written to
     const draw = (x: number) => {
-      const s = sweep(x), deg = 360 * s, th = (deg * Math.PI) / 180;
-      svg.style.clipPath = s >= 1 ? '' : wedge(deg);
-      ticks.forEach((t, k) => { const u = clamp((x - XK[k]) / POP), v = (u <= 0 ? 0 : back(u)).toFixed(3); if (v !== lastTick[k]) { lastTick[k] = v; t.style.transform = `scale(${v})`; } });
-      if (pen) {
-        pen.style.opacity = (ss(seg(x, 0, 0.03)) * (1 - ss(seg(x, 1, X)))).toFixed(3);
-        pen.style.transform = `translate3d(${(((cx + R * Math.sin(th)) / vb) * W).toFixed(2)}px,${(((cy - R * Math.cos(th)) / vb) * W).toFixed(2)}px,0)`;
-      }
-      show(Math.round(to * s));
+      items.forEach(({ c, r }, i) => {
+        const L = when[i]!, F = fall(r), u = (x - (L - F)) / F, d = D[r] ?? 0;
+        if (u <= 0) { const key = `w${d}`; if (last[i] !== key) { last[i] = key; c.style.opacity = '0'; c.style.transform = `translate3d(0,${(-d).toFixed(1)}px,0)`; c.style.removeProperty('--fx-l'); } return; }
+        if (u < 1) {                                                   // in free fall: the distance covered goes with the square of the time
+          const y = (-d * (1 - u * u)).toFixed(1), key = `f${y}`;
+          if (last[i] !== key) { last[i] = key; c.style.opacity = '1'; c.style.transform = `translate3d(0,${y}px,0)`; }
+          return;
+        }
+        const v = (x - L) / T.squash, f = 1 - (x - L) / T.flash;       // v: 0..1 through the squash, f: how lit the outline still is
+        if (v >= 1 && f <= 0) { if (last[i] !== 'd') { last[i] = 'd'; ['opacity', 'transform', '--fx-l'].forEach((p) => c.style.removeProperty(p)); } return; }
+        const sy = (v < 1 ? 1 - 0.1 * Math.sin(Math.PI * v) : 1).toFixed(3), lit = Math.max(0, f).toFixed(2), key = `l${sy}|${lit}`;
+        if (last[i] !== key) { last[i] = key; c.style.removeProperty('opacity'); c.style.transform = sy === '1.000' ? '' : `scaleY(${sy})`; c.style.setProperty('--fx-l', lit); }
+      });
+      show(count(P, x, to));
     };
-    /** The clock as the page has it: nothing of the effect left on it. */
+    /** The pile as the page has it: nothing of the effect left on it. */
     const clear = () => {
-      stop && stop(); stop = undefined; state = 'static';
-      svg.style.removeProperty('clip-path'); ticks.forEach((t) => t.style.removeProperty('transform')); lastTick.length = 0;
-      pen && pen.remove(); pen = undefined; tw && tw.kill(); tw = undefined; ov && ov.remove(); ov = undefined; shown = -1; delete clock.dataset.fxS; delete REG['c07:ring'];
+      tw && tw.kill(); tw = undefined;
+      for (const { c } of items) ['opacity', 'transform', '--fx-l'].forEach((p) => c.style.removeProperty(p));
+      last.length = 0; ov && ov.remove(); ov = undefined; shown = -1; delete pile!.dataset.fxS; delete REG['c07:stack'];
     };
-    const play = () => {
-      stop = undefined; state = 'run'; clock.dataset.fxS = 'run'; geometry();
-      const p = { x: 0 };
-      tw = gsap.to(p, { x: X, duration: X * D, delay: 0.12, ease: 'none', onUpdate: () => draw(p.x), onComplete: clear });
-      REG['c07:ring'] = tw;
-    };
-    if (belowFold(clock)) {
-      state = 'arm'; geometry();
-      ov = el('i', 'fxk num'); ov.setAttribute('aria-hidden', 'true'); big.appendChild(ov); clock.dataset.fxS = 'arm';
-      pen = el('div', 'fxk pen'); pen.setAttribute('aria-hidden', 'true'); clock.appendChild(pen);
-      draw(0);
-      stop = whenSeen(clock, play, '0px 0px -18% 0px');
-    }
 
-    // a reader who went past before it played gets the page as it is: never a number still waiting at 0 behind them
-    let y0 = -1;
-    undo(onTick(() => { if (A.st.y === y0) return; y0 = A.st.y; if (state === 'arm' && passed(clock)) clear(); }));
-    undo(onWidth(geometry));
-    undo(clear);
+    undo(onWidth(measure));
+    once(pile!, undo, {
+      arm: () => {
+        pile!.dataset.fxS = 'arm'; measure();
+        ov = el('i', 'fxk num'); ov.setAttribute('aria-hidden', 'true'); big!.appendChild(ov); draw(0);
+      },
+      play: (done) => {
+        pile!.dataset.fxS = 'run'; measure();
+        const p = { x: 0 };
+        tw = gsap.to(p, { x: P.end, duration: P.end, ease: 'none', onUpdate: () => draw(p.x), onComplete: done });
+        REG['c07:stack'] = tw;
+      },
+      clear,
+      margin: '0px 0px -18% 0px',                                      // it plays once the pile has come well up the screen: the reader is looking at it
+    });
   });
 }

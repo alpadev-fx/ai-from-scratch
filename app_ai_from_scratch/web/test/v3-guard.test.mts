@@ -14,6 +14,7 @@ import { DEFAULTS, LADDER, WHAT, createRatchet, type Step } from '../src/aegis/q
 import { ahead } from '../src/aegis/seq.ts';
 import { followStep, glowAlpha, rng, squareFrame, squareGlow, toward, type Follow } from '../src/aegis/util.ts';
 import { END as C12_END, GEO as C12_GEO, LAP as C12_LAP, LAPS, LAPS_END, NODES as C12_NODES, NODE_BUDGET as C12_BUDGET, T as C12_T, beat, loopOf, nodeCount, tickAt } from '../src/aegis/c12-data.ts';
+import { NODE_BUDGET as C07_BUDGET, ROWS as C07_ROWS, T as C07_T, count as c07Count, fall as c07Fall, nodeCount as c07Nodes, plan as c07Plan } from '../src/aegis/c07-data.ts';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 
 test('guard throws on a city, on plural courses, and lets the tokenizer sentence through', () => {
@@ -996,4 +997,104 @@ test('chapter 12: the effect writes only transform, opacity, clip-path and --fx-
   const page = readFileSync(new URL('../src/pages/v3.astro', import.meta.url), 'utf8'), s = page.indexOf('<section id="c12"'), e = page.indexOf('<section id="c13"'), use = page.indexOf('<V3Loop close={V.instrCierre} tag={V.ilus} />');
   assert.ok(s > 0 && use > s && use < e, 'the page puts the drawing in chapter 12');
   assert.ok(page.indexOf('<p class="bio-close"', s) < use && use < page.indexOf('</div>\n</section>', s) + 1, 'after the text of the plate, still inside it');
+});
+
+// ---------- chapter 07: the pile ----------
+test('chapter 07: the pile fills from the floor up, a row at a time and left to right, every chip falls in free fall to its place, and the number ends on the course\'s 40 (real token counts, both languages)', () => {
+  const want = { es: [4, 5, 5, 4, 6, 5, 5, 4, 9, 5, 4, 6], en: [4, 5, 6, 5, 5, 5, 6, 4, 7, 5, 5, 5] };
+  for (const lang of ['es', 'en'] as const) {
+    const ks = modulos(lang).map((m) => piecesOf(TOKENS[lang], m.h).length);
+    assert.deepEqual(ks, want[lang], `${lang}: the tokens of the twelve lesson titles, as the file has them today`);
+    assert.equal(ks.reduce((a, b) => a + b, 0), 62);
+    const P = c07Plan(ks);
+    assert.equal(P.land.length, C07_ROWS); assert.deepEqual(P.land.map((r) => r.length), ks);
+    // the bottom row (11) lands first, each row on top of the one before: every landing of a row is before the first of the row above it
+    for (let r = C07_ROWS - 1; r >= 1; r--) assert.ok(P.land[r]![P.land[r]!.length - 1]! < P.land[r - 1]![0]!, `row ${r + 1} is complete before row ${r} starts`);
+    // inside a row: left to right, one step apart
+    P.land.forEach((row, r) => row.forEach((t, k) => { if (k) assert.ok(Math.abs(t - row[k - 1]! - C07_T.step) < 1e-9, `row ${r + 1}: a chip every ${C07_T.step} s`); }));
+    assert.ok(Math.abs(P.times[0]! - (C07_T.lead + C07_T.tMax)) < 1e-12, 'the first chip to land is the bottom row\'s, after the longest fall');
+    assert.ok(P.times.every((t, i) => i === 0 || t > P.times[i - 1]!), 'a landing at a time of its own');
+    // nothing leaves the top edge before the effect starts (a chip's fall begins at its landing minus its fall time)
+    P.land.forEach((row, r) => row.forEach((t) => assert.ok(t - c07Fall(r) >= C07_T.lead - 1e-12, `a chip of row ${r + 1} would leave the top edge before the lead`)));
+    assert.ok(Math.abs(P.end - (P.last + Math.max(C07_T.flash, C07_T.squash) + C07_T.tail)) < 1e-12);
+    assert.ok(P.end >= 2 && P.end <= 3.2, `it plays for ${P.end.toFixed(2)} s, once`);
+    // the number: 0 until the first chip lands, never goes back, and is exactly the course's 40 once the last chip has landed
+    assert.equal(c07Count(P, P.times[0]! - 1e-6, 40), 0); assert.equal(c07Count(P, P.last, 40), 40); assert.equal(c07Count(P, P.end, 40), 40);
+    let prev = 0; for (let x = 0; x <= P.end; x += 0.01) { const n = c07Count(P, x, 40); assert.ok(n >= prev && n <= 40, `the count never goes back or past 40 (${n} at ${x.toFixed(2)})`); prev = n; }
+  }
+  // free fall: the time goes with the square root of the distance, and the rows are one pitch apart
+  assert.ok(Math.abs(c07Fall(C07_ROWS - 1) - C07_T.tMax) < 1e-12);
+  for (let r = 0; r < C07_ROWS; r++) assert.ok(Math.abs(c07Fall(r) - C07_T.tMax * Math.sqrt((r + 1) / C07_ROWS)) < 1e-12 && (r === 0 || c07Fall(r) > c07Fall(r - 1)), `row ${r + 1}'s fall`);
+  assert.ok(Math.abs(c07Fall(2) / c07Fall(C07_ROWS - 1) - Math.sqrt(3 / 12)) < 1e-12, 'a quarter of the depth takes half the time');
+  // a pile that is not twelve rows of at least one chip is not scheduled (nothing is made from a guess)
+  assert.throws(() => c07Plan([4, 5, 5]), /c07:/); assert.throws(() => c07Plan([4, 5, 5, 4, 6, 5, 5, 4, 9, 5, 4, 0]), /c07:/); assert.throws(() => c07Plan([4, 5, 5, 4, 6, 5, 5, 4, 9, 5, 4, 6.5]), /c07:/);
+  // the rule can fail: a pile that came in at 0.1 s a chip would take 6 s
+  assert.ok(0.52 + 62 * 0.1 > 3.2);
+});
+
+test('chapter 07: the pile writes a style on one node per chip (62 of the contract\'s 80), and the markup is the finished pile of the real tokens, in the temario\'s order', () => {
+  assert.equal(C07_BUDGET, 80, 'the budget of the contract');
+  for (const lang of ['es', 'en'] as const) {
+    const chips = modulos(lang).reduce((n, m) => n + piecesOf(TOKENS[lang], m.h).length, 0);
+    assert.equal(c07Nodes(chips), 62); assert.ok(c07Nodes(chips) <= C07_BUDGET, `${lang}: ${chips} chips`);
+  }
+  assert.ok(c07Nodes(81) > C07_BUDGET, 'the rule can fail');
+  const page = readFileSync(new URL('../src/pages/v3.astro', import.meta.url), 'utf8'), a = page.indexOf('<section id="c07"'), b = page.indexOf('<section id="c08"'), sec = page.slice(a, b);
+  assert.ok(a > 0 && b > a, 'chapter 07 is where this test looks for it');
+  assert.ok(/const pile = mods\.map\(\(m\) => piecesOf\(TOK, m\.h\)\);/.test(page), 'the rows are the real o200k pieces of the lesson titles, in the lessons\' order (no heuristic)');
+  assert.ok(/data-fx="stack"/.test(sec) && /<div class="stk" data-pile aria-hidden="true">/.test(sec), 'the effect\'s name and a decoration (aria-hidden)');
+  assert.ok(/\{pile\.map\(\(row\) => \(<div class="stk-r" data-row>\{row\.map\(\(p\) => \(<i class="stk-t">\{show\(p\[0\]\)\}<\/i>\)\)\}<\/div>\)\)\}/.test(sec), 'one row per lesson, one chip per piece, a leading space shown as «·» by show()');
+  assert.ok(/<p class="stk-src">\{V\.tokReal\}<\/p>/.test(sec), 'it says what the chips are, with the page\'s own source label');
+  assert.ok(/<div class="ctr"><b data-count="40">40<\/b><span>MIN<\/span><\/div>/.test(sec), 'the counter is the course\'s 40 MIN');
+  assert.ok(!/<circle|<svg|<img|<canvas|border-radius/.test(sec), 'no ring, no circle, no image: nothing round');
+  assert.ok(!/\bticks\b/.test(page.slice(0, page.indexOf('<!doctype html>'))), 'the ring\'s twelve ticks are gone from the frontmatter');
+});
+
+test('chapter 07 is square and its class names are its own: no round shape in an `stk` rule, no ring, clock or pen left in the stylesheet, and no rule outside the block styles an `stk` class but the effect\'s one', () => {
+  const css = readFileSync(new URL('../src/aegis/v3.css', import.meta.url), 'utf8').replace(/\/\*(?!!)[\s\S]*?\*\//g, '');
+  assert.ok(!/\.clock\b|\.r0\b|\.r1\b|\.clock \.tick|\.pen\b|--fx-pen/.test(css), 'the ring, its ticks and its round pen are gone');
+  const NAMES = /\.stk(?![\w-])|\.stk-[\w-]+/;
+  const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ sel: m[1]!.trim(), body: m[2]! })), mine = rules.filter((r) => r.sel.split(',').some((x) => NAMES.test(x)));
+  assert.ok(mine.length >= 9, `the pile's rules are found (${mine.length})`);
+  const round = (b: string) => /border-radius\s*:\s*(?!0(?:px)?\s*(?:;|$))|clip-path\s*:\s*(?:circle|ellipse)/i.test(b);
+  for (const r of mine) assert.ok(!round(r.body), `«${r.sel}» is round`);
+  // the chips are the pile's text: never under 10px, the page's floor for mono labels (an 8px floor made them too small to read on a phone). Their size is the pile's --tf, which starts at 10px; the source label is
+  // 10px; and where the pile is narrower than 300px (a 320px phone gives it 288) the chips are padded tighter, which is what keeps the widest row (lesson 09) inside it at that size
+  const floorOf = (t: string) => { const m = /--tf\s*:\s*clamp\(\s*(\d+(?:\.\d+)?)px\s*,/.exec(t); return m ? parseFloat(m[1]!) : null; };
+  assert.ok((floorOf(css) ?? 0) >= 10, `--tf (the chips' text) never goes under 10px (${floorOf(css)})`);
+  assert.ok(/\.stk-t\{[^}]*font:500 var\(--tf\)\/1 var\(--m\)/.test(css), 'the chips take their size from --tf');
+  assert.ok(/\.stk-src\{[^}]*font:500 10px\//.test(css), 'the source label is 10px');
+  assert.ok(/@container \(max-width:300px\)\{\.stk-t\{padding:0 \.35em\}\}/.test(css), 'on the narrowest phones the chips are padded tighter, so that the 10px floor still fits the widest row');
+  const sized = (b: string) => { const m = /(?:^|;)font(?:-size)?\s*:[^;]*?(clamp\(\s*(\d+(?:\.\d+)?)px|(\d+(?:\.\d+)?)px)/.exec(b); return m ? parseFloat(m[2] ?? m[3]!) : null; };
+  for (const r of mine) { const z = sized(r.body); if (z !== null) assert.ok(z >= 10, `«${r.sel}» sets its text at ${z}px`); }
+  assert.ok(floorOf('.stk-rows{--tf:clamp(10px,3.1cqw,11px)}') === 10 && floorOf('.stk-rows{--tf:clamp(8px,3.1cqw,11px)}') === 8 && floorOf('.stk-rows{--tf:clamp(.6rem,3.1cqw,11px)}') === null && floorOf('.stk-rows{--tf:3.1cqw}') === null);
+  assert.ok(sized('font:500 10px/1 var(--m)') === 10 && sized('font:500 8px/1 var(--m)') === 8 && sized('font:700 clamp(56px,6.4vw,96px)/1 var(--f)') === 56 && sized('font:500 var(--tf)/1 var(--m)') === null && sized('color:red') === null);
+  const a = css.indexOf('.time{display:grid;grid-template-columns:minmax(0,340px)'), tail = '.stk .ctr span{', b = css.indexOf(tail);
+  assert.ok(a > 0 && b > a, 'the chapter 07 block is where this test looks for it');
+  const inside = css.slice(a, css.indexOf('}', b) + 1), outside = css.slice(0, a) + css.slice(css.indexOf('}', b) + 1);
+  const stray = (t: string) => [...t.matchAll(/([^{}]+)\{([^{}]*)\}/g)].flatMap((m) => m[1]!.split(',').map((x) => x.trim())).filter((x) => NAMES.test(x));
+  assert.deepEqual(stray(outside), ['html.fxl .stk[data-fx-s] .stk-t'], 'outside the block only the effect\'s own rule (the chips land on their bottom edge, keyed to html.fxl and the armed attribute) styles an stk class');
+  const own = stray(inside).join(' ');
+  for (const c of ['.stk', '.stk-src', '.stk-rows', '.stk-r', '.stk-t']) assert.ok(new RegExp(`${c.replace('.', '\\.')}(?![\\w-])`).test(own), `${c} is styled in the block`);
+  const page = readFileSync(new URL('../src/pages/v3.astro', import.meta.url), 'utf8'), comp = page.slice(page.indexOf('<section id="c07"'), page.indexOf('<section id="c08"')), cls = new Set([...comp.matchAll(/class="([^"]*)"/g)].flatMap((m) => m[1]!.split(/\s+/)));
+  for (const c of ['stk', 'stk-src', 'stk-rows', 'stk-r', 'stk-t']) assert.ok(cls.has(c), `the markup uses ${c}`);
+  // the rule can fail
+  assert.deepEqual(stray('.stk-t{padding:8px}.x .stk{y:1}.foo{z:1}.stkx{a:1}'), ['.stk-t', '.x .stk']);
+  assert.ok(round('border-radius:50%;width:1px') && round('clip-path:circle(50%)') && !round('border:1px solid red'));
+});
+
+test('chapter 07: the effect writes only transform, opacity and --fx-l, writes no copy but the counter\'s number, adds no node but its overlay, plays once on c07-data\'s clocks and is registered', () => {
+  const src = readFileSync(new URL('../src/aegis/fx/c07.ts', import.meta.url), 'utf8'), code = src.replace(/\/\/.*$/gm, '');
+  assert.ok(!/\.style\.(?!opacity\b|transform\b)\w+\s*=(?!=)/.test(code), 'it sets only style.opacity and style.transform');
+  assert.deepEqual([...new Set([...code.matchAll(/setProperty\('([^']+)'/g)].map((m) => m[1]))], ['--fx-l'], 'the one custom property it sets is --fx-l, how lit a landed chip\'s outline is');
+  const removed = [...code.matchAll(/\[((?:'[^']+',?\s*)+)\]\.forEach\(\(p\) => [\w.]+\.style\.removeProperty\(p\)\)/g)].flatMap((m) => [...m[1]!.matchAll(/'([^']+)'/g)].map((x) => x[1]!));
+  assert.ok(removed.length >= 6 && removed.every((p) => ['opacity', 'transform', '--fx-l'].includes(p)), `what it gives back are only those three (${[...new Set(removed)]})`);
+  assert.deepEqual([...code.matchAll(/\.textContent\s*=\s*([^;]+);/g)].map((m) => m[1]), ['String(k)'], 'the only text it writes is the counter\'s number, into its own overlay');
+  assert.ok(!/innerHTML|innerText|insertAdjacent|appendChild\((?!ov)|\.append\(|\.prepend\(|cloneNode|replaceWith|createElement/.test(code), 'it adds no node but the counter\'s overlay (el(), appended to the number), moves none and removes none but that');
+  assert.ok(!/canvas|drawImage|fetch\(|\.webp|\.gif|\.apng/i.test(code), 'no footage, no sprite, no animated image');
+  assert.ok(/import \{[^}]*\bplan\b[^}]*\} from '\.\.\/c07-data'/.test(src) && /duration: P\.end\b/.test(code) && /x: P\.end\b/.test(code), 'it plays for the end of c07-data\'s plan');
+  assert.ok(/once\(pile!, undo/.test(code) && /REG\['c07:stack'\]/.test(code) && /margin:/.test(code), 'a play-once effect that asks once(), and shows itself to the review hooks');
+  assert.ok(/CHAPTERS[^\n]*\['c07', initC07\]/.test(readFileSync(new URL('../src/aegis/fx/index.ts', import.meta.url), 'utf8')), 'the effect is registered in the list of chapters');
+  // the number is an overlay: the real text stays, transparent while it runs, and the overlay goes in the task the last number lands
+  assert.ok(/ov = el\('i', 'fxk num'\)/.test(code) && /onComplete: done/.test(code), 'the counter overlay is made when the effect arms and removed when it is done');
 });

@@ -127,8 +127,8 @@ const offer = [
   { t: V.s7Next, d: V.vivoV },
   { t: V.s7Gar.t, d: fill(V.s7Gar.d) },
 ];
-// 07 · twelve ticks, one per lesson, on a circle of radius 88
-const ticks = Array.from({ length: 12 }, (_, i) => { const a = (i / 12) * Math.PI * 2 - Math.PI / 2; return { x: +(100 + Math.cos(a) * 88).toFixed(2), y: +(100 + Math.sin(a) * 88).toFixed(2) }; });
+// 07 · the twelve lesson titles as their real o200k tokens, one row per lesson in the course's order: the pile the chips fall into (src/aegis/fx/c07.ts); nothing here is cut by a heuristic
+const pile = mods.map((m) => piecesOf(TOK, m.h));
 const seal = V.s8Sello.repeat(2);
 ---
 <!doctype html>
@@ -405,16 +405,15 @@ setTimeout(function(){
   </div>
 </section>
 
-<!-- ===== 07 · EL TIEMPO (Hormozi s4 + the four figures) + CTA. Static ring, fully drawn. Stage 2B: the ring draws and the counter runs 0 to 40. ===== -->
-<section id="c07" class="sec cx" aria-labelledby="c07h" data-fx="ring">
+<!-- ===== 07 · EL TIEMPO (Hormozi s4 + the four figures) + CTA. The twelve lesson titles as their real tokens, piled in twelve rows, with the course's 40 MIN under them: the finished pile. Stage 2C: the chips fall into it and the counter runs 0 to 40. ===== -->
+<section id="c07" class="sec cx" aria-labelledby="c07h" data-fx="stack">
   <div class="sh"><div class="sn">■ {label('07', V.ch07)}</div><div class="sx">{cnt('07')}</div></div>
   <div class="time">
-    <div class="clock" data-ring aria-hidden="true">
-      <svg viewBox="0 0 200 200">
-        <circle class="r0" cx="100" cy="100" r="88"></circle>
-        <circle class="r1" data-ring-stroke cx="100" cy="100" r="88" pathLength="1" transform="rotate(-90 100 100)"></circle>
-        {ticks.map((k) => (<circle class="tick" data-tick cx={k.x} cy={k.y} r="3"></circle>))}
-      </svg>
+    <div class="stk" data-pile aria-hidden="true">
+      <p class="stk-src">{V.tokReal}</p>
+      <div class="stk-rows">
+        {pile.map((row) => (<div class="stk-r" data-row>{row.map((p) => (<i class="stk-t">{show(p[0])}</i>))}</div>))}
+      </div>
       <div class="ctr"><b data-count="40">40</b><span>MIN</span></div>
     </div>
     <div class="tcopy">

@@ -14,7 +14,7 @@ import { card as _c, headline } from './hud';
 import { softmax, pctText } from './specimens';
 import { piecesOf, show, tokensFromPage } from './tokens';
 import type { GL } from './engine';
-import { $, $$, clamp, eio, eo, lerp, rng, seg, ss, toward } from './util';
+import { $, $$, clamp, eio, eo, lerp, rng, seg, squareFrame, ss, toward } from './util';
 
 const SP = [0.1, 0.32, 0.56, 0.78, 0.94];          // stage boundaries (progress)
 // The timeline below was authored over a 6.4-screen chapter and ends at p = 0.96, where the panel and the card have faded. The chapter no longer
@@ -122,13 +122,15 @@ export function initLLM(gl: GL) {
   for (let i = 0; i < MN; i++) { mnU[i * 2] = rnd() * 2 - 1; mnU[i * 2 + 1] = rnd() * 2 - 1; mnS[i] = rnd(); }
   const mg = new THREE.BufferGeometry(); mg.setAttribute('position', new THREE.BufferAttribute(mnP, 3)); mg.setAttribute('aS', new THREE.BufferAttribute(mnS, 1)); mg.setAttribute('aA', new THREE.BufferAttribute(mnA, 1));
   const neurons = new THREE.Points(mg, dotMat()); neurons.frustumCulled = false; scene.add(neurons);
-  // output node: ring + beam
+  // output node: a SQUARE outline + beam. It was a ring (a circle: no circles on this page); the box is the one the ring had (its outer diameter, 0.38, is the square's side) and so are the colour and the
+  // thickness (0.02; the pulse 0.01). It faces the camera (node.quaternion) so it is a square on the screen, and it only ever changes scale and opacity.
   const accentMat = (o = 0) => { const m = new THREE.MeshBasicMaterial({ color: 0x0A84FF, transparent: true, opacity: o, side: THREE.DoubleSide, depthWrite: false }); mats.push({ m: m as any, add: true }); return m; };
-  const nodeRing = new THREE.Mesh(new THREE.RingGeometry(0.17, 0.19, 64), accentMat()), nodePulse = new THREE.Mesh(new THREE.RingGeometry(0.17, 0.18, 64), accentMat());
+  const frameGeo = (o: number, i: number) => { const f = squareFrame(o, i); return new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(f.pos, 3)).setIndex(f.idx); };
+  const nodeFrame = new THREE.Mesh(frameGeo(0.19, 0.17), accentMat()), nodePulse = new THREE.Mesh(frameGeo(0.18, 0.17), accentMat());
   const nodeCore = new THREE.Sprite(new THREE.SpriteMaterial({ map: GLOWT, color: 0x0A84FF, opacity: 0, transparent: true, depthWrite: false })); mats.push({ m: nodeCore.material as any, add: true });
-  const node = new THREE.Group(); node.add(nodeRing, nodePulse, nodeCore); scene.add(node);
+  const node = new THREE.Group(); node.add(nodeFrame, nodePulse, nodeCore); scene.add(node);
   const beam = new THREE.LineSegments(new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3)), lineMat(0)); beam.frustumCulled = false; scene.add(beam);
-  const accents = [nodeRing.material, nodePulse.material, nodeCore.material, beam.material] as any[];
+  const accents = [nodeFrame.material, nodePulse.material, nodeCore.material, beam.material] as any[];
 
   // ---------- layout ----------
   let trkW = 0; let lastW = 0, lastH = 0, gut = 24, hdrB = 64, stepsTop = 700, cardW = 262, cardTop = 600, copyBot = 0;
@@ -197,7 +199,7 @@ export function initLLM(gl: GL) {
   const _q = V3(), _ea = V3(), _eb = V3();          // reused: the arcs run every frame and must not allocate
 
   ch.resize = () => { lastW = 0; };
-  // the programs of this scene (points, squares, lines, the ring, the glow sprite) are compiled when the chapter comes near, in parallel with the page (KHR_parallel_shader_compile), not in
+  // the programs of this scene (points, squares, lines, the square frame, the glow sprite) are compiled when the chapter comes near, in parallel with the page (KHR_parallel_shader_compile), not in
   // the frame that first draws it: compiled there they were one frame of 20+ ms on a throttled CPU, felt as the chapter began. A browser without the extension (Firefox) is left as it was:
   // asking three for it anyway would put a warning in its console and compile on the main thread, which is what the first draw does
   ch.warm = () => { if (R.extensions.has('KHR_parallel_shader_compile')) R.compileAsync(scene, cam).catch(() => { /* the first draw compiles them, as it always did */ }); };
@@ -282,7 +284,7 @@ export function initLLM(gl: GL) {
     node.visible = beam.visible = predOn > 0.01; node.position.set(nodeX, nodeY, 0); node.quaternion.copy(cam.quaternion);
     const flash = seg(p, 0.5, 0.52);
     (nodeCore.material as ThreeNS.SpriteMaterial).opacity = predOn * (0.4 + 0.5 * (p > 0.5 ? 1 : 0)); nodeCore.scale.setScalar(0.34 + 0.14 * (p > 0.5 ? 1 - flash : 0));
-    (nodeRing.material as ThreeNS.MeshBasicMaterial).opacity = predOn * 0.85; (nodePulse.material as ThreeNS.MeshBasicMaterial).opacity = predOn * (flash > 0 && flash < 1 ? (1 - flash) * 0.9 : 0); nodePulse.scale.setScalar(1 + 2.4 * eo(flash));
+    (nodeFrame.material as ThreeNS.MeshBasicMaterial).opacity = predOn * 0.85; (nodePulse.material as ThreeNS.MeshBasicMaterial).opacity = predOn * (flash > 0 && flash < 1 ? (1 - flash) * 0.9 : 0); nodePulse.scale.setScalar(1 + 2.4 * eo(flash));
     const bp = beam.geometry.attributes.position as ThreeNS.BufferAttribute; bp.setXYZ(0, nodeX, topY, 0); bp.setXYZ(1, nodeX, nodeY - 0.19, 0); bp.needsUpdate = true; (beam.material as ThreeNS.LineBasicMaterial).opacity = predOn * 0.5;
     // ----- attention (stage 3): focus sweeps the context words and the new token; arcs look back only
     const env = seg(p, SP[2], 0.6) * (1 - seg(p, 0.76, 0.8)), aP = seg(p, 0.6, 0.72);

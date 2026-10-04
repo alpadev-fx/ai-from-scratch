@@ -12,7 +12,7 @@ import { piecesOf, show, wordsOf, type TokenFile } from '../src/aegis/tokens.ts'
 import { ANSWERS, CURVE, DIALS, END, NODES, NODE_BUDGET, T, TRACK_NODES, VIZ, WEIGHTS, curveOf, dialAngles, figureInts, stackOf, weightHeights } from '../src/aegis/c05-data.ts';
 import { DEFAULTS, LADDER, WHAT, createRatchet, type Step } from '../src/aegis/quality.ts';
 import { ahead } from '../src/aegis/seq.ts';
-import { toward } from '../src/aegis/util.ts';
+import { squareFrame, toward } from '../src/aegis/util.ts';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 
 test('guard throws on a city, on plural courses, and lets the tokenizer sentence through', () => {
@@ -774,4 +774,29 @@ test('chapter 04: the arcs are one draw call in the order they were made, and ro
     assert.equal(c, tgt, `${cur} -> ${tgt} arrives`); assert.ok(n <= Math.ceil(Math.abs(cur - tgt) / PAD_STEP) + 1);
   }
   assert.equal(toward(0, 9, 2.4), 2.4); assert.equal(toward(9, 0, 2.4), 6.6);
+});
+
+test('chapter 04: the output node is a square outline (no round geometry in the scene), in the box of the ring it replaced, and its pulse grows as a square', () => {
+  const llm = readFileSync(new URL('../src/aegis/llm.ts', import.meta.url), 'utf8').replace(/\/\/.*$/gm, '');
+  assert.ok(!/RingGeometry|CircleGeometry|SphereGeometry|TorusGeometry|CylinderGeometry|EllipseCurve|ArcCurve/.test(llm), 'no round geometry in the scene of chapter 04');
+  // the box, the thickness and the colour of the ring (0.17..0.19, 0.17..0.18, #0A84FF) are the square's
+  assert.ok(/nodeFrame = new THREE\.Mesh\(frameGeo\(0\.19, 0\.17\), accentMat\(\)\)/.test(llm), 'the node frame: outer half-side 0.19 (the ring\'s outer radius), inner 0.17');
+  assert.ok(/nodePulse = new THREE\.Mesh\(frameGeo\(0\.18, 0\.17\), accentMat\(\)\)/.test(llm), 'the pulse: 0.18 / 0.17, as before');
+  assert.ok(/new THREE\.MeshBasicMaterial\(\{ color: 0x0A84FF,/.test(llm), 'the colour is the same #0A84FF');
+  assert.ok(/nodePulse\.scale\.setScalar\(1 \+ 2\.4 \* eo\(flash\)\)/.test(llm), 'one scale on both axes: a square pulse grows as a square, and scale and opacity are all that ever changes');
+  assert.ok(/node\.quaternion\.copy\(cam\.quaternion\)/.test(llm), 'the node faces the camera: a square on the screen, not a tilted rectangle');
+  // the geometry itself: 8 flat vertices, 8 triangles that are never degenerate, each in the band between the inner and the outer square, together exactly that band
+  for (const [o, i] of [[0.19, 0.17], [0.18, 0.17], [1, 0.5]] as const) {
+    const { pos, idx } = squareFrame(o, i);
+    assert.equal(pos.length, 24); assert.equal(idx.length, 24);
+    for (let v = 0; v < 8; v++) { assert.equal(pos[v * 3 + 2], 0, 'flat'); const r = Math.fround(v < 4 ? o : i); assert.equal(Math.abs(pos[v * 3]), r); assert.equal(Math.abs(pos[v * 3 + 1]), r); }
+    let area = 0;
+    for (let k = 0; k < idx.length; k += 3) {
+      const [a, b, c] = [idx[k], idx[k + 1], idx[k + 2]], P = (n: number) => [pos[n * 3], pos[n * 3 + 1]] as const;
+      const [ax, ay] = P(a), [bx, by] = P(b), [cx, cy] = P(c), cross = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
+      assert.ok(Math.abs(cross) > 1e-9, 'no degenerate triangle'); area += Math.abs(cross) / 2;
+      const m = Math.max(Math.abs((ax + bx + cx) / 3), Math.abs((ay + by + cy) / 3)); assert.ok(m > i && m < o, 'each triangle lies in the band between the two squares');
+    }
+    const O = Math.fround(o), I = Math.fround(i); assert.ok(Math.abs(area - (4 * O * O - 4 * I * I)) < 1e-9, 'the triangles cover exactly the outer square minus the inner one');
+  }
 });

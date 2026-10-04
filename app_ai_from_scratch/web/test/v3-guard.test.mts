@@ -16,7 +16,7 @@ import { followStep, glowAlpha, rng, squareFrame, squareGlow, toward, type Follo
 import { END as C12_END, GEO as C12_GEO, LAP as C12_LAP, LAPS, LAPS_END, NODES as C12_NODES, NODE_BUDGET as C12_BUDGET, T as C12_T, beat, loopOf, nodeCount, tickAt } from '../src/aegis/c12-data.ts';
 import { NODE_BUDGET as C07_BUDGET, ROWS as C07_ROWS, T as C07_T, count as c07Count, fall as c07Fall, nodeCount as c07Nodes, plan as c07Plan } from '../src/aegis/c07-data.ts';
 import { NODE_BUDGET as C09_BUDGET, T as C09_T, chip as c09Chip, flight as c09Flight, nodeCount as c09Nodes, plain as c09Plain, plan as c09Plan, title as c09Title, wrap as c09Wrap } from '../src/aegis/c09-data.ts';
-import { CAP as C13_CAP, NODE_BUDGET as C13_BUDGET, PILE_SEED as C13_SEED, T as C13_T, nodeCount as c13Nodes, pileIn as c13PileIn, pileOf as c13Pile, plan as c13Plan, text as c13Text, unit as c13Unit, unitsOf as c13Units, type Geo as C13Geo, type Rect as C13Rect, type UnitSpec as C13Spec } from '../src/aegis/c13-data.ts';
+import { CAP as C13_CAP, NODE_BUDGET as C13_BUDGET, PILE_SEED as C13_SEED, T as C13_T, STAND as C13_STAND, flowOf as c13Flow, nodeCount as c13Nodes, pileIn as c13PileIn, pileOf as c13Pile, plan as c13Plan, standTop as c13StandTop, text as c13Text, unit as c13Unit, unitsOf as c13Units, type Geo as C13Geo, type Rect as C13Rect, type UnitSpec as C13Spec } from '../src/aegis/c13-data.ts';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 
 test('guard throws on a city, on plural courses, and lets the tokenizer sentence through', () => {
@@ -1236,22 +1236,31 @@ const c13Lines = (lang: 'es' | 'en') => {
   const V = STR[lang].pub.v3;
   return [...(V.s10Si as unknown as string[]).map((t) => ({ t, list: 'yes' as const })), ...(V.s10No as unknown as string[]).map((t) => ({ t, list: 'no' as const }))].map((l) => ({ ...l, pieces: piecesOf(TOKENS[lang], l.t) }));
 };
-/** A made-up page for the schedule: the seven lines as units of mono chips (7.2 px a character plus 14 of padding, 3 px between two chips of a unit), the two lists side by side (yes left, no right) or stacked, the pile
- *  parked by pileIn in the block of lines that are not there yet (both lists' lines side by side, the yes lines alone when stacked). `park` is that block. */
-function c13Page(lang: 'es' | 'en', width: number, side: boolean): { specs: C13Spec[]; geo: C13Geo; park: C13Rect } {
-  const MONO = 7.2, PAD = 14, GAP = 3, H = 24, ROW = 72, specs: C13Spec[] = [], box: Array<{ w: number; h: number }> = [], rest: Array<{ x: number; y: number }> = [], lineC: Array<[number, number]> = [];
-  c13Lines(lang).forEach((l, item) => {
-    const n = l.list === 'yes' ? item : item - 4, left = side ? (l.list === 'yes' ? 40 : width / 2 + 40) : 20, y = side ? 100 + n * ROW : l.list === 'yes' ? 100 + n * ROW : 100 + 4 * ROW + 60 + n * ROW;
-    let x = left;
+/** A made-up page for the schedule, laid out the way the real one is: the seven lines as units of mono chips (12px mono, 7.22 px a character, 6 px of padding and a 1 px border either side; at 480 px and under 10px mono,
+ *  6.02 px a character and 3.5 px of padding; 3 px between the two chips of a unit), a line's box 24 px per line of words (8 px a character) plus its 35 px of padding and border, the two lists side by side (yes
+ *  left, no right) or stacked, the units of each line as one row (flowOf) inside the line's box (standTop), and the pile parked by pileIn in the block of lines that are not there yet (both lists' lines side by
+ *  side, the yes lines alone when stacked). `park` is that block and `lines` each line's box, the left of its words and its units. */
+function c13Page(lang: 'es' | 'en', width: number, side: boolean): { specs: C13Spec[]; geo: C13Geo; park: C13Rect; lines: Array<{ box: C13Rect; left: number; mid: number; rows: number; units: number[] }> } {
+  const phone = width <= 480, ADV = phone ? 6.0205 : 7.2246, PAD = phone ? 9 : 14, GAP = 3, H = 24, specs: C13Spec[] = [], box: Array<{ w: number; h: number }> = [], rest: Array<{ x: number; y: number }> = [], lineC: Array<[number, number]> = [], rows: Array<{ box: C13Rect; left: number; mid: number; rows: number; units: number[] }> = [];
+  const colW = side ? width / 2 - 126 : width - 118;                                 // the width of a line's words: the column's padding and the line's 34 px of padding-left taken off
+  const lines = c13Lines(lang), liH = lines.map((l) => 24 * Math.max(1, Math.ceil((l.t.length * 8) / colW)) + 35);
+  const yesH = liH.slice(0, 4).reduce((a, h) => a + h, 0), noH = liH.slice(4).reduce((a, h) => a + h, 0);
+  let yTop = 100, nTop = side ? 100 : 100 + yesH + 60;
+  lines.forEach((l, item) => {
+    const left = (side ? (l.list === 'yes' ? 40 : width / 2 + 40) : 20) + 34, top = l.list === 'yes' ? yTop : nTop, ks: number[] = [];
+    if (l.list === 'yes') yTop += liH[item]!; else nTop += liH[item]!;
     c13Units(l.pieces).forEach((u) => {
-      const chips = l.pieces.slice(u.first, u.last + 1).map((p) => show(p[0])), w = chips.reduce((a, c) => a + c.length * MONO + PAD, 0) + (chips.length - 1) * GAP;
-      specs.push({ item, chips: chips.length, list: l.list }); box.push({ w, h: H }); rest.push({ x, y }); x += w + 6;
+      const chips = l.pieces.slice(u.first, u.last + 1).map((p) => show(p[0])), w = chips.reduce((a, c) => a + c.length * ADV + PAD, 0) + (chips.length - 1) * GAP;
+      ks.push(specs.length); specs.push({ item, chips: chips.length, list: l.list }); box.push({ w, h: H });
     });
-    lineC[item] = [left + 180, y + H / 2];
+    // the line's box (padding included) and the middle of its words, then the units as one row of real tokens inside it
+    const liBox: C13Rect = { left: left - 34, right: left + colW, top, bottom: top + liH[item]! }, f = c13Flow(ks.map((k) => box[k]!.w), liBox.right - left), mid = top + liH[item]! / 2, y0 = c13StandTop(liBox, mid, f.rows, H);
+    ks.forEach((k, j) => { rest[k] = { x: left + f.pos[j]![0], y: y0 + f.pos[j]![1] * (H + C13_STAND.rowGap) }; });
+    lineC[item] = [left + 180, mid]; rows[item] = { box: liBox, left, mid, rows: f.rows, units: ks };
   });
-  const park: C13Rect = side ? { left: 40, top: 100, right: width - 40, bottom: 100 + 3 * ROW } : { left: 20, top: 100, right: width - 20, bottom: 100 + 4 * ROW };
+  const park: C13Rect = side ? { left: 40, top: 100, right: width - 40, bottom: 100 + Math.min(yesH, noH) } : { left: 20, top: 100, right: width - 20, bottom: 100 + yesH };
   const pile = c13PileIn(park, box, side ? { hx: 150, hy: 110 } : { hx: 90, hy: 110 }, 10_000);
-  return { specs, geo: { pile, box, rest, dist: lineC.map(([x, y]) => Math.hypot(x - pile.x, y - pile.y)) }, park };
+  return { specs, geo: { pile, box, rest, dist: lineC.map(([x, y]) => Math.hypot(x - pile.x, y - pile.y)) }, park, lines: rows };
 }
 
 test('chapter 13: the units are runs of at most two real tokens (a unit\'s chips are its two pseudo-elements) cut at word boundaries, a longer word cut into runs of two, they join back into each line, and there are 51 (ES) and 45 (EN) of them for 91 and 85 tokens', () => {
@@ -1267,9 +1276,6 @@ test('chapter 13: the units are runs of at most two real tokens (a unit\'s chips
       }
       assert.ok(u.chips >= 1 && u.chips <= C13_CAP, 'a unit has one or two chips, never more than it has pseudo-elements');
       assert.equal(u.chips, u.last - u.first + 1);
-      // where its words stand in the line's text: the unit's tokens joined, without the space the first one begins with
-      const joined = l.pieces.slice(u.first, u.last + 1).map((p) => p[0]).join('').replace(/^ /, '');
-      assert.equal(l.t.slice(u.start, u.end), joined, `${lang}: the text of «${l.t}» between ${u.start} and ${u.end}`);
     });
     totals[lang]![0] += us.length; totals[lang]![1] += l.pieces.length;
   }
@@ -1278,11 +1284,10 @@ test('chapter 13: the units are runs of at most two real tokens (a unit\'s chips
   const P = (...t: string[]): Array<[string]> => t.map((x) => [x]);
   assert.deepEqual(c13Units(P('Usas', ' Chat', 'G', 'PT')).map((u) => [u.first, u.last]), [[0, 0], [1, 2], [3, 3]]);
   assert.deepEqual(c13Units(P(' ab', 'c', 'd', 'e', 'f')).map((u) => [u.first, u.last]), [[0, 1], [2, 3], [4, 4]], 'a word of five tokens is three units');
-  assert.deepEqual(c13Units(P(' ab', 'c', 'd', ' e')).map((u) => [u.first, u.last, u.start, u.end]), [[0, 1, 1, 4], [2, 2, 4, 5], [3, 3, 6, 7]], 'a word of three tokens is cut after two, and where each run\'s words stand in « abcd e» (the space a word begins with is not drawn)');
+  assert.deepEqual(c13Units(P(' ab', 'c', 'd', ' e')).map((u) => [u.first, u.last]), [[0, 1], [2, 2], [3, 3]], 'a word of three tokens is cut after two');
   assert.deepEqual(c13Units(P('a', ' b', ' c')).map((u) => [u.first, u.last]), [[0, 1], [2, 2]]);
   assert.deepEqual(c13Units(P('a', ' bb', 'x', ' c')).map((u) => [u.first, u.last]), [[0, 0], [1, 2], [3, 3]]);
-  assert.deepEqual(c13Units(P('hola', '.')).map((u) => [u.start, u.end]), [[0, 5]], 'punctuation sticks to the word before it');
-  assert.deepEqual(c13Units(P('a', ' b')).map((u) => [u.start, u.end]), [[0, 3]], 'the space a token begins with is not part of where its words stand');
+  assert.deepEqual(c13Units(P('hola', '.')).map((u) => [u.first, u.last]), [[0, 1]], 'punctuation sticks to the word before it');
   assert.throws(() => c13Units([]), /c13:/);
   assert.equal(C13_CAP, 2);
 });
@@ -1403,6 +1408,89 @@ test('chapter 13: the clocks of one unit (its run, its fade, the words) and what
   assert.equal(C13_SEED, 13);
 });
 
+test('chapter 13: the units of a line stand as one row of real tokens, left to right, wrapped at the text\'s width, never one over another: flowOf, whatever the widths', () => {
+  const G = C13_STAND.gap;
+  // the rule on a case that can be done by hand: three units of 100 px in a row 250 px wide, 3 px apart
+  assert.deepEqual(c13Flow([100, 100, 100], 250), { pos: [[0, 0], [100 + G, 0], [0, 1]], rows: 2 });
+  assert.deepEqual(c13Flow([100, 147], 250).pos, [[0, 0], [100 + G, 0]], 'a unit that exactly fills what is left of the row stays in it');
+  assert.deepEqual(c13Flow([100, 148], 250).pos, [[0, 0], [0, 1]], 'and one px more opens the next row');
+  assert.deepEqual(c13Flow([250], 250), { pos: [[0, 0]], rows: 1 }, 'a unit as wide as the row has the row to itself');
+  assert.deepEqual(c13Flow([60, 250, 60], 250).pos, [[0, 0], [0, 1], [0, 2]], 'and the units either side of it have rows of their own');
+  // the rule on thousands of rows: no two units of a line overlap, every unit is inside the row, a row's first unit is at its left, the gap is kept, and a unit opens a new row only when it did not fit
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let t = 0; t < 400; t++) {
+    const maxW = 150 + Math.floor(rnd() * 500), n = 1 + Math.floor(rnd() * 14), ws = Array.from({ length: n }, () => 20 + rnd() * Math.min(140, maxW - 20)), f = c13Flow(ws, maxW);
+    assert.equal(f.pos.length, n); assert.equal(f.rows, f.pos[n - 1]![1] + 1);
+    f.pos.forEach(([x, row], i) => {
+      assert.ok(x >= 0 && x + ws[i]! <= maxW + 0.01, `trial ${t}: unit ${i} stands inside the row`);
+      if (i && row === f.pos[i - 1]![1]) assert.ok(x >= f.pos[i - 1]![0] + ws[i - 1]! + G - 1e-9, `trial ${t}: unit ${i} keeps ${G} px from the unit before it`);
+      if (i && row !== f.pos[i - 1]![1]) { assert.equal(row, f.pos[i - 1]![1] + 1); assert.equal(x, 0, 'a row opens at its left'); assert.ok(f.pos[i - 1]![0] + ws[i - 1]! + G + ws[i]! > maxW + 0.01, `trial ${t}: unit ${i} opened a row only because it did not fit`); }
+      for (let j = 0; j < i; j++) if (f.pos[j]![1] === row) assert.ok(f.pos[j]![0] + ws[j]! <= x + 1e-9, `trial ${t}: units ${j} and ${i} of a row do not overlap`);
+    });
+  }
+  // fail closed: no unit, a row with no width, a unit with no width or one that is not a number, one wider than the row
+  assert.throws(() => c13Flow([], 250), /c13:/);
+  for (const bad of [0, -5, NaN, Infinity]) assert.throws(() => c13Flow([100], bad), /c13:/);
+  for (const bad of [0, -5, NaN, Infinity]) assert.throws(() => c13Flow([100, bad], 250), /c13:/);
+  assert.throws(() => c13Flow([100, 251], 250), /wider than the 250 px/);
+  assert.equal(C13_STAND.gap, 3, 'the gap between two units is the gap between the two chips of one');
+});
+
+test('chapter 13: a line\'s rows are centred on its words and kept inside the line\'s own box, with a margin: standTop, and a block that does not fit the box is refused with the numbers', () => {
+  const box = { top: 1000, bottom: 1083 }, H = (rows: number) => rows * 24 + (rows - 1) * C13_STAND.rowGap, e = C13_STAND.edge;
+  assert.equal(c13StandTop(box, 1041.5, 1, 24), 1041.5 - 12, 'one row is centred on the middle of the words');
+  assert.equal(c13StandTop(box, 1041.5, 2, 24), 1041.5 - H(2) / 2, 'and so is a block of two');
+  assert.equal(c13StandTop(box, 1000, 2, 24), 1000 + e, 'a block that would reach over the top of the box is put back inside it, edge px from it');
+  assert.equal(c13StandTop(box, 1083, 2, 24), 1083 - e - H(2), 'and over the bottom likewise');
+  assert.equal(c13StandTop(box, 1041.5, 3, 24), 1000 + e + (83 - 2 * e - H(3)) / 2 , 'three rows (76 px) in the 83 px box of a line of two lines of words: 2 px of margin either side and 1.5 px to move');
+  for (const rows of [1, 2, 3]) for (const mid of [900, 1000, 1041.5, 1083, 1200]) { const t = c13StandTop(box, mid, rows, 24); assert.ok(t >= box.top + e - 1e-9 && t + H(rows) <= box.bottom - e + 1e-9, `${rows} row(s) around ${mid} stay inside the box`); }
+  // the block that does not fit: four rows (102 px) in the 83 px box of two lines of words, and the exact limit
+  assert.throws(() => c13StandTop(box, 1041.5, 4, 24), /4 row\(s\) of units \(102 px\) do not fit the 83 px box/);
+  assert.doesNotThrow(() => c13StandTop({ top: 0, bottom: H(3) + 2 * e }, 40, 3, 24));
+  assert.throws(() => c13StandTop({ top: 0, bottom: H(3) + 2 * e - 0.5 }, 40, 3, 24), /c13:/);
+  for (const bad of [NaN, Infinity]) { assert.throws(() => c13StandTop({ top: bad, bottom: 1083 }, 1041, 1, 24), /c13:/); assert.throws(() => c13StandTop(box, bad, 1, 24), /c13:/); assert.throws(() => c13StandTop(box, 1041, 1, bad), /c13:/); }
+  for (const rows of [0, -1, 1.5, NaN]) assert.throws(() => c13StandTop(box, 1041, rows, 24), /c13:/);
+  assert.throws(() => c13StandTop(box, 1041, 1, 0), /c13:/);
+});
+
+test('chapter 13: on the real lines (both languages, four widths) every unit that has landed is inside its own line\'s box, in a row that starts at the text\'s left, and no two units of a line overlap', () => {
+  for (const lang of ['es', 'en'] as const) for (const [width, side] of [[390, false], [768, false], [1024, true], [1440, true]] as const) {
+    const { specs, geo, lines } = c13Page(lang, width, side);
+    lines.forEach((ln, i) => {
+      ln.units.forEach((k, j) => {
+        const r = geo.rest[k]!, b = geo.box[k]!;
+        assert.ok(r.x >= ln.left - 1e-9 && r.x + b.w <= ln.box.right + 0.01, `${lang} ${width} line ${i}: unit ${j} is inside the width of its line`);
+        assert.ok(r.y >= ln.box.top + C13_STAND.edge - 1e-9 && r.y + b.h <= ln.box.bottom - C13_STAND.edge + 1e-9, `${lang} ${width} line ${i}: unit ${j} is inside the box of its line, ${C13_STAND.edge} px from its edges`);
+        for (let m = 0; m < j; m++) { const o = geo.rest[ln.units[m]!]!, ob = geo.box[ln.units[m]!]!; assert.ok(o.x + ob.w <= r.x + 1e-9 || r.x + b.w <= o.x + 1e-9 || o.y + ob.h <= r.y + 1e-9 || r.y + b.h <= o.y + 1e-9, `${lang} ${width} line ${i}: units ${m} and ${j} overlap`); }
+      });
+      assert.equal(geo.rest[ln.units[0]!]!.x, ln.left, `${lang} ${width} line ${i}: the row starts at the text's left`);
+      assert.equal(ln.units.length, specs.filter((s) => s.item === i).length);
+    });
+  }
+});
+
+test('chapter 13: the band where a line\'s rows do not fit its box (EN, 327 to 331 px wide): line 5 needs four rows (102 px) in the 83 px box of two lines of words and is refused with the numbers, one px either side it is not', () => {
+  // Line 5 of the English list («You want AI to decide for you…»): its 8 units on a phone as the page draws them (exact widths, Chromium, 10px chips: not typed by hand, read from the page by the review's c13-unitw.mjs) and the
+  // geometry of its box from 326 to 332 px wide, read from the static page by c13-line-dump.mjs: the box is the viewport less 78 px wide, the text starts 34 px in, and a line of words is 24 px with 35 px of padding.
+  const widths = [69.172, 57.125, 87.25, 51.125, 63.156, 57.141, 87.234, 69.188];
+  const geo = (w: number) => { const lines = w <= 326 ? 3 : 2, h = 24 * lines + 35; return { room: w - 112, box: { top: 0, bottom: h }, mid: 17 + (24 * lines) / 2 }; };
+  const stand = (w: number) => { const g = geo(w), f = c13Flow(widths, g.room); return { rows: f.rows, top: c13StandTop(g.box, g.mid, f.rows, 24), h: g.box.bottom }; };
+  for (const w of [327, 328, 329, 330, 331]) {
+    assert.equal(c13Flow(widths, geo(w).room).rows, 4, `${w} px: the 8 units need four rows in a row ${geo(w).room} px wide (the first three are 69 + 57 + 87 px, 3 px apart: 219.55 px)`);
+    assert.throws(() => stand(w), /c13: 4 row\(s\) of units \(102 px\) do not fit the 83 px box of their line \(4 px to spare\)/, `${w} px: refused, with the numbers`);
+  }
+  // one px either side the same line fits: at 326 px its words take three lines (a 107 px box: four rows, 102 px, 1 px to move) and at 332 px the rows are three (76 px in 83)
+  const a = stand(326), z = stand(332);
+  assert.equal(a.rows, 4); assert.equal(z.rows, 3);
+  assert.ok(a.top >= 2 && a.top + 102 <= a.h - 2 + 1e-9 && z.top >= 2 && z.top + 76 <= z.h - 2 + 1e-9, 'and they stand inside their box, 2 px from its edges');
+  // it is the box that refuses, not the flow: the same four rows in the 107 px box of three lines of words are what the page has at 326 px
+  assert.equal(c13Flow(widths, geo(327).room).rows, c13Flow(widths, geo(326).room).rows);
+  // what the effect does with the refusal (fail open: no state left, the lists whole, one warning that carries the error, so the numbers) is in the source, and the browser check of it is the review's fallback cell (331 px EN)
+  const code = readFileSync(new URL('../src/aegis/fx/c13.ts', import.meta.url), 'utf8').replace(/\/\/.*$/gm, '');
+  assert.ok(/console\.warn\('\[v3\] chapter 13 is off:', e\); done\(\);/.test(code), 'the refusal is the effect\'s own warning, with the error (the numbers) in it, and the lists are given back');
+  assert.ok(/top = standTop\(box, mid, f\.rows, rowH\)/.test(code), 'and it is the effect\'s standTop that refuses (a block that does not fit the box is never drawn)');
+});
+
 test('chapter 13: the pile is parked in the block of lines that are not there yet, never over a heading: as big as it can be there and no bigger, centred on the block (or higher, to stay in view), and a block no larger than a unit is refused', () => {
   const boxes = [{ w: 60, h: 24 }, { w: 130, h: 24 }, { w: 90, h: 24 }], pref = { hx: 150, hy: 110 };
   // a block with room to spare: the preferred size, centred on it
@@ -1503,7 +1591,10 @@ test('chapter 13: the effect writes only transform and opacity, adds no element 
   assert.deepEqual([...code.matchAll(/\.textContent\s*=\s*([^;]+);/g)].map((m) => m[1]), [], 'it writes no text node');
   assert.deepEqual([...code.matchAll(/setAttribute\(([^,]+), ([^)]+)\)/g)].map((m) => `${m[1]}=${m[2]}`), ["'aria-hidden'='true'", '`data-t${i + 1}`=t'], 'the only attributes it sets: the layer is aria-hidden, and the text of a chip is a token piece read from the page\'s own token file');
   assert.ok(/piecesOf\(map, t\)/.test(code) && /pieces\.slice\(u\.first, u\.last \+ 1\)\.map\(\(p\) => show\(p\[0\]\)\)/.test(code) && /tokensFromPage\(\)/.test(code) && /unitsOf\(pieces\)/.test(code), 'the chips are the real pieces, a leading space shown as «·» by show(), grouped by c13-data\'s unitsOf');
-  assert.ok(/\bus = unitsOf\(pieces\);/.test(code) && /chips: us\.map\(/.test(code) && /ranges: us\.map\(/.test(code), 'every unit of a line is kept (none cut off, none sampled): the chips and the ranges are made from all of the line\'s units');
+  assert.ok(/\bus = unitsOf\(pieces\);/.test(code) && /chips: us\.map\(/.test(code) && /const mine = lines\.map\(\(_, i\) => specs\.flatMap\(\(s, k\) => \(s\.item === i \? \[k\] : \[\]\)\)\);/.test(code), 'every unit of a line is kept (none cut off, none sampled): the chips are made from all of the line\'s units, and each line\'s units are all of the specs that belong to it');
+  assert.ok(/import \{[^}]*\bflowOf\b[^}]*\bstandTop\b[^}]*\} from '\.\.\/c13-data'|import \{[^}]*\bSTAND\b[^}]*\bflowOf\b[^}]*\} from '\.\.\/c13-data'/.test(src) && /flowOf\(ks\.map\(\(k\) => size\[k\]!\.w\), box\.right - left\)/.test(code) && /standTop\(box, mid, f\.rows, rowH\)/.test(code) && /rowH = Math\.max\(\.\.\.ks\.map\(\(k\) => size\[k\]!\.h\)\)/.test(code), 'each line\'s units land as one row: flowOf over the widths of the line\'s units, wrapped at the right of the line\'s box less the text\'s left, as tall as the tallest of them, and standTop inside the line\'s box');
+  assert.ok(/rest\[k\] = \{ x: left \+ f\.pos\[j\]!\[0\] - O\.left, y: top \+ f\.pos\[j\]!\[1\] \* \(rowH \+ STAND\.rowGap\) - O\.top \}/.test(code) && !/ranges|EDGE|setStart\(lines/.test(code), 'a unit\'s resting place is its slot in its line\'s row, not the x of its own words');
+  assert.ok(/rg\.selectNodeContents\(l\.node\);/.test(code) && /need\(rs\.length > 0, 'a line has no place: its words are not drawn'\)/.test(code) && /const left = Math\.min\(\.\.\.rs\.map\(\(q\) => q\.left\)\), mid = \(Math\.min\(\.\.\.rs\.map\(\(q\) => q\.top\)\) \+ Math\.max\(\.\.\.rs\.map\(\(q\) => q\.bottom\)\)\) \/ 2, box = l\.li\.getBoundingClientRect\(\);/.test(code), 'a line\'s row starts at the left of its words and is centred on their middle (a Range over its text node), and a line whose words are not drawn is refused');
   assert.deepEqual([...code.matchAll(/\bel\('([a-z]+)', ([^)]+)\)/g)].map((m) => `${m[1]}.${m[2]!.replace(/\$\{[^}]*\}/g, '$')}`), ["div.'fxk ssv'", 'div.`fxk ssu $`'], 'the elements it adds: its layer and its units, marked fxk, and nothing inside a unit (the contract\'s counter finds every descendant of what is added)');
   assert.ok(/layer\.setAttribute\('aria-hidden', 'true'\)/.test(code), 'and the layer is a decoration (aria-hidden)');
   assert.ok(/import \{[^}]*\bCAP\b[^}]*\} from '\.\.\/c13-data'/.test(src) && /need\(lines\.every\(\(l\) => l\.chips\.every\(\(c\) => c\.length >= 1 && c\.length <= CAP\)\)/.test(code), 'it refuses a unit with no chip or with more than the pseudo-elements it has');
@@ -1524,4 +1615,5 @@ test('chapter 13: the effect writes only transform and opacity, adds no element 
   assert.ok(/pileOf\(specs\.length\)\.order\.forEach\(\(k\) => layer!\.appendChild\(boxes\[k\]!\)\)/.test(code), 'the units are stacked in the pile\'s own order');
   assert.ok(/Y\.right <= N\.left \+ 1 && Math\.abs\(Y\.top - N\.top\) < 2/.test(code) && /\{ hx: clamp\(B\.width \* 0\.14, 90, 150\), hy: clamp\(B\.height \* 0\.22, 70, 110\) \}, innerHeight \* 0\.72\)/.test(code), 'the lists are side by side or stacked as the page lays them out, the pile is asked for the size it has always had, and it is always in view');
   assert.ok(/createRange\(\)/.test(code) && /getClientRects\(\)/.test(code), 'each unit\'s place is where its words are (a Range over them)');
+  assert.ok(/const size = boxes\.map\(\(b\) => \{ const q = b\.getBoundingClientRect\(\); return \{ w: q\.width, h: q\.height \}; \}\)/.test(code) && !/offsetWidth|offsetHeight/.test(code), 'every unit is measured as it is drawn, exact, never in whole pixels (offsetWidth rounds a 10px chip down by up to half a pixel): a row is never wider than the text and two units are never closer than the gap');
 });

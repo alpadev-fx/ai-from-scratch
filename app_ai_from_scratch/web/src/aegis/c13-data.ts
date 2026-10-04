@@ -3,11 +3,13 @@
 //
 // What the chapter draws: the two lists of the chapter (the four lines of «Es para ti si» and the three of «No es para ti si», the page's own copy) are first a pile: the REAL o200k tokens of all seven lines
 // (src/data/v3-tokens.json, a leading space shown as «·»), jumbled together, the tokens of the two lists mixed (the ones of the yes list outlined in the accent, the ones of the no list plain). When the
-// chapter comes into view the pile forms, stands for a moment, and then separates: each token runs to the place of its own words, the yes tokens into the yes column and the no tokens into the no column,
-// the lines nearest the pile first. The pile is PARKED where the lines are not yet there (pileIn: in the block of the yes lines when the lists are stacked, in the block of both lists side by side), never over
-// a heading or any other text that is there. A line's words stay out until every one of its tokens has landed: the chips stand over the place of the words for a moment, go out together, and only then do the
-// words come in (never a chip over words of its own line that can be read), and no word comes in while a token is still in the pile. The page's text is never changed and never typed here: the markup is the
-// finished picture and the real lines are what the reader ends with.
+// chapter comes into view the pile forms, stands for a moment, and then separates: each token runs into its own line, the yes tokens into the yes column and the no tokens into the no column, the lines nearest
+// the pile first. The pile is PARKED where the lines are not yet there (pileIn: in the block of the yes lines when the lists are stacked, in the block of both lists side by side), never over a heading or any other
+// text that is there. A line's tokens land as ONE ROW of real tokens (flowOf: the units in reading order, left-aligned at the text's left, wrapped at the text's width, a small gap between them) inside the line's
+// own box (standTop), never one over another: a mono chip with its padding is wider than the proportional words it stands for, so landing each unit at its words' own x would pile the chips of a line on top
+// of each other and a clipped chip would read as a fake token. A line's words stay out until every one of its tokens has landed: the row stands whole for a moment, goes out together, and only then do the words
+// come in (never a chip over words of its own line that can be read), and no word comes in while a token is still in the pile. The page's text is never changed and never typed here: the markup is the finished
+// picture and the real lines are what the reader ends with.
 //
 // The tokens travel in UNITS, runs of up to CAP (two) tokens, cut at word boundaries: there are 91 (ES) and 85 (EN) real tokens in the seven lines, and the contract allows a chapter 80 nodes. Its counter
 // (v3-fps --nodes) counts every element a chapter ADDS, descendants included, and every element it writes a style on, so 91 chip elements are 91 nodes before a single unit is counted. A unit is ONE
@@ -21,7 +23,7 @@ export const T = {
   form: 0.3,                                                         // the pile forms: its units come in over this long, one after another, in the pile's own order
   pop: 0.14,                                                         // each unit fades in over this long
   hold: 0.18,                                                        // the pile stands, mixed, before it separates
-  fly: 0.56,                                                         // every unit's run, from the pile to its words
+  fly: 0.56,                                                         // every unit's run, from the pile to its slot in its line's row
   unit: 0.028,                                                       // between one unit of a line and the next one, in the order the line reads
   item: 0.085,                                                       // between one line and the next, the one nearest the pile first
   stand: 0.08,                                                       // the line stands as its chips, every one of its units landed, before they go
@@ -51,9 +53,6 @@ export interface Unit {
   first: number;
   last: number;
   chips: number;
-  /** Where its words stand in the line's text: [start, end) in UTF-16 units, the leading space of its first token left out (the space is not drawn). */
-  start: number;
-  end: number;
 }
 
 /** The words of a line: the index in the line of each word's first and last piece. A piece that starts with a space, or the first one, opens a new word; punctuation sticks to the word before it
@@ -68,12 +67,11 @@ function wordsOf(pieces: readonly Piece[]): Array<[number, number]> {
  *  has pseudo-elements). Fail closed: no tokens is an error. */
 export function unitsOf(pieces: readonly Piece[]): Unit[] {
   if (!pieces.length) throw new Error('c13: a line has at least one token');
-  const off: number[] = [0]; pieces.forEach(([t]) => off.push(off[off.length - 1]! + t.length));
   const out: Unit[] = [];
   let cur: [number, number] | null = null;
   const push = () => {
     if (!cur) return;
-    const [a, b] = cur; out.push({ first: a, last: b, chips: b - a + 1, start: off[a]! + (pieces[a]![0].startsWith(' ') ? 1 : 0), end: off[b + 1]! }); cur = null;
+    const [a, b] = cur; out.push({ first: a, last: b, chips: b - a + 1 }); cur = null;
   };
   for (const [a, b] of wordsOf(pieces)) {
     if (b - a + 1 > CAP) {                                           // a word of more tokens than a unit holds: it closes the unit in progress and is cut into runs of CAP
@@ -93,10 +91,44 @@ export interface Geo {
   pile: { x: number; y: number; hx: number; hy: number };
   /** Each unit's box (px). */
   box: ReadonlyArray<{ w: number; h: number }>;
-  /** Where each unit's box stands (its top-left corner, px from the layer's corner) once it has arrived at its words. */
+  /** Where each unit's box stands (its top-left corner, px from the layer's corner) once it has landed: its slot in its line's row (flowOf, standTop). */
   rest: ReadonlyArray<{ x: number; y: number }>;
   /** How far each line's text is from the pile (px): the nearest line goes first. */
   dist: readonly number[];
+}
+
+/** How the units of a line stand once they have landed, px: `gap` between two units of a row (the same 3 px as between the two chips of a unit, so the line reads as an even row of chips), `rowGap` between two rows,
+ *  and `edge` kept free between the rows and the top and the bottom of the line's box (the next line's box starts where this one ends, so a row never reaches into it). */
+export const STAND = { gap: 3, rowGap: 2, edge: 2 } as const;
+
+export interface Flow {
+  /** For each unit, in reading order: its left edge from the left of the row (px) and the row it stands in (0 = the first). */
+  pos: Array<[number, number]>;
+  rows: number;
+}
+
+/** The units of one line as a row of real tokens: in reading order, left to right, a unit that does not fit what is left of the row `maxW` wide opens the next row. Fail closed: no unit, a row with no width, a unit
+ *  with no width or wider than the row (it could not stand in it without leaving the line's box) is an error. By construction no two units of a line overlap. */
+export function flowOf(widths: readonly number[], maxW: number): Flow {
+  if (!widths.length) throw new Error('c13: a line has at least one unit to stand');
+  if (!Number.isFinite(maxW) || !(maxW > 0)) throw new Error(`c13: a row of units has no width (${maxW} px)`);
+  let x = 0, row = 0;
+  const pos = widths.map((w, k): [number, number] => {
+    if (!Number.isFinite(w) || !(w > 0)) throw new Error(`c13: unit ${k} has no width (${w} px)`);
+    if (w > maxW + 0.01) throw new Error(`c13: unit ${k} is ${w} px wide, wider than the ${maxW} px of the row it stands in`);
+    if (x > 0 && x + w > maxW + 0.01) { x = 0; row++; }
+    const at: [number, number] = [x, row]; x += w + STAND.gap; return at;
+  });
+  return { pos, rows: row + 1 };
+}
+
+/** The top of the block of `rows` rows (`rowH` tall, STAND.rowGap apart) of a line: centred on `mid`, the middle of the line's words, and kept inside the line's box (`box.top`..`box.bottom`, padding included) with
+ *  STAND.edge px to spare at either end. Fail closed: a block that does not fit the box (with the numbers) or a number that is not finite is an error. */
+export function standTop(box: { top: number; bottom: number }, mid: number, rows: number, rowH: number): number {
+  if (![box.top, box.bottom, mid, rowH].every(Number.isFinite) || !Number.isInteger(rows) || rows < 1 || !(rowH > 0)) throw new Error('c13: the rows of a line have no size or no place');
+  const H = rows * rowH + (rows - 1) * STAND.rowGap, lo = box.top + STAND.edge, hi = box.bottom - STAND.edge - H;
+  if (!(hi >= lo)) throw new Error(`c13: ${rows} row(s) of units (${H} px) do not fit the ${box.bottom - box.top} px box of their line (${2 * STAND.edge} px to spare)`);
+  return Math.max(lo, Math.min(hi, mid - H / 2));
 }
 
 export interface Rect { left: number; top: number; right: number; bottom: number }

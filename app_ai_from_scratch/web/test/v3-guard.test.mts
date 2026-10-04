@@ -16,7 +16,7 @@ import { followStep, glowAlpha, rng, squareFrame, squareGlow, toward, type Follo
 import { END as C12_END, GEO as C12_GEO, LAP as C12_LAP, LAPS, LAPS_END, NODES as C12_NODES, NODE_BUDGET as C12_BUDGET, T as C12_T, beat, loopOf, nodeCount, tickAt } from '../src/aegis/c12-data.ts';
 import { NODE_BUDGET as C07_BUDGET, ROWS as C07_ROWS, T as C07_T, count as c07Count, fall as c07Fall, nodeCount as c07Nodes, plan as c07Plan } from '../src/aegis/c07-data.ts';
 import { NODE_BUDGET as C09_BUDGET, T as C09_T, chip as c09Chip, flight as c09Flight, nodeCount as c09Nodes, plain as c09Plain, plan as c09Plan, title as c09Title, wrap as c09Wrap } from '../src/aegis/c09-data.ts';
-import { CAP as C13_CAP, NODE_BUDGET as C13_BUDGET, PILE_SEED as C13_SEED, T as C13_T, nodeCount as c13Nodes, pileOf as c13Pile, plan as c13Plan, text as c13Text, unit as c13Unit, unitsOf as c13Units, type Geo as C13Geo, type UnitSpec as C13Spec } from '../src/aegis/c13-data.ts';
+import { CAP as C13_CAP, NODE_BUDGET as C13_BUDGET, PILE_SEED as C13_SEED, T as C13_T, nodeCount as c13Nodes, pileIn as c13PileIn, pileOf as c13Pile, plan as c13Plan, text as c13Text, unit as c13Unit, unitsOf as c13Units, type Geo as C13Geo, type Rect as C13Rect, type UnitSpec as C13Spec } from '../src/aegis/c13-data.ts';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 
 test('guard throws on a city, on plural courses, and lets the tokenizer sentence through', () => {
@@ -1237,8 +1237,8 @@ const c13Lines = (lang: 'es' | 'en') => {
   return [...(V.s10Si as unknown as string[]).map((t) => ({ t, list: 'yes' as const })), ...(V.s10No as unknown as string[]).map((t) => ({ t, list: 'no' as const }))].map((l) => ({ ...l, pieces: piecesOf(TOKENS[lang], l.t) }));
 };
 /** A made-up page for the schedule: the seven lines as units of mono chips (7.2 px a character plus 14 of padding, 3 px between two chips of a unit), the two lists side by side (yes left, no right) or stacked, the pile
- *  on the border between the columns or at the junction of the two blocks. */
-function c13Page(lang: 'es' | 'en', width: number, side: boolean): { specs: C13Spec[]; geo: C13Geo } {
+ *  parked by pileIn in the block of lines that are not there yet (both lists' lines side by side, the yes lines alone when stacked). `park` is that block. */
+function c13Page(lang: 'es' | 'en', width: number, side: boolean): { specs: C13Spec[]; geo: C13Geo; park: C13Rect } {
   const MONO = 7.2, PAD = 14, GAP = 3, H = 24, ROW = 72, specs: C13Spec[] = [], box: Array<{ w: number; h: number }> = [], rest: Array<{ x: number; y: number }> = [], lineC: Array<[number, number]> = [];
   c13Lines(lang).forEach((l, item) => {
     const n = l.list === 'yes' ? item : item - 4, left = side ? (l.list === 'yes' ? 40 : width / 2 + 40) : 20, y = side ? 100 + n * ROW : l.list === 'yes' ? 100 + n * ROW : 100 + 4 * ROW + 60 + n * ROW;
@@ -1249,8 +1249,9 @@ function c13Page(lang: 'es' | 'en', width: number, side: boolean): { specs: C13S
     });
     lineC[item] = [left + 180, y + H / 2];
   });
-  const pile = side ? { x: width / 2, y: 330, hx: 150, hy: 90 } : { x: width / 2, y: 100 + 4 * ROW + 30, hx: 90, hy: 110 };
-  return { specs, geo: { pile, box, rest, dist: lineC.map(([x, y]) => Math.hypot(x - pile.x, y - pile.y)) } };
+  const park: C13Rect = side ? { left: 40, top: 100, right: width - 40, bottom: 100 + 3 * ROW } : { left: 20, top: 100, right: width - 20, bottom: 100 + 4 * ROW };
+  const pile = c13PileIn(park, box, side ? { hx: 150, hy: 110 } : { hx: 90, hy: 110 }, 10_000);
+  return { specs, geo: { pile, box, rest, dist: lineC.map(([x, y]) => Math.hypot(x - pile.x, y - pile.y)) }, park };
 }
 
 test('chapter 13: the units are runs of at most two real tokens (a unit\'s chips are its two pseudo-elements) cut at word boundaries, a longer word cut into runs of two, they join back into each line, and there are 51 (ES) and 45 (EN) of them for 91 and 85 tokens', () => {
@@ -1286,22 +1287,26 @@ test('chapter 13: the units are runs of at most two real tokens (a unit\'s chips
   assert.equal(C13_CAP, 2);
 });
 
-test('chapter 13: the schedule (the real lines, both languages, two stacked widths and two side by side): the pile forms and stands complete and mixed, the line nearest the pile goes first, each unit runs on a straight line to its words and fades as it arrives, and the words come in with it', () => {
+test('chapter 13: the schedule (the real lines, both languages, two stacked widths and two side by side): the pile forms and stands complete and mixed, the line nearest the pile goes first, each unit runs on a straight line to its words and stands over them until the last unit of its line has landed, the chips go out together and only then do the words come in', () => {
   let cases = 0;
   for (const lang of ['es', 'en'] as const) for (const [width, side] of [[390, false], [768, false], [1024, true], [1440, true]] as const) {
-    const { specs, geo } = c13Page(lang, width, side), P = c13Plan(specs, geo), n = specs.length, items = 7;
+    const { specs, geo, park } = c13Page(lang, width, side), P = c13Plan(specs, geo), n = specs.length, items = 7;
     // the order of the lines: the nearest to the pile first (a permutation: every line has a turn)
     assert.deepEqual([...P.rank].sort((a, b) => a - b), Array.from({ length: items }, (_, i) => i));
     for (let i = 0; i < items; i++) for (let j = 0; j < items; j++) if (geo.dist[i]! < geo.dist[j]!) assert.ok(P.rank[i]! < P.rank[j]!, `${lang} ${width}: line ${i} is nearer the pile than line ${j} and goes first`);
     const within: number[] = [], seen = new Array(items).fill(0); specs.forEach((s, k) => { within[k] = seen[s.item]!++; });
+    const lastLand = Array.from({ length: items }, (_, i) => Math.max(...specs.map((s, k) => (s.item === i ? P.land[k]! : -Infinity)))), lastRel = Math.max(...P.rel);
     for (let k = 0; k < n; k++) {
       const rel = C13_T.form + C13_T.hold + P.rank[specs[k]!.item]! * C13_T.item + within[k]! * C13_T.unit;
       assert.ok(Math.abs(P.rel[k]! - rel) < 1e-12 && Math.abs(P.land[k]! - (rel + C13_T.fly)) < 1e-12, 'a unit runs after the pile has formed and stood, in its line\'s turn, a unit apart in the order the line reads');
       assert.ok(P.appear[k]! >= 0 && P.appear[k]! <= C13_T.form - C13_T.pop + 1e-12, 'a unit has come into the pile by the end of the formation');
+      assert.ok(Math.abs(P.out[k]! - (lastLand[specs[k]!.item]! + C13_T.stand)) < 1e-12, 'the units of a line go out together: once the last of them has landed and the line has stood as its chips');
       assert.deepEqual(P.to[k], [geo.rest[k]!.x, geo.rest[k]!.y]);
       // it comes into the pile at a place inside the pile's ellipse (box centred on a point of it)
       const cx = P.from[k]![0] + geo.box[k]!.w / 2 - geo.pile.x, cy = P.from[k]![1] + geo.box[k]!.h / 2 - geo.pile.y;
       assert.ok((cx / geo.pile.hx) ** 2 + (cy / geo.pile.hy) ** 2 <= 1 + 1e-9, 'inside the pile');
+      // and the whole of its box is inside the block the pile is parked in: never over a heading, never over a line that is not that block's
+      assert.ok(P.from[k]![0] >= park.left - 1e-9 && P.from[k]![0] + geo.box[k]!.w <= park.right + 1e-9 && P.from[k]![1] >= park.top - 1e-9 && P.from[k]![1] + geo.box[k]!.h <= park.bottom + 1e-9, `${lang} ${width}: unit ${k} is parked inside the block of lines`);
     }
     assert.ok(Math.min(...P.rel) >= C13_T.form + C13_T.hold - 1e-12, 'nothing leaves before the pile has stood');
     // the pile stands complete between the formation and the first run
@@ -1320,32 +1325,48 @@ test('chapter 13: the schedule (the real lines, both languages, two stacked widt
         assert.ok(t >= prevT - 1e-9, `unit ${k} never runs back`); prevT = t;
         assert.ok(u.a >= 0 && u.a <= 1, 'opacity is a share');
         if (x <= P.appear[k]!) assert.equal(u.a, 0, 'unseen until it comes into the pile');
-        if (x >= P.land[k]! + C13_T.fade * 0.4) assert.equal(u.a, 0, 'gone once it has arrived');
-        if (x >= P.appear[k]! + C13_T.pop && x <= P.land[k]! - C13_T.fade * 0.6) assert.equal(u.a, 1, 'whole from its coming in to its arrival');
-        if (x >= P.land[k]! - C13_T.fade * 0.6) assert.ok(u.a <= prevA + 1e-12, 'only fading once it nears its words');
+        if (x >= P.out[k]! + C13_T.fade) assert.equal(u.a, 0, 'gone once its line has stood and its chips have gone out');
+        if (x >= P.appear[k]! + C13_T.pop && x <= P.out[k]!) assert.equal(u.a, 1, 'whole from its coming in until its line has stood as its chips: over its words, it does not fade as it lands');
+        if (x >= P.out[k]!) assert.ok(u.a <= prevA + 1e-12, 'only fading once its line has stood');
         prevA = u.a; maxA = Math.max(maxA, u.a);
       }
       assert.equal(maxA, 1);
       { const u = c13Unit(P, k, P.land[k]!); assert.ok(Math.abs(u.x - b[0]) < 1e-9 && Math.abs(u.y - b[1]) < 1e-9, 'it arrives at the place of its words'); }
     }
-    // the words of a line come in as its units arrive: from T.text before the first one lands, whole when the last has faded, never going back
+    // the words of a line come in once its chips are gone (every unit of the line landed, the line stood, the chips faded out) and no unit is left in the pile, over T.text, never going back
     for (let i = 0; i < items; i++) {
-      const ks = specs.map((s, k) => (s.item === i ? k : -1)).filter((k) => k >= 0), first = Math.min(...ks.map((k) => P.land[k]!)), last = Math.max(...ks.map((k) => P.land[k]!));
-      assert.ok(Math.abs(P.text[i]![0] - (first - C13_T.text)) < 1e-12 && Math.abs(P.text[i]![1] - (last + C13_T.fade / 2)) < 1e-12);
-      assert.equal(c13Text(P, i, 0), 0); assert.equal(c13Text(P, i, P.text[i]![1]), 1); assert.equal(c13Text(P, i, P.end + 3), 1);
+      assert.ok(Math.abs(P.text[i]![0] - Math.max(lastLand[i]! + C13_T.stand + C13_T.fade, lastRel)) < 1e-12 && Math.abs(P.text[i]![1] - (P.text[i]![0] + C13_T.text)) < 1e-12, `${lang} ${width}: the words of line ${i} come in after its chips and after the pile`);
+      assert.equal(c13Text(P, i, 0), 0); assert.equal(c13Text(P, i, P.text[i]![0]), 0); assert.equal(c13Text(P, i, P.text[i]![1]), 1); assert.equal(c13Text(P, i, P.end + 3), 1);
       let prev = 0; for (let x = 0; x <= P.end; x += 0.004) { const t = c13Text(P, i, x); assert.ok(t >= prev - 1e-12 && t >= 0 && t <= 1); prev = t; }
     }
-    assert.ok(P.end > 1.8 && P.end < 2.4, `${lang} ${width}: it plays for ${P.end.toFixed(2)} s, once`);
+    // a chip is never over words that can be read, and no word is read over the pile: while any of a line's words is seen none of its units is, and no word is seen while any unit is still waiting in the pile
+    for (let x = 0; x <= P.end + 0.004; x += 0.002) for (let i = 0; i < items; i++) if (c13Text(P, i, x) > 0) {
+      assert.ok(x >= lastRel - 1e-9, `${lang} ${width}: a word of line ${i} is seen at ${x.toFixed(3)} s while a unit is still in the pile (the last leaves at ${lastRel.toFixed(3)} s)`);
+      specs.forEach((s, k) => { if (s.item === i) assert.equal(c13Unit(P, k, x).a, 0, `${lang} ${width}: unit ${k} is seen at ${x.toFixed(3)} s over the words of its own line`); });
+    }
+    assert.ok(P.end > 1.8 && P.end < 2.3, `${lang} ${width}: it plays for ${P.end.toFixed(2)} s, once`);
     // the units of a line arrive one after the other in the order it reads
     for (let k = 1; k < n; k++) if (specs[k]!.item === specs[k - 1]!.item) assert.ok(P.land[k]! > P.land[k - 1]! && P.rel[k]! > P.rel[k - 1]!, `${lang}: unit ${k} arrives after the unit before it in its line`);
     // the clocks are where the design needs them: a pile that takes a moment to form and stands for a moment, a run long enough to be seen, the words coming in before the first unit lands
-    assert.ok(C13_T.form >= 0.25 && C13_T.hold >= 0.15 && C13_T.fly >= 0.4 && C13_T.fly <= 0.9 && C13_T.item >= 0.05 && C13_T.unit >= 0.01 && C13_T.text >= 0.1 && C13_T.fade >= 0.1 && C13_T.pop >= 0.05 && C13_T.pop <= C13_T.form, 'the clocks');
-    assert.ok(Math.abs(P.end - Math.max(...P.land.map((l) => l + C13_T.fade / 2))) < 1e-12);
+    assert.ok(C13_T.form >= 0.25 && C13_T.hold >= 0.15 && C13_T.fly >= 0.4 && C13_T.fly <= 0.9 && C13_T.item >= 0.05 && C13_T.unit >= 0.01 && C13_T.stand >= 0.05 && C13_T.text >= 0.1 && C13_T.fade >= 0.1 && C13_T.pop >= 0.05 && C13_T.pop <= C13_T.form, 'the clocks');
+    assert.ok(Math.abs(P.end - Math.max(...P.text.map((t) => t[1]))) < 1e-12 && P.end >= Math.max(...P.out) + C13_T.fade, 'it ends when the last line is whole');
     cases++;
   }
   assert.equal(cases, 8);
   // the rule can fail: a pile that formed in 3 s would not leave the 2.4 s the whole is allowed
   assert.ok(3 + C13_T.hold + 6 * C13_T.item + 9 * C13_T.unit + C13_T.fly > 2.4);
+});
+
+test('chapter 13: no word is seen while a unit is still in the pile, whatever the order of the lines: a line of one unit that is nearest the pile waits for a pile that empties later', () => {
+  // seven lines: the nearest to the pile (line 0) has ONE unit and its chips are gone long before the last unit of the farthest line (twelve units) has left the pile
+  const specs: C13Spec[] = [], box: Array<{ w: number; h: number }> = [], rest: Array<{ x: number; y: number }> = [];
+  for (let item = 0; item < 7; item++) for (let j = 0; j < (item === 0 ? 1 : 12); j++) { specs.push({ item, chips: 1, list: item < 4 ? 'yes' : 'no' }); box.push({ w: 60, h: 24 }); rest.push({ x: 20 + j * 70, y: 100 + item * 50 }); }
+  const P = c13Plan(specs, { pile: { x: 500, y: 300, hx: 100, hy: 60 }, box, rest, dist: [0, 100, 200, 300, 400, 500, 600] });
+  const lastRel = Math.max(...P.rel), chipsGone = P.out[0]! + C13_T.fade;
+  assert.ok(chipsGone < lastRel, `the chips of line 0 are gone at ${chipsGone.toFixed(3)} s, before the last unit leaves the pile at ${lastRel.toFixed(3)} s: this is the case the rule is for`);
+  assert.ok(Math.abs(P.text[0]![0] - lastRel) < 1e-12, 'so the words of line 0 wait for the pile to empty');
+  for (let i = 1; i < 7; i++) assert.ok(P.text[i]![0] >= lastRel - 1e-12, `and so do the words of line ${i}`);
+  for (let x = 0; x <= P.end; x += 0.002) for (let i = 0; i < 7; i++) if (c13Text(P, i, x) > 0) assert.ok(x >= lastRel - 1e-9, `a word of line ${i} is seen at ${x.toFixed(3)} s while a unit is still in the pile`);
 });
 
 test('chapter 13: the clocks of one unit (its run, its fade, the words) and what the schedule refuses', () => {
@@ -1356,8 +1377,10 @@ test('chapter 13: the clocks of one unit (its run, its fade, the words) and what
   assert.ok(Math.hypot(at(P.rel[k]! + C13_T.fly * 0.1).x - a[0], at(P.rel[k]! + C13_T.fly * 0.1).y - a[1]) < 0.1 * Math.hypot(b[0] - a[0], b[1] - a[1]), 'it leaves the pile slowly: a tenth of the way through its run it has covered less than a tenth of the way');
   const e = (u: number) => u * u * (3 - 2 * u); assert.ok(mid(at(P.rel[k]! + C13_T.fly * 0.25).x, a[0] + (b[0] - a[0]) * e(0.25)), 'a smooth step: slow out of the pile, slow into its place');
   assert.ok(mid(at(P.appear[k]! + C13_T.pop / 2).a, 0.5) && at(P.appear[k]!).a === 0 && at(P.appear[k]! + C13_T.pop).a === 1, 'it comes into the pile over T.pop');
-  assert.ok(mid(at(P.land[k]! - C13_T.fade * 0.1).a, 0.5) && at(P.land[k]! - C13_T.fade * 0.6).a === 1 && at(P.land[k]! + C13_T.fade * 0.4).a === 0, 'and fades out around the second it arrives, T.fade long');
+  assert.ok(P.out[k]! >= P.land[k]! + C13_T.stand - 1e-12 && at(P.land[k]!).a === 1 && at(P.out[k]!).a === 1, 'it stands over its words, whole, at least T.stand after it lands (longer while the rest of its line lands)');
+  assert.ok(mid(at(P.out[k]! + C13_T.fade / 2).a, 0.5) && at(P.out[k]! + C13_T.fade).a === 0, 'and goes out with its line over T.fade');
   const t = P.text[2]!; assert.equal(c13Text(P, 2, t[0]), 0); assert.ok(mid(c13Text(P, 2, (t[0] + t[1]) / 2), 0.5)); assert.equal(c13Text(P, 2, t[1]), 1);
+  assert.ok(t[0] >= P.out.filter((_, j) => specs[j]!.item === 2).reduce((m, o) => Math.max(m, o), 0) + C13_T.fade - 1e-12, 'the words of a line begin when its chips have gone');
   // fail closed: no units, lines that do not count up one at a time, a unit with no chip or with more than the two its pseudo-elements draw, geometry that does not describe the units, a number that is not a number, a pile with no size
   type MutGeo = { pile: C13Geo['pile']; box: Array<{ w: number; h: number }>; rest: Array<{ x: number; y: number }>; dist: number[] };
   const bad = (f: (s: C13Spec[], g: MutGeo) => [C13Spec[], C13Geo]) => assert.throws(() => c13Plan(...f(specs.map((x) => ({ ...x })), { ...geo, box: [...geo.box], rest: [...geo.rest], dist: [...geo.dist] })), /c13:/);
@@ -1378,6 +1401,41 @@ test('chapter 13: the clocks of one unit (its run, its fade, the words) and what
   bad((s, g) => [s, { ...g, pile: { ...g.pile, y: NaN } }]);
   assert.doesNotThrow(() => c13Plan(specs, geo));
   assert.equal(C13_SEED, 13);
+});
+
+test('chapter 13: the pile is parked in the block of lines that are not there yet, never over a heading: as big as it can be there and no bigger, centred on the block (or higher, to stay in view), and a block no larger than a unit is refused', () => {
+  const boxes = [{ w: 60, h: 24 }, { w: 130, h: 24 }, { w: 90, h: 24 }], pref = { hx: 150, hy: 110 };
+  // a block with room to spare: the preferred size, centred on it
+  let p = c13PileIn({ left: 100, top: 200, right: 1100, bottom: 700 }, boxes, pref, 10_000);
+  assert.deepEqual(p, { x: 600, y: 450, hx: 150, hy: 110 });
+  // a narrow, short block: the pile is what the block allows, so that the whole of the widest and the tallest box stays inside it (the half-size of the block less half the box)
+  p = c13PileIn({ left: 20, top: 400, right: 370, bottom: 560 }, boxes, pref, 10_000);
+  assert.deepEqual(p, { x: 195, y: 480, hx: (350 - 130) / 2, hy: (160 - 24) / 2 });
+  for (const park of [{ left: 20, top: 400, right: 370, bottom: 560 }, { left: 40, top: 100, right: 700, bottom: 316 }, { left: 0, top: 0, right: 400, bottom: 300 }]) for (const lowest of [10_000, 350, 100, -50]) {
+    const q = c13PileIn(park, boxes, pref, lowest);
+    // the whole box of any unit centred on any point of the ellipse is inside the block (the extremes: the four points of the ellipse, the widest and the tallest box)
+    assert.ok(q.x - q.hx - 130 / 2 >= park.left - 1e-9 && q.x + q.hx + 130 / 2 <= park.right + 1e-9 && q.y - q.hy - 24 / 2 >= park.top - 1e-9 && q.y + q.hy + 24 / 2 <= park.bottom + 1e-9, `${JSON.stringify(park)} at ${lowest}: the pile stays in the block`);
+    assert.ok(q.hx > 0 && q.hy > 0 && q.hx <= pref.hx && q.hy <= pref.hy, 'it is never bigger than asked');
+  }
+  // in view: the block's centre is below the lowest y a pile may be centred on, so the pile goes up, as far as the block's top allows and no further
+  p = c13PileIn({ left: 0, top: 100, right: 800, bottom: 900 }, boxes, pref, 400);
+  assert.equal(p.y, 400);
+  p = c13PileIn({ left: 0, top: 100, right: 800, bottom: 900 }, boxes, pref, 50);
+  assert.equal(p.y, 100 + 12 + 110, 'but never above the block: its top plus half a box plus the pile\'s half-height');
+  // fail closed: a block no larger than the biggest unit (either way), a box that is not a size, no boxes, a size or a number that is not one
+  const ok = { left: 0, top: 0, right: 400, bottom: 300 };
+  for (const bad of [{ ...ok, right: 130 }, { ...ok, right: 100 }, { ...ok, bottom: 24 }, { ...ok, bottom: 10 }, { ...ok, left: NaN }, { ...ok, top: Infinity }]) assert.throws(() => c13PileIn(bad, boxes, pref, 10_000), /c13:/);
+  assert.throws(() => c13PileIn(ok, [], pref, 10_000), /c13:/);
+  assert.throws(() => c13PileIn(ok, [{ w: 0, h: 24 }], pref, 10_000), /c13:/);
+  assert.throws(() => c13PileIn(ok, [{ w: 60, h: NaN }], pref, 10_000), /c13:/);
+  assert.throws(() => c13PileIn(ok, boxes, { hx: 0, hy: 110 }, 10_000), /c13:/);
+  assert.throws(() => c13PileIn(ok, boxes, { hx: 150, hy: NaN }, 10_000), /c13:/);
+  assert.throws(() => c13PileIn(ok, boxes, pref, NaN), /c13:/);
+  // the real pages, both languages and four widths: every parked unit is inside its block, so the headings above and below it are never under a chip
+  for (const lang of ['es', 'en'] as const) for (const [width, side] of [[390, false], [768, false], [1024, true], [1440, true]] as const) {
+    const { geo, park, specs } = c13Page(lang, width, side), P = c13Plan(specs, geo);
+    P.from.forEach(([x, y], k) => assert.ok(x >= park.left && x + geo.box[k]!.w <= park.right && y >= park.top && y + geo.box[k]!.h <= park.bottom, `${lang} ${width}: unit ${k} is parked inside the block of lines`));
+  }
 });
 
 test('chapter 13: a pass adds one layer and one element per unit and writes a style on those and on the seven lines (59 and 53 of the contract\'s 80: a unit\'s chips are pseudo-elements, no node), and the markup is the two lists as they were: nothing added to it', () => {
@@ -1452,6 +1510,10 @@ test('chapter 13: the effect writes only transform and opacity, adds no element 
   assert.ok(!/innerHTML|innerText|insertAdjacent|\.prepend\(|cloneNode|replaceWith|createElement|createTextNode/.test(code), 'it moves no node and writes no markup');
   assert.ok(!/canvas|drawImage|fetch\(|\.webp|\.gif|\.apng/i.test(code), 'no footage, no sprite, no animated image');
   assert.ok(/import \{[^}]*\bplan\b[^}]*\} from '\.\.\/c13-data'/.test(src) && /duration: P!\.end\b/.test(code) && /x: P!\.end\b/.test(code), 'it plays for the end of c13-data\'s plan');
+  assert.ok(/import \{[^}]*\bpileIn\b[^}]*\} from '\.\.\/c13-data'/.test(src) && /\bpile = pileIn\(park, size, /.test(code) && /yesLines = yes && \$<HTMLElement>\('ul', yes\)/.test(code) && /noLines = no && \$<HTMLElement>\('ul', no\)/.test(code), 'the pile is parked by pileIn in the block of lines of the lists (their ul), under the headings');
+  assert.ok(/const park: Rect = side \? \{ left: Math\.min\(uy\.left, un\.left\), top: Math\.max\(uy\.top, un\.top\), right: Math\.max\(uy\.right, un\.right\), bottom: Math\.min\(uy\.bottom, un\.bottom\) \} : \{ left: uy\.left, top: uy\.top, right: uy\.right, bottom: uy\.bottom \};/.test(code), 'the block is the band where both lists have lines when they are side by side, the yes list\'s lines alone when they are stacked (the no list\'s heading is under them)');
+  assert.ok(/uy = yesLines\.getBoundingClientRect\(\), un = noLines\.getBoundingClientRect\(\)/.test(code), 'the block is measured on the two lists of lines (their ul), not on the columns that hold the headings');
+  assert.ok(/pile: \{ x: cx - O\.left, y: cy - O\.top, hx: pile\.hx, hy: pile\.hy \}/.test(code) && !/B\.top \+ B\.height \/ 2|N\.left :/.test(code), 'and the plan is given the pile that was parked, not one at the middle of the block or on the border between the columns');
   assert.ok(/nodeCount\(specs\.length, lines\.length\) <= NODE_BUDGET/.test(code), 'it refuses more nodes than the contract allows');
   assert.ok(/once\(para, undo/.test(code) && /REG\['c13:sort'\]/.test(code) && /margin:/.test(code), 'a play-once effect that asks once(), and shows itself to the review hooks');
   assert.ok(/CHAPTERS[^\n]*\['c13', initC13\]/.test(readFileSync(new URL('../src/aegis/fx/index.ts', import.meta.url), 'utf8')), 'the effect is registered in the list of chapters');
@@ -1460,6 +1522,6 @@ test('chapter 13: the effect writes only transform and opacity, adds no element 
   assert.ok(/onWidth\(\(\) => \{ if \(o\.state\(\) === 'run'\) o\.clear\(\); \}\)/.test(code), 'a width change gives back a sorting that is playing');
   assert.ok(/layer && layer\.remove\(\)/.test(code) && /onComplete: done/.test(code), 'the chips and the layer go in the very task it is done');
   assert.ok(/pileOf\(specs\.length\)\.order\.forEach\(\(k\) => layer!\.appendChild\(boxes\[k\]!\)\)/.test(code), 'the units are stacked in the pile\'s own order');
-  assert.ok(/Y\.right <= N\.left \+ 1 && Math\.abs\(Y\.top - N\.top\) < 2/.test(code) && /Math\.min\(B\.top \+ B\.height \/ 2, innerHeight \* 0\.72\)/.test(code), 'the pile is on the border between the columns, or in the middle of a stacked block, and always in view');
+  assert.ok(/Y\.right <= N\.left \+ 1 && Math\.abs\(Y\.top - N\.top\) < 2/.test(code) && /\{ hx: clamp\(B\.width \* 0\.14, 90, 150\), hy: clamp\(B\.height \* 0\.22, 70, 110\) \}, innerHeight \* 0\.72\)/.test(code), 'the lists are side by side or stacked as the page lays them out, the pile is asked for the size it has always had, and it is always in view');
   assert.ok(/createRange\(\)/.test(code) && /getClientRects\(\)/.test(code), 'each unit\'s place is where its words are (a Range over them)');
 });

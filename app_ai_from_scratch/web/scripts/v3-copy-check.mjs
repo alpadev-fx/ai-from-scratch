@@ -543,7 +543,7 @@ function groupSelfTest(html, lang) {
 }
 
 // ---------- chapter 13: the two lists, made by sorting a pile of their real tokens ----------
-// The plan's verb for chapter 13 is «separar»: when the two lists come into view the REAL o200k tokens of their seven lines are a mixed pile in the middle of them, and the pile separates, each token running
+// The plan's verb for chapter 13 is «separar»: when the two lists come into view the REAL o200k tokens of their seven lines are a mixed pile, parked where the lines are not there yet, and the pile separates, each token running
 // to the place of its own words, the yes tokens into the yes column and the no tokens into the no column (src/aegis/fx/c13.ts). The server renders only the two lists as they always were: the yes column then the
 // no column, each with its heading and one plain line per item of the page's own copy (the effect reads each line as ONE text node and finds its tokens in the page's own token file, so a line that is not
 // in it would stop the effect at attach, and this gate says so before it ships). The units are the effect's own, and a unit's chips are its two pseudo-elements (one element per unit: the contract's counter

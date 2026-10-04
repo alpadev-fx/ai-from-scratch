@@ -3,9 +3,11 @@
 //
 // What the chapter draws: the two lists of the chapter (the four lines of «Es para ti si» and the three of «No es para ti si», the page's own copy) are first a pile: the REAL o200k tokens of all seven lines
 // (src/data/v3-tokens.json, a leading space shown as «·»), jumbled together, the tokens of the two lists mixed (the ones of the yes list outlined in the accent, the ones of the no list plain). When the
-// chapter comes into view the pile forms in the middle of it, stands for a moment, and then separates: each token runs to the place of its own words, the yes tokens into the yes column and the no tokens
-// into the no column, the lines nearest the pile first. A line's words come in as its tokens arrive and the chips are gone. The page's text is never changed and never typed here: the markup is the finished
-// picture and the real lines are what the reader ends with.
+// chapter comes into view the pile forms, stands for a moment, and then separates: each token runs to the place of its own words, the yes tokens into the yes column and the no tokens into the no column,
+// the lines nearest the pile first. The pile is PARKED where the lines are not yet there (pileIn: in the block of the yes lines when the lists are stacked, in the block of both lists side by side), never over
+// a heading or any other text that is there. A line's words stay out until every one of its tokens has landed: the chips stand over the place of the words for a moment, go out together, and only then do the
+// words come in (never a chip over words of its own line that can be read), and no word comes in while a token is still in the pile. The page's text is never changed and never typed here: the markup is the
+// finished picture and the real lines are what the reader ends with.
 //
 // The tokens travel in UNITS, runs of up to CAP (two) tokens, cut at word boundaries: there are 91 (ES) and 85 (EN) real tokens in the seven lines, and the contract allows a chapter 80 nodes. Its counter
 // (v3-fps --nodes) counts every element a chapter ADDS, descendants included, and every element it writes a style on, so 91 chip elements are 91 nodes before a single unit is counted. A unit is ONE
@@ -16,14 +18,15 @@ export const CAP = 2;
 
 /** Seconds and px. Every picture of the sorting is a pure function of the second it is at (the harness seeks it). */
 export const T = {
-  form: 0.32,                                                        // the pile forms: its units come in over this long, one after another, in the pile's own order
+  form: 0.3,                                                         // the pile forms: its units come in over this long, one after another, in the pile's own order
   pop: 0.14,                                                         // each unit fades in over this long
-  hold: 0.22,                                                        // the pile stands, mixed, before it separates
-  fly: 0.62,                                                         // every unit's run, from the pile to its words
-  unit: 0.03,                                                        // between one unit of a line and the next one, in the order the line reads
-  item: 0.11,                                                        // between one line and the next, the one nearest the pile first
-  fade: 0.2,                                                         // a unit fades out around the second it arrives
-  text: 0.2,                                                         // a line's words begin to come in this long before its first unit arrives
+  hold: 0.18,                                                        // the pile stands, mixed, before it separates
+  fly: 0.56,                                                         // every unit's run, from the pile to its words
+  unit: 0.028,                                                       // between one unit of a line and the next one, in the order the line reads
+  item: 0.085,                                                       // between one line and the next, the one nearest the pile first
+  stand: 0.08,                                                       // the line stands as its chips, every one of its units landed, before they go
+  fade: 0.12,                                                        // the units of a line go out together over this long, and only then
+  text: 0.2,                                                         // its words come in over this long
 } as const;
 
 /** The nodes the contract's counter (v3-fps --nodes) finds in a whole pass: every element the effect adds (the layer, one per unit: a unit's chips are pseudo-elements, no element) and every element it
@@ -96,6 +99,22 @@ export interface Geo {
   dist: readonly number[];
 }
 
+export interface Rect { left: number; top: number; right: number; bottom: number }
+
+/** Where the pile is parked: in `park`, the block of lines that are not there yet (their words are transparent while the pile stands, and the headings are outside it). It is as wide and as tall as `prefer` and no wider or
+ *  taller than keeps the whole box of every unit inside the block (a unit's box is centred on a point of the pile's ellipse, so the ellipse's half-axes are the block's half-size less half the biggest box). Its centre
+ *  is the block's, or higher when the block's centre is below `lowest` (the lowest y a pile can be centred on and still be in view: a stacked pair of lists is taller than a screen), never so high or so low that a box
+ *  leaves the block. Fail closed: a block no larger than a unit, a box that is not a size, or a number that is not a number, is an error. Returns the centre and the half-axes, in the block's own coordinates. */
+export function pileIn(park: Rect, box: ReadonlyArray<{ w: number; h: number }>, prefer: { hx: number; hy: number }, lowest: number) {
+  const fin = (v: number) => Number.isFinite(v);
+  if (![park.left, park.top, park.right, park.bottom, prefer.hx, prefer.hy, lowest].every(fin) || !(prefer.hx > 0 && prefer.hy > 0)) throw new Error('c13: the block or the pile has no size or no place');
+  if (!box.length || box.some((b) => !fin(b.w) || !fin(b.h) || !(b.w > 0 && b.h > 0))) throw new Error('c13: a box is not a size');
+  const wMax = Math.max(...box.map((b) => b.w)), hMax = Math.max(...box.map((b) => b.h)), fitX = (park.right - park.left - wMax) / 2, fitY = (park.bottom - park.top - hMax) / 2;
+  if (!(fitX > 0 && fitY > 0)) throw new Error(`c13: the block the pile is parked in (${park.right - park.left} x ${park.bottom - park.top} px) is no larger than a unit (${wMax} x ${hMax} px)`);
+  const hx = Math.min(prefer.hx, fitX), hy = Math.min(prefer.hy, fitY), lo = park.top + hMax / 2 + hy, hi = park.bottom - hMax / 2 - hy;
+  return { x: (park.left + park.right) / 2, y: Math.max(lo, Math.min(hi, Math.min((park.top + park.bottom) / 2, lowest))), hx, hy };
+}
+
 export interface Plan {
   /** Where each unit's box is in the pile (top-left) and where it comes to rest. */
   from: Array<[number, number]>;
@@ -104,13 +123,15 @@ export interface Plan {
   appear: number[];
   rel: number[];
   land: number[];
-  /** Each line's text: the second it begins to come in and the second it is whole. */
+  /** The second each unit begins to go out: its line's, the second the last unit of the line has landed and the line has stood as its chips (T.stand). The units of a line go out together. */
+  out: number[];
+  /** Each line's text: the second it begins to come in (the chips of the line are gone, and no unit is left in the pile) and the second it is whole. */
   text: Array<[number, number]>;
   /** Each line's turn (0 = the line nearest the pile, which goes first). */
   rank: number[];
   /** The pile's own order, bottom first: a permutation of the units. The units are made in this order, so it is also the pile's stacking. */
   order: number[];
-  /** The second the effect lets go: the last unit has arrived and gone, the last line is whole. */
+  /** The second the effect lets go: the last line is whole. */
   end: number;
 }
 
@@ -160,19 +181,23 @@ export function plan(specs: readonly UnitSpec[], g: Geo): Plan {
     rel.push(T.form + T.hold + rank[specs[k]!.item]! * T.item + within[k]! * T.unit);
     land.push(rel[k]! + T.fly);
   }
-  const first = new Array<number>(items).fill(Infinity), lastL = new Array<number>(items).fill(-Infinity);
-  specs.forEach((s, k) => { first[s.item] = Math.min(first[s.item]!, land[k]!); lastL[s.item] = Math.max(lastL[s.item]!, land[k]!); });
-  const text = first.map((f, i): [number, number] => [f - T.text, lastL[i]! + T.fade / 2]);
-  const end = Math.max(...land.map((l) => l + T.fade / 2), ...text.map((t) => t[1]));
-  return { from, to, appear, rel, land, text, rank, order, end };
+  // a line is whole in its chips when its last unit has landed: they stand a moment and go out together, and its words come in once they are gone (and not before the last unit has left the pile: a word is
+  // never shown while a unit is still parked, whatever the order of the lines)
+  const lastL = new Array<number>(items).fill(-Infinity);
+  specs.forEach((s, k) => { lastL[s.item] = Math.max(lastL[s.item]!, land[k]!); });
+  const lastRel = Math.max(...rel), out = specs.map((s) => lastL[s.item]! + T.stand);
+  const text = lastL.map((l): [number, number] => { const a = Math.max(l + T.stand + T.fade, lastRel); return [a, a + T.text]; });
+  const end = Math.max(...text.map((t) => t[1]));
+  return { from, to, appear, rel, land, out, text, rank, order, end };
 }
 
-/** How unit k stands at second x: the top-left corner of its box and its opacity. It comes into the pile (0 -> 1 over T.pop), waits there, runs to its place (an ease in and out) and fades out around the second it arrives. */
+/** How unit k stands at second x: the top-left corner of its box and its opacity. It comes into the pile (0 -> 1 over T.pop), waits there, runs to its place (an ease in and out), stands over it, whole, until
+ *  the last unit of its line has landed (and a moment more), and then goes out with the others of its line over T.fade. */
 export function unit(p: Plan, k: number, x: number) {
   const e = smooth(clamp01((x - p.rel[k]!) / T.fly)), [fx, fy] = p.from[k]!, [tx, ty] = p.to[k]!;
-  const pop = clamp01((x - p.appear[k]!) / T.pop), out = smooth(clamp01((x - (p.land[k]! - T.fade * 0.6)) / T.fade));
+  const pop = clamp01((x - p.appear[k]!) / T.pop), out = smooth(clamp01((x - p.out[k]!) / T.fade));
   return { x: fx + (tx - fx) * e, y: fy + (ty - fy) * e, a: pop * (1 - out) };
 }
 
-/** How whole line i's text is at second x (the words come in as the line's units arrive). */
+/** How whole line i's text is at second x: 0 until its chips are gone, then it comes in over T.text. */
 export const text = (p: Plan, i: number, x: number) => smooth(clamp01((x - p.text[i]![0]) / (p.text[i]![1] - p.text[i]![0])));

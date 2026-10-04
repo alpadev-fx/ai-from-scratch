@@ -1,0 +1,609 @@
+---
+// /v3 — the landing in AEGIS style (preview). noindex, no Meta Pixel, out of the sitemap. Same language mechanism
+// (cookie pref_lang) and theme mechanism (Auto/Oscuro/Papel via theme-css.ts + data-theme) as index.astro.
+//
+// STAGE 2A: the Hormozi sales argument on the AEGIS chapters. 17 chapters, in this order (the order IS the argument):
+//   00 ignition · 01 hero · 02 te ha pasado · 03 qué cambia · 04 por dentro (Δ) · 05 cifras · 06 lo que no necesitas ·
+//   07 el tiempo · 08 prueba · 09 temario · 10 la oferta · 11 garantía · 12 quién · 13 para quién · 14 precio · 15 FAQ · 16 cierre
+// The engine chapters (00 ignition, 01 hero sequence, 04 Δ) are the engine's. Every other chapter is
+// STATIC here, with AEGIS tokens (HUD label, plates, hairlines, mono eyebrows) and data-fx / data-* hooks that stage 2B animates.
+// ALL the copy is in the server HTML: the engine (src/aegis/*) only animates it, so ?rm=1, ?nogl=1 and a real no-WebGL
+// browser read every chapter in full.
+// NOTHING IN THE ENGINE GATES WHAT THE VISITOR READS. The hero copy is painted from the first frame; the ignition is a 1.0 s CSS timeline
+// that the head script ends (animationend, 1.2 s at the latest, or click / key / wheel / touch); the engine attaches later, only to a page that
+// has not been scrolled, and never hides the copy again; if an import hangs, the head script's watchdog marks the visit engine-off after 15 s.
+// The page is not tall until an engine drives it (html.fxl, set by main.ts), and nothing changes its layout once somebody is scrolling it.
+//
+// COPY RULES, enforced by code and not by hope. Everything this page reads from `pub` passes through `guarded()`, which
+// THROWS the moment a banned string is read (city, plural courses, the Hormozi §0.4 list, monthly wording, «veinte segundos»,
+// the cat prompt, a testimonial outside its one sentence). web/scripts/v3-copy-check.mjs applies the same rule table to the
+// rendered HTML of every market. Prod sells ONE thing: the price for 30 days, auto-renew OFF by default.
+export const prerender = false;
+import { mercadoDe } from '../lib/region';
+import { narrativaDe } from '../lib/narrative';
+import { MARCA } from '../lib/site';
+import { PRECIO_VISUAL } from '../lib/price';
+import { publicPrefs } from '../lib/prefs';
+import { t } from '../lib/i18n';
+import { modulos, candidatos, preguntas } from '../data/landing';
+import { jsonSafe } from '../lib/json-safe';
+import PrefToggles from '../components/PrefToggles.astro';
+import V3Cta from '../components/V3Cta.astro';
+import V3Viz from '../components/V3Viz.astro';
+import V3Loop from '../components/V3Loop.astro';
+import { TOKENS } from '../lib/theme-css';
+import { tokenize, candRowsHTML, ctxOf } from '../aegis/specimens';
+import { show, wordsOf, piecesOf } from '../aegis/tokens';
+import { chipStrings } from '../aegis/token-strings';
+import { VIZ } from '../aegis/c05-data';
+import TOKEN_FILE from '../data/v3-tokens.json';
+import { guard, guarded, withoutCity, assertPriced } from '../aegis/copy-guard';
+import { WORDMARK } from '../aegis/wordmark';
+import V3CSS from '../aegis/v3.css?raw';
+// The wordmark at the end of the page («AI FROM SCRATCH», precomputed outlines: src/aegis/wordmark.ts). The page cuts a tenth of the bottom line's cap height off below the
+// baseline, so the mark bleeds off the end of the page; the box is the cropped viewBox, so it keeps its aspect ratio from the first paint (no layout shift).
+const wmBox = (m: { w: number; h: number; cap: number }) => `0 0 ${m.w} ${m.h - Math.round(m.cap * 0.1)}`;
+// The closing footer (the brand row, the legal line and the wordmark) is a BLACK plate in every theme: the dark tokens of theme-css.ts, scoped to it. Its first :root block is their one
+// source (a recalibration there reaches the plate too); if it is not readable the page does not render, rather than ship a footer with the wrong colours.
+const PLATE = `.endp{${(/:root\{([^}]*)\}/.exec(TOKENS)?.[1] ?? '').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\s+/g, ' ').trim()}}`;
+if (!/--bg:#000;/.test(PLATE) || !/--l1:#fff;/.test(PLATE) || !/--l3:rgba\(/.test(PLATE)) throw new Error('[v3] the footer plate cannot read the dark tokens (theme-css.ts :root block): it would not be black');
+const CSS = V3CSS.replace(/\/\*(?!!)[\s\S]*?\*\//g, '');
+
+const { lang, langPref, theme } = publicPrefs(Astro.request);
+const L = t(lang);
+const PUB = guarded(L.pub, 'pub');            // a string is checked at the moment this page reads it, so no list can fall behind the markup
+const P = PUB.land;
+const V = PUB.v3;
+const precioBig = PRECIO_VISUAL[lang];
+if (!precioBig) throw new Error(`[v3 copy] no published price for the language "${lang}"`);   // never the other language's notation: «$39.990» in English reads as dollars
+const fill = (s: string) => s.split('{precio}').join(precioBig);   // prices of the v3 strings come from PRECIO_VISUAL through {precio}, never a literal
+// The two prod buttons that name the price carry it as a literal («PAGAR $39.990 · 30 DÍAS», i18n.ts), which this stage does not edit. They are shown only
+// while that literal IS the published price: the page throws otherwise (and v3-copy-check fails on any other price in the rendered page).
+assertPriced('pub.land.preCta', P.preCta, precioBig);
+assertPriced('pub.land.cierreCta', P.cierreCta, precioBig);
+const { mercado } = mercadoDe(Astro.request);
+const N = narrativaDe(mercado, lang);
+
+// Data that does not live in `pub`. The Colombian narrative carries a city, which v3 cuts; lesson 01 is the only text
+// allowed to say «gatos» (it is published course copy), and it is named, exactly, as the exemption.
+const mods = modulos(lang);
+const cands = candidatos(lang);
+const faqs = preguntas(lang).map((f, i) => ({ q: f.q, a: i === 3 ? V.faqIncluyeA : f.a }));
+faqs.forEach((f, i) => { guard(`faq ${i + 1} q`, f.q); guard(`faq ${i + 1} a`, f.a); });
+mods.forEach((m) => { guard(`modulo ${m.n}`, m.eb + m.h + m.d + m.k + m.kc, { allow: m.n === '01' ? [m.kc] : [] }); });
+cands.forEach((c) => guard(`candidate ${c.name}`, c.name));
+const prueba = N.prueba.map((x, i) => guard(`narrative.prueba[${i}]`, withoutCity(x)));
+[N.garantiaTxt, N.moneda, N.pagoTit, N.pagoTxt, ...N.medios].forEach((x, i) => guard(`narrative[${i}]`, x));
+
+const sentence = P.aEjemplo;                 // «Cartagena es hermosa» — the example of specimen A (lesson 05)
+// ILLUSTRATIVE: specimen A of chapter 08 is the free-typing box, cut by the page's own heuristic (specimens.ts tokenize), and it is labelled ILUSTRATIVO. It is the ONLY
+// caller of tokenize() left: every other chip on the page is a real o200k token (src/data/v3-tokens.json, cut by web/scripts/v3-tokens.py).
+const illusToks = tokenize(sentence);
+// The candidates (Max, Luna…) answer specimen B's context, not «Cartagena es hermosa»: chapter 04 shows them ONLY after
+// that sentence, which is the first sentence of P.bD (no new text). Chapter 08 uses the same line as its prompt.
+const ctx = ctxOf(P.bD);                     // «Le pediste un nombre para tu perro.»
+// Real tokens (o200k_base, GPT-4o). A string that is shown as chips and is not in the committed file stops the render (the page answers 500), like a stale price does.
+const TOK = (TOKEN_FILE as any)[lang] as Record<string, Array<[string, ...number[]]>>;
+const chipText = chipStrings({ P, V, mods, price: precioBig, ctx, cands });
+const PIECES = Object.fromEntries(chipText.map((c) => [c.text, piecesOf(TOK, c.text)]));   // what the effects read from the page (#v3-tokens); not TOKENS: that is the theme's CSS tokens (theme-css.ts)
+const realA = piecesOf(TOK, sentence), realB = piecesOf(TOK, ctx), realBw = wordsOf(realB), realNext = piecesOf(TOK, ' ' + cands[0].name)[0][0];   // chapter 04: row A, and the dog context with the word each piece belongs to
+// 03 · the request of chapter 02's third case (the one that came back generic) as the real tokens it is, and the distribution over the next word that saying what, for whom and how moves.
+// The bars are a DRAWING of that process (every word about as likely, then one clear winner), not a measurement: the panel carries ILUSTRATIVO. Both lists sum to 1 and are drawn on the same
+// scale (the winner's height is the whole chart).
+const askP = piecesOf(TOK, V.s1Beats[2].tu);
+const SHARP = [0.46, 0.17, 0.11, 0.08, 0.06, 0.04, 0.03, 0.025, 0.015, 0.01];
+const FLAT = [0.108, 0.104, 0.102, 0.101, 0.1, 0.099, 0.098, 0.097, 0.096, 0.095];
+const bars = SHARP.map((v, k) => ({ v: +(v / SHARP[0]).toFixed(3), f: +(FLAT[k] / SHARP[0]).toFixed(3) }));
+const sym = [
+  { lbl: P.s1Lbl, lec: P.s1Lec, h: P.s1H, d: P.s1D, c: P.s1C },
+  { lbl: P.s2Lbl, lec: P.s2Lec, h: P.s2H, d: P.s2D, c: P.s2C },
+  { lbl: P.s3Lbl, lec: P.s3Lec, h: P.s3H, d: P.s3D, c: P.s3C },
+];
+const byN = (n: string) => mods.find((m) => m.n === n)!;
+const steps = [
+  { n: '05', name: V.tabTok }, { n: '06', name: V.tabNext }, { n: '08', name: V.tabCtx }, { n: '09', name: V.tabTemp },
+].map((s) => ({ ...s, h: byN(s.n).h, d: byN(s.n).d }));
+const DATA = {
+  lang, sentence, candidatos: cands,
+  cifra: V.cifra, fuente: V.fuente, ilus: V.ilus, s1Lec: P.s1Lec, s1C: P.s1C, logFirma: V.logFirma,
+  logVec: V.logVec, logAtt: V.logAtt, logLay: V.logLay, logNext: V.logNext, logLoop: V.logLoop, tabTemp: V.tabTemp,
+  txt: { ejemplo: P.aEjemplo, predecible: P.bPredecible, equilibrada: P.bEquilibrada, impredecible: P.bImpredecible },
+};
+
+const label = (n: string, s: string) => `${n} — ${s}`;
+const TOTAL = 16;
+const cnt = (n: string) => `${n} / ${TOTAL}`;
+// Chapter 02's tags end «… → LECCIÓN NN»: the last part is a link to the syllabus of this page (the lesson pages themselves ask for a login). A tag that lost its arrow stops the render.
+const tagParts = (tag: string): [string, string] => {
+  const k = tag.lastIndexOf(' → ');
+  if (k < 1) throw new Error(`[v3] a chapter 02 tag has no « → LESSON» part to link: «${tag}»`);
+  return [tag.slice(0, k), tag.slice(k + 3)];
+};
+// The size class of a figure comes from its length, not from the eye: «1 vez» is 5 characters and «3 palabras = 4 tokens» is 21.
+const escala = (k: string): string => (k.length <= 6 ? 'k-xs' : k.length <= 10 ? 'k-s' : k.length <= 15 ? 'k-m' : 'k-l');
+// 10 · the offer stack: the five Hormozi items, «lo que publique después» (its description is the published vivoV), the guarantee.
+const offer = [
+  ...V.s7Items.map((it) => ({ t: it.t, d: fill(it.d) })),
+  { t: V.s7Next, d: V.vivoV },
+  { t: V.s7Gar.t, d: fill(V.s7Gar.d) },
+];
+// 07 · the twelve lesson titles as their real o200k tokens, one row per lesson in the course's order: the pile the chips fall into (src/aegis/fx/c07.ts); nothing here is cut by a heuristic
+const pile = mods.map((m) => piecesOf(TOK, m.h));
+const seal = V.s8Sello.repeat(2);
+---
+<!doctype html>
+<html lang={lang} data-theme={theme}>
+<head>
+<style set:html={TOKENS}></style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml" sizes="any">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<title>{P.titulo}</title>
+<meta name="description" content={P.desc}>
+<link rel="preload" as="image" href="/v3/poster/n1.webp">
+<script is:inline>
+/* Mode before the first paint: reduced motion or ?rm=1, and WebGL2. With neither, the static page is the page.
+   Everything below is plain code with no module, no gsap and no three, so none of them can hold it up:
+   · the hero copy is server-rendered and visible from the first frame (nothing waits for the engine);
+   · the ignition (first visit of the session, engine mode only, never under reduced motion) is a CSS timeline of 1.0 s (v3.css). It ENDS here:
+     when that animation ends, at 1.2 s from the first frame at the latest, or on any click, key, wheel or touch. Ending = the overlay goes,
+     the scroll lock goes, and the session remembers it;
+   · layout: the page is tall (html.fxl) only once main.ts attaches the engine, and it only attaches at the very top of the page; before that the
+     hero is one screen and every other chapter is static. Scroll restoration is off, so a reload opens at the top;
+   · watchdog: if the engine has not attached after 15 s (a hung import never throws, so the catch in main.ts never runs) the visit is marked
+     engine-off (html.eng-off). It changes no layout, so it cannot move a reader who is scrolling; late modules find eng-off and stay detached.
+     Console-visible, never silent. */
+(function(){var d=document.documentElement,q=location.search,rm=/[?&]rm=1/.test(q)||(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches),gl=false;
+try{gl=!!document.createElement('canvas').getContext('webgl2')}catch(e){}
+if(/[?&]nogl=1/.test(q))gl=false;
+if(rm){d.classList.add('rm');return}
+if(!gl){d.classList.add('nogl');return}
+d.classList.add('fx');
+try{history.scrollRestoration='manual'}catch(e){}
+var seen=false;try{seen=sessionStorage.getItem('v3_ign')==='1'}catch(e){}
+if(!seen){
+  d.classList.add('ign-on');
+  var over=false,timer=0,ev=['click','keydown','wheel','touchstart'];
+  var end=function(e){
+    if(e&&e.type==='animationend'&&e.animationName!=='ign-life')return;
+    if(over)return;over=true;clearTimeout(timer);
+    for(var i=0;i<ev.length;i++)removeEventListener(ev[i],end,true);
+    removeEventListener('animationend',end,true);
+    d.classList.remove('ign-on');
+    try{sessionStorage.setItem('v3_ign','1')}catch(x){}
+  };
+  for(var i=0;i<ev.length;i++)addEventListener(ev[i],end,{capture:true,passive:true});
+  addEventListener('animationend',end,true);
+  var arm=function(){if(!timer&&!over)timer=setTimeout(end,1200)};
+  requestAnimationFrame(arm);setTimeout(arm,250);
+}
+setTimeout(function(){
+  if(d.classList.contains('ready')||d.classList.contains('eng-off'))return;
+  try{console.warn('[v3] engine did not attach in 15 s: it stays off for this visit and the page keeps the layout it has')}catch(x){}
+  d.classList.remove('ign-on');d.classList.add('eng-off');d.setAttribute('data-eng-off','timeout');
+},15000);
+})();
+</script>
+<style is:global set:html={PLATE + CSS}></style>
+</head>
+<body>
+<a class="skip" href="#c01">{P.saltar}</a>
+
+<!-- ===== 00 · IGNICIÓN (solo con motor y solo la primera visita de la sesión; el HTML estático no la necesita). 1.0 s de CSS puro (v3.css), sin módulos:
+     la termina el script de la cabecera (fin de la animación, 1.2 s como tope, o clic / tecla / rueda / toque). Sin contador de carga: ya no hay una carga real a la que atarlo. ===== -->
+<div id="ign" aria-hidden="true">
+  <div class="ibg"></div>
+  <div class="pt"></div>
+  <div class="iln"></div>
+  <div class="lock">
+    <svg viewBox="0 0 200 200" width="100%" height="100%"><rect class="isq" x="22" y="22" width="156" height="156" pathLength="1" fill="none" stroke="currentColor" stroke-width="5"></rect><text class="iia" x="100" y="128" text-anchor="middle" font-size="84" font-weight="700" fill="currentColor">IA</text></svg>
+    <div class="glint"></div>
+  </div>
+  <div class="ilog" data-text={V.ignLog}>{V.ignLog}</div>
+  <button class="iskip" type="button">{P.saltar} →</button>
+</div>
+
+<header id="hdr">
+  <div class="hdr-in">
+    <a class="brand" href="#c01" aria-label={P.figMarca}><span class="lg" aria-hidden="true">IA</span><b>{P.figMarca}</b></a>
+    <div class="hdr-lang"><PrefToggles lang={langPref} theme={theme} labels={{ auto: PUB.auto, dark: PUB.oscuro, paper: PUB.papel, langAria: PUB.ariaIdioma, themeAria: PUB.ariaTema }} /></div>
+    <nav class="hdr-nav">
+      <a href="#c09" class="nl hide-m">{P.navIndice}</a>
+      <a href="#c08" class="nl hide-m">{P.navEspec}</a>
+      <a href="/login" class="nl">{P.navEntrar}</a>
+      <a href="/pago" class="buy">{P.navCta}</a>
+    </nav>
+  </div>
+</header>
+<div id="prog" aria-hidden="true"><u></u></div>
+<canvas id="gl" aria-hidden="true"></canvas>
+<div id="log" aria-hidden="true"></div>
+
+<main>
+<!-- ===== 01 · HERO (Hormozi: heroEb, heroH, heroH2, heroSub, the CTA PAIR, heroConfianza under both). Hormozi's pair is a PRIMARY paid button and a
+     SECONDARY free one; adapted to prod: the primary is prod's preCta -> /pago (one 30-day product, renewal off by default, so no ?renovar=1),
+     the secondary is the free heroCta -> /registro. The trust line (guarantee, cancel) sits under both, next to the paid button it is about.
+     Engine chapter: the engine reads .copy, .head, .rule, .sub and .cta (the whole block, both buttons and the line). ===== -->
+<section class="ch lay" id="c01" style="--len:5.6" aria-labelledby="c01h">
+  <div class="stage">
+    <figure class="pstat" aria-hidden="true">
+      <img class="poster" src="/v3/poster/n1.webp" alt="" width="48" height="85">
+      <div class="plate"><img class="still" src="/v3/still/n1.webp" alt="" width="540" height="960" loading="eager" decoding="async">
+        <div class="sbk" aria-hidden="true"><i class="c tl"></i><i class="c tr"></i><i class="c bl"></i><i class="c br"></i>
+          <div class="plt"><span>{V.cifra}</span><span>{V.fuente}</span><em>{V.ilus}</em></div></div>
+      </div>
+    </figure>
+    <div class="pframe" aria-hidden="true"></div>
+    <div class="scrim" aria-hidden="true"></div>
+    <div class="copy">
+      <div class="label"><i></i><span>{label('01', V.heroEb)}</span></div>
+      <h1 class="head" id="c01h">{V.heroH}</h1>
+      <div class="rule"></div>
+      <div class="sub"><p class="h2l">{V.heroH2}</p><p>{V.heroSub}</p></div>
+      <div class="cta">
+        <div class="ctas">
+          <a href="/pago" class="buy big" data-cta><span>{P.preCta}</span><svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h11M11 5.5l4.5 4.5L11 14.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path></svg></a>
+          <a href="/registro" class="buy big alt" data-cta><span>{P.heroCta}</span><svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h11M11 5.5l4.5 4.5L11 14.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path></svg></a>
+        </div>
+        <p class="micro">{V.heroConfianza}</p>
+      </div>
+    </div>
+    <aside class="card" aria-label={V.sintomas}>
+      <div class="hd"><span>{V.sintomas}</span><b><i class="dot"></i></b></div>
+      {sym.map((s) => (
+        <div class="row"><span class="k">{s.lec}</span><span class="v">{s.h}<small>{s.c}</small></span></div>
+      ))}
+    </aside>
+    <div class="cue" aria-hidden="true"><span>{V.scroll}</span><u></u></div>
+  </div>
+</section>
+
+<!-- ===== 02 · TE HA PASADO (Hormozi s1). Three chat windows, one per case: a chat's look (the user's message in a soft grey pill on the right, the answer as plain text on the left, a composer
+     at the bottom) inside our square HUD frame, with OUR mark where a chat shows its name. Static: every window fully written, every diagnosis tag under its window.
+     Stage 2B: the pill slides in, the answer streams token by token (the real o200k pieces of src/data/v3-tokens.json) and the tag drops in; in the second case the first instruction
+     leaves the context bracket as ghost messages pass. The N3 hook (the bust that cracks) is kept from phase 1.
+     Rounded corners exist ONLY inside these windows (the owner's one exception to the straight HUD): the pill, the composer and its send button, the dot, the ghosts. ===== -->
+<section id="c02" class="sec cx s02" aria-labelledby="c02h" data-fx="chat-stream">
+  <div class="sh"><div class="sn">■ {label('02', V.s1Eb)}</div><div class="sx">{cnt('02')}</div></div>
+  <h2 id="c02h" class="hx xl">{V.s1H}</h2>
+  <div class="cases" data-chat>
+    {V.s1Beats.map((b, i) => {
+      const [why, lesson] = tagParts(b.tag);
+      return (
+        <div class="case" data-beat={i}>
+          <span class="bn" aria-hidden="true">{String(i + 1).padStart(2, '0')}</span>
+          <figure class="cw" data-win>
+            <i class="c tl"></i><i class="c tr"></i><i class="c bl"></i><i class="c br"></i>
+            <div class="cwh" aria-hidden="true"><span class="lg">IA</span></div>
+            <div class="cwb">
+              {i === 1 && <p class="you faint"><span class="sr">{V.chatTu}</span>{V.s1Earlier}</p>}
+              {i === 1 ? (
+                <div class="ctx" data-ctx>
+                  <p class="gap">{V.s1Gap}</p>
+                  <p class="you"><span class="sr">{V.chatTu}</span>{b.tu}</p>
+                  <p class="ia"><span class="sr">{V.chatIa}</span><span class="rp" data-type>{b.ia}</span></p>
+                </div>
+              ) : (
+                <>
+                  <p class="you"><span class="sr">{V.chatTu}</span>{b.tu}</p>
+                  <p class="ia"><span class="sr">{V.chatIa}</span><span class="rp" data-type>{b.ia}</span></p>
+                </>
+              )}
+            </div>
+            <div class="cwc" aria-hidden="true"><i class="caret"></i><b class="send"><svg width="18" height="18" viewBox="0 0 20 20"><path d="M10 15.5V5M5.5 9.5 10 5l4.5 4.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg></b></div>
+          </figure>
+          <p class="tag" data-tag><i aria-hidden="true"></i><span>{why} → <a href="#c09">{lesson}</a></span></p>
+        </div>
+      );
+    })}
+  </div>
+  <p class="shout">{V.s1Cierre}</p>
+  <div class="n3-hook" data-seq="n3" aria-hidden="true"></div>
+</section>
+
+<!-- ===== 03 · QUÉ CAMBIA (prod l1–l3) + CTA. One display headline; the three benefits are mono labels. Above them a drawing of the process the chapter is about: the request of case 3 of
+     chapter 02 as its real tokens, the three things it lacked (what, for whom, how: the ones that case's tag names) added as chips, the distribution over the next word going from flat to one
+     winner (ILUSTRATIVO). The panel is a decoration (aria-hidden): the chapter reads without it. Stage 2B plays it once. ===== -->
+<section id="c03" class="sec cx" aria-labelledby="c03h" data-fx="sharpen">
+  <div class="sh"><div class="sn">■ {label('03', V.ch03)}</div><div class="sx">{cnt('03')}</div></div>
+  <h2 id="c03h" class="hx">{P.llevasH2}</h2>
+  <figure class="sharp" data-sharp aria-hidden="true">
+    <i class="c tl"></i><i class="c tr"></i><i class="c bl"></i><i class="c br"></i>
+    <div class="spl">
+      <div class="sq" data-prompt>
+        {askP.map((p) => (<span class="sk">{show(p[0])}</span>))}
+      </div>
+      <p class="src">{V.tokReal}</p>
+      <div class="sl">
+        {V.askSlots.map((w) => (<span class="sk ask" data-slot>{w}</span>))}
+      </div>
+    </div>
+    <div class="spr">
+      <p class="ilt"><i class="dot"></i><em>{V.tabNext} · {V.ilus}</em></p>
+      <div class="sb">
+        {bars.map((b, k) => (<span class="bw"><i class={k === 0 ? 'hi' : undefined} data-bar={b.v} data-flat={b.f} style={`--v:${b.v}`}></i></span>))}
+      </div>
+    </div>
+  </figure>
+  <div class="trio">
+    {[[P.l1H, P.l1D], [P.l2H, P.l2D], [P.l3H, P.l3D]].map(([h, d], i) => (
+      <article class="tri"><span class="no">0{i + 1}</span><h3>{h}</h3><p>{d}</p></article>
+    ))}
+  </div>
+  <V3Cta label={P.preCta} micro={P.heroGar} />
+</section>
+
+<!-- ===== 04 · POR DENTRO (Δ). Engine chapter. Its h2 is Hormozi's s2.h2 (it replaces «Así la lee la IA.»). It used to close on «Dos especímenes para tocar»;
+     the specimens live in chapter 08 now, four chapters on, so the chapter ends with its last tab and carries no closing line. ===== -->
+<section class="ch" id="cL" style="--len:6.2" aria-labelledby="cLh">
+  <div class="stage" data-stage="1">
+    <div class="copy">
+      <div class="label"><i></i><span>{label('04', V.ch04)}</span></div>
+      <h2 class="head" id="cLh">{V.adentroH}</h2>
+      <div class="rule"></div>
+      <p class="sub">{P.aD}</p>
+    </div>
+    <div class="sent" aria-hidden="true">{sentence}</div>
+    <div class="chips" aria-label={sentence}>
+      {realA.map((p) => (<div class="tk"><b>{show(p[0])}</b></div>))}
+    </div>
+    <p class="tokref">{V.tokReal}</p>
+    <div class="chips ctx" aria-hidden="true">
+      {realB.map((p, i) => (<div class="tk cw" data-w={realBw[i]}><b>{show(p[0])}</b></div>))}
+      <div class="tk ans"><b>{show(realNext)}</b></div>
+    </div>
+    <aside class="pcard" aria-label={V.cand}>
+      <div class="hd"><span>{steps[1].h}</span><b><i class="dot"></i><em>{V.ilus}</em></b></div>
+      <p class="pctx">{ctx}</p>
+      <div class="ph">{V.cand}</div>
+      <div set:html={candRowsHTML(cands, 0.3)}></div>
+      <div class="dial"><span>{V.tabTemp}</span><div class="trk"><i></i></div><b class="dialv">0.30</b></div>
+    </aside>
+    <div class="steps-wrap">
+      <ol class="steps">
+        {steps.map((s) => (
+          <li><u><i></i></u><div class="n">{V.lec} {s.n}</div><div class="t">{s.name}</div><div class="h">{s.h}</div><div class="d">{s.d}</div></li>
+        ))}
+      </ol>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 05 · CIFRAS (the first six figures of the curriculum). Static grid; stage 2B turns data-track into the horizontal track with parallax
+     (.pstage is the wrapper its pinned stage is made of: it has no style until the engine adds `pin` to the section).
+     A card is the figure and what it measures (eyebrow, number, caption, lesson number) and nothing else: each lesson's title and description are
+     chapter 09's, and saying them twice on the way down only made the page longer. Under the figure of five of the six sits a drawing of the process it measures (V3Viz, aria-hidden,
+     ILUSTRATIVO; card 5 has none yet: it reads «3 palabras = 4 tokens», the real o200k count of its sentence, by the owner's decision of 2026-10-04). The HUD label is this chapter's heading (h2). ===== -->
+<section id="c05" class="sec cx figs-sec" aria-labelledby="c05n" data-fx="track">
+  <div class="pstage">
+    <div class="sh"><h2 class="sn" id="c05n">■ {label('05', V.ch05)}</h2><div class="sx">{cnt('05')}</div></div>
+    <div class="figs" data-track>
+      {mods.slice(0, 6).map((m, i) => (
+        <article class="fig" data-fig>
+          <p class="ie">{m.eb}</p>
+          <p class={`big ${escala(m.k)}`} data-cifra>{m.k}</p>
+          {VIZ[i] && <V3Viz kind={VIZ[i]!} k={m.k} tag={V.ilus} />}
+          <p class="cap">{m.kc}</p>
+          <span class="no">{m.n}</span>
+        </article>
+      ))}
+    </div>
+  </div>
+</section>
+
+<!-- ===== 06 · LO QUE NO NECESITAS (Hormozi s3). Static: the six words struck out, then the line. Stage 2B: scrubbed by the scroll, the words implode into
+     particles toward the line, which lands (.pstage is the wrapper its pinned stage is made of: no style until the engine adds `pin` to the section). ===== -->
+<section id="c06" class="sec cx" aria-labelledby="c06h" data-fx="implode">
+  <div class="pstage">
+    <div class="sh"><div class="sn">■ {label('06', V.s3Eb)}</div><div class="sx">{cnt('06')}</div></div>
+    <ul class="nots" data-nots>
+      {V.s3Palabras.map((w) => (<li><s data-word>{w}</s></li>))}
+    </ul>
+    <h2 id="c06h" class="hx xl" data-final>{V.s3H}</h2>
+  </div>
+</section>
+
+<!-- ===== 07 · EL TIEMPO (Hormozi s4 + the four figures) + CTA. The twelve lesson titles as their real tokens, piled in twelve rows, with the course's 40 MIN under them: the finished pile. Stage 2C: the chips fall into it and the counter runs 0 to 40. ===== -->
+<section id="c07" class="sec cx" aria-labelledby="c07h" data-fx="stack">
+  <div class="sh"><div class="sn">■ {label('07', V.ch07)}</div><div class="sx">{cnt('07')}</div></div>
+  <div class="time">
+    <div class="stk" data-pile aria-hidden="true">
+      <p class="stk-src">{V.tokReal}</p>
+      <div class="stk-rows">
+        {pile.map((row) => (<div class="stk-r" data-row>{row.map((p) => (<i class="stk-t">{show(p[0])}</i>))}</div>))}
+      </div>
+      <div class="ctr"><b data-count="40">40</b><span>MIN</span></div>
+    </div>
+    <div class="tcopy">
+      <h2 id="c07h" class="hx">{V.s4H}</h2>
+      <p class="lede">{V.s4Sub}</p>
+    </div>
+  </div>
+  <dl class="specs">
+    {V.specs.map((s) => (<div class="srow"><dt>{s.k}</dt><dd>{s.d}</dd></div>))}
+  </dl>
+  <V3Cta label={P.preCta} micro={P.heroGar} />
+</section>
+
+<!-- ===== 08 · PRUEBA (Hormozi s5 + the two real specimens). The prompt is the published dog sentence, never the cat. ===== -->
+<section id="c08" class="sec cx" aria-labelledby="c08h" data-fx="bars-once">
+  <div class="sh"><div class="sn">■ {label('08', V.ch08)}</div><div class="sx">{cnt('08')}</div></div>
+  <h2 id="c08h" class="hx wide">{V.s5H}</h2>
+  <p class="lede">{V.s5Sub}</p>
+  <div class="grid2">
+    <div class="spec">
+      <div class="meta"><span>{V.s5Eb}</span><span class="ac">{P.espInter}</span></div>
+      <p class="pctx">{ctx}</p>
+      <div class="ph">{V.cand}</div>
+      <div id="cands" class="cands" data-bars set:html={candRowsHTML(cands, 0.3)}></div>
+      <div class="temp">
+        <div class="meta"><span>{P.bTemp}</span><b id="tempLabel" class="ac">0.30</b></div>
+        <input id="tempin" class="deslizador" type="range" min="1" max="180" step="1" value="30" aria-label={P.bTemp}>
+        <div class="meta sm"><span>{P.bSeguro}</span><span id="tempVerdict">{P.bPredecible}</span><span>{P.bArriesga}</span></div>
+      </div>
+      <div class="askrow"><button id="ask" class="buy ghost" type="button" disabled>{V.s5Boton}</button><div id="picks" class="picks" aria-live="polite"></div></div>
+    </div>
+    <div class="spec">
+      <div class="meta"><span>{P.aLbl}</span><span class="ac">{P.espInter}</span></div>
+      <h3>{P.aH}</h3><p>{P.aD}</p>
+      <input id="tokin" class="tokin" type="text" value={P.aEjemplo} maxlength="46" aria-label={P.aH}>
+      <div class="ph">{V.ilus}</div>
+      <div id="tokens" class="toks">{illusToks.map((tk) => (<div class="tokc">{tk}</div>))}</div>
+      <div class="stats">
+        <div><b id="tokenCount" class="ac">{illusToks.length}</b><span>{P.aTokens}</span></div>
+        <div><b id="wordCount">{sentence.split(/\s+/).length}</b><span>{P.aPalabras}</span></div>
+        <div><b id="charCount">{sentence.replace(/\s/g, '').length}</b><span>{P.aLetras}</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 09 · TEMARIO (the 12 lessons, in the temario's order: it never changes). Stage 2C: when a row comes into view the real tokens of its title arrive from the edge of the screen and group into it (src/aegis/fx/c09.ts). ===== -->
+<section id="c09" class="sec cx" aria-labelledby="c09h" data-fx="group">
+  <div class="sh"><div class="sn">■ {label('09', V.ch09)}</div><div class="sx">{cnt('09')}</div></div>
+  <h2 id="c09h" class="hx">{P.indH2}</h2>
+  <p class="xsub">{P.indSub}</p>
+  <div class="idx">
+    {mods.map((m) => (
+      <div class="irow" data-lesson={m.n}><div class="in">{m.n}</div><div><div class="ie">{m.eb}</div><div class="ih">{m.h}</div></div><p>{m.d}</p><div><div class="ik">{m.k}</div><div class="ikc">{m.kc}</div></div></div>
+    ))}
+  </div>
+</section>
+
+<!-- ===== 10 · LA OFERTA (Hormozi s7: seven items, item 6 = «lo que publique después» + the published vivoV) + CTA. Stage 2B: docking onto the spine.
+     Each item is a title and a description in two elements of their own, never one sentence joined by a dash: the descriptions are lower-case
+     continuations in Hormozi's copy, but item 6's is the published vivoV, a full sentence with a capital. ===== -->
+<section id="c10" class="sec cx" aria-labelledby="c10h" data-fx="dock">
+  <div class="sh"><div class="sn">■ {label('10', V.ch10)}</div><div class="sx">{cnt('10')}</div></div>
+  <h2 id="c10h" class="hx wide">{fill(V.s7H)}</h2>
+  <ol class="stack" data-dock data-total={offer.length}>
+    {offer.map((it, i) => (
+      <li data-dock-item><span class="no">{String(i + 1).padStart(2, '0')}</span><div class="it"><p class="t">{it.t}</p><p class="d">{it.d}</p></div></li>
+    ))}
+  </ol>
+  <V3Cta label={P.preCta} micro={P.heroGar} />
+</section>
+
+<!-- ===== 11 · GARANTÍA (Hormozi s8) + CTA. Static seal. Stage 2B: the ring of text rotates; the 14 in the centre stays. ===== -->
+<section id="c11" class="sec cx" aria-labelledby="c11h" data-fx="seal">
+  <div class="sh"><div class="sn">■ {label('11', V.ch11)}</div><div class="sx">{cnt('11')}</div></div>
+  <div class="gar">
+    <div class="gar-t">
+      <h2 id="c11h" class="hx">{V.s8H}</h2>
+      <p class="lede">{fill(V.s8Body)}</p>
+    </div>
+    <div class="seal" data-seal aria-hidden="true">
+      <svg viewBox="0 0 240 240">
+        <defs><path id="sealPath" d="M120,120 m-100,0 a100,100 0 1,1 200,0 a100,100 0 1,1 -200,0"></path></defs>
+        <g data-seal-ring>
+          <circle cx="120" cy="120" r="100" fill="none" class="sr"></circle>
+          <circle cx="120" cy="120" r="78" fill="none" class="sr2"></circle>
+          <text class="st"><textPath href="#sealPath" textLength="628" lengthAdjust="spacing">{seal}</textPath></text>
+        </g>
+      </svg>
+      <b class="core" data-seal-core>14</b>
+    </div>
+  </div>
+  <V3Cta label={P.preCta} micro={P.heroGar} />
+</section>
+
+<!-- ===== 12 · QUIÉN (Hormozi instr*, approved word for word on 2026-09-21; it backs «frontera» in the hero). Under the heading sits a drawing of what the closing sentence lists, as a loop
+     (V3Loop, aria-hidden, ILUSTRATIVO; its only words are the five terms of that sentence, read from it). Stage 2C plays it once (fx/c12v.ts). ===== -->
+<section id="c12" class="sec cx" aria-labelledby="c12h" data-fx="plate-parallax">
+  <div class="sh"><div class="sn">■ {label('12', V.instrEb)}</div><div class="sx">{cnt('12')}</div></div>
+  <div class="bio">
+    <i class="c tl"></i><i class="c tr"></i><i class="c bl"></i><i class="c br"></i>
+    <h2 id="c12h" class="bio-l">{V.instrH}</h2>
+    <div class="bio-h">
+      <p class="bio-body" data-line>{V.instrBody}</p>
+      <p class="bio-em" data-line>{V.instrEnfasis}</p>
+      <p class="bio-close" data-line>{V.instrCierre}</p>
+    </div>
+    <V3Loop close={V.instrCierre} tag={V.ilus} />
+  </div>
+</section>
+
+<!-- ===== 13 · PARA QUIÉN (Hormozi s10). Stage 2B: the two columns come in from opposite sides. ===== -->
+<section id="c13" class="sec cx" aria-labelledby="c13n" data-fx="split-in">
+  <div class="sh"><div class="sn" id="c13n">■ {label('13', V.ch13)}</div><div class="sx">{cnt('13')}</div></div>
+  <div class="para">
+    <div class="pcol yes" data-col="yes"><h2>{V.s10TituloSi}</h2><ul>{V.s10Si.map((x) => (<li>{x}</li>))}</ul></div>
+    <div class="pcol no" data-col="no"><h2>{V.s10TituloNo}</h2><ul>{V.s10No.map((x) => (<li>{x}</li>))}</ul></div>
+  </div>
+</section>
+
+<!-- ===== 14 · PRECIO (the prod block; the in-card button is this chapter's CTA). Stage 2B: odometer up to the price + the segmented bar. ===== -->
+<section id="c14" class="sec cx" aria-labelledby="c14h" data-fx="odometer">
+  <div class="sh"><div class="sn">■ {label('14', V.ch14)}</div><div class="sx">{cnt('14')}</div></div>
+  <div class="price">
+    <div class="pl">
+      <h2 id="c14h">{P.preH2}</h2>
+      <p class="pg">{N.garantiaTxt}</p>
+      <div class="pp">{prueba.map((x) => (<p>{x}</p>))}<small>{N.moneda}</small></div>
+      <ul class="inc">
+        <li><span>{P.incluye}</span><b>{P.pre1}</b></li>
+        <li><span>{P.incluye}</span><b>{P.pre2}</b></li>
+        <li><span>{P.incluye}</span><b>{P.pre3}</b></li>
+      </ul>
+    </div>
+    <div class="pr">
+      <div class="pbig"><b data-odo>{precioBig}</b><span>{P.preUnidad}</span></div>
+      <div class="segbar" aria-hidden="true" data-segbar>{Array.from({ length: 30 }, () => (<i></i>))}</div>
+      <p>{P.preNota}</p>
+      <a href="/pago" class="buy big" data-cta><span>{P.preCta}</span><svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h11M11 5.5l4.5 4.5L11 14.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path></svg></a>
+      <div class="why2"><h4>{P.preWhyH}</h4><p>{P.preWhy1}</p><p>{P.preWhy2}</p><p>{V.preWhy3V}</p><p>{P.preWhy4}</p></div>
+      <div class="legal"><span>{P.preGar}</span><span>{P.preTerm}</span></div>
+    </div>
+  </div>
+  <div class="pay"><h4>{N.pagoTit}</h4><div class="chipsrow">{N.medios.map((m) => (<span>{m}</span>))}</div><p>{N.pagoTxt}</p></div>
+</section>
+
+<!-- ===== 15 · FAQ (the 8 prod questions; the fourth answer is the plural-free variant). Reading, so no effect. ===== -->
+<section id="c15" class="sec cx" aria-labelledby="c15h">
+  <div class="sh"><div class="sn">■ {label('15', V.ch15)}</div><div class="sx">{cnt('15')}</div></div>
+  <h2 id="c15h" class="hx">{P.faqH2}</h2>
+  <div class="faq">
+    {faqs.map((f, i) => (
+      <details><summary><span class="in">{String(i + 1).padStart(2, '0')}</span><span class="q">{f.q}</span><i aria-hidden="true"></i></summary><p>{f.a}</p></details>
+    ))}
+  </div>
+</section>
+
+<!-- ===== 16 · CIERRE (Hormozi s14 with step 1 adapted, «La IA no se va a ir.», the closing CTA). Stage 2B: the three-node constellation draws. ===== -->
+<section id="c16" class="sec cx close" aria-labelledby="c16h" data-fx="constellation">
+  <div class="sh"><div class="sn">■ {label('16', V.ch16)}</div><div class="sx">{cnt('16')}</div></div>
+  <ol class="steps3" data-nodes>
+    {V.s14Pasos.map((s) => (<li data-node><i aria-hidden="true"></i><p>{s}</p></li>))}
+  </ol>
+  <h2 id="c16h">{V.cierreH}</h2>
+  <V3Cta label={P.cierreCta} />
+</section>
+{/* The end of the page: a black plate in every theme (v3.css .endp): the brand row, the legal line and the wordmark. The wordmark: «AI FROM SCRATCH» as the ghost outline that ends the page (a
+    decoration: no copy, aria-hidden), one line on desktop and two on phones (v3.css picks). Static: the outline, fully drawn. Stage 2B (fx/wordmark.ts): it draws itself when it comes into
+    view, then white lines run along the edges of its letters while it is on screen. /v3 only: the shared footer of the other public pages is untouched. */}
+<footer class="endp">
+  <div class="foot">
+    <div><span class="lg" aria-hidden="true">IA</span> {MARCA}</div>
+    <div>{P.pieHand}</div>
+    <div>{P.pieMeta2}</div>
+    <div><a href="/login">{P.navEntrar}</a></div>
+  </div>
+  <div class="foot legal2"><a href="/terminos">{PUB.footer.term}</a> · <a href="/privacidad">{PUB.footer.priv}</a></div>
+  <div class="wmk" data-fx="wordmark" aria-hidden="true">
+    <i class="wmg"></i>
+    <div class="wmr wm1"><svg viewBox={wmBox(WORDMARK.one)} data-lc={WORDMARK.one.lc.join(',')} focusable="false"><path class="o" d={WORDMARK.one.d} /></svg></div>
+    <div class="wmr wm2"><svg viewBox={wmBox(WORDMARK.two)} data-lc={WORDMARK.two.lc.join(',')} focusable="false"><path class="o" d={WORDMARK.two.d} /></svg></div>
+  </div>
+</footer>
+</main>
+
+<script type="application/json" id="v3-data" is:inline set:html={jsonSafe(DATA)}></script>
+<script type="application/json" id="v3-tokens" is:inline set:html={jsonSafe(PIECES)}></script>
+<script>
+  import { boot } from '../aegis/main';
+  boot();
+</script>
+</body>
+</html>

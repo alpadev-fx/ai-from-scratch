@@ -1,0 +1,26 @@
+---
+// The drawing of chapter 12 (src/aegis/fx/c12v.ts plays it, once, when it comes into view): the harness the instructor's closing sentence lists, as a loop. It is a decoration: aria-hidden, and
+// the markup IS the final picture (the loop at rest), so a page without the engine shows it finished. Its only words are the five terms of that sentence, read from the sentence itself
+// (src/aegis/c12-data.ts loopOf: a sentence that does not list five terms stops the render), and the page's own ILUSTRATIVO tag (passed in); the number of prompt ticks is the sentence's own.
+// Square, flat, hairline: no round shape. The class names are all `lp-`, apart from the wrapper: none of them is styled by another part of the stylesheet (a guard test reads that).
+import { GEO, loopOf } from '../aegis/c12-data';
+interface Props { close: string; tag: string }
+const { close, tag } = Astro.props;
+const L = loopOf(close);
+const geo = `--x:${GEO.x}%;--y:${GEO.y}%;--w:${GEO.w}%;--h:${GEO.h}%`;
+---
+<div class="lp" data-loop aria-hidden="true">
+  <p class="lp-tag"><i class="dot"></i><em>{tag}</em></p>
+  <div class="lp-fig" style={geo}>
+    <i class="lp-wf"></i>
+    <b class="lp-c lp-wl">{L.workflows}</b>
+    <i class="lp-e lp-e0"></i><i class="lp-e lp-e1"></i><i class="lp-e lp-e2"></i><i class="lp-e lp-e3"></i>
+    <b class="lp-c lp-ag">{L.agents}</b>
+    <b class="lp-c lp-sk">{L.skills}</b>
+    <b class="lp-c lp-hk">{L.hooks}</b>
+    <i class="lp-s lp-s0"></i><i class="lp-s lp-s1"></i><i class="lp-s lp-s2"></i><i class="lp-s lp-s3"></i>
+    <i class="lp-p lp-p0"></i><i class="lp-p lp-p1"></i><i class="lp-p lp-p2"></i><i class="lp-p lp-p3"></i>
+    <i class="lp-g lp-g0"></i><i class="lp-g lp-g1"></i><i class="lp-g lp-g2"></i><i class="lp-k"></i>
+    <div class="lp-b"><div class="lp-q">{Array.from({ length: L.n }, () => (<i class="lp-t"></i>))}</div><b class="lp-c lp-pl">{L.prompts}</b></div>
+  </div>
+</div>

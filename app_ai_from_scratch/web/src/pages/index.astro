@@ -40,7 +40,7 @@ const PREGUNTAS = lang === 'en' ? [
   { q: 'What about auto-renewal?', a: `It is off by default: after 30 days access pauses and nothing else is charged. If you turn it on, Mercado Pago charges ${precioTxt} COP every month until you cancel from your profile in one click, and you keep access until the end of the paid month.` },
   { q: 'Is there a refund if it is not for me?', a: 'Yes: 14 days from purchase, no explanation needed, back through the same payment method in under 10 business days.' },
   { q: 'Is it available in English?', a: 'Yes. The platform, this page and the lesson content are in Spanish and English, and you switch language from the top bar.' },
-  { q: 'What is a token in artificial intelligence?', a: 'A token is the chunk of text the model works with: it sees neither words nor letters, it sees frequent pieces. "Cartagena is beautiful" is three words but five tokens. Everything that gets billed or capped is measured in tokens.' },
+  { q: 'What is a token in artificial intelligence?', a: 'A token is the chunk of text the model works with: it sees neither words nor letters, it sees frequent pieces. "Cartagena is beautiful" is three words but four tokens. Everything that gets billed or capped is measured in tokens.' },
   { q: 'Why does AI invent facts that sound true?', a: 'Because it does not always detect that information is missing: it completes the most likely pattern and can present an invented fact with confidence. That is why any fact with consequences gets checked at the source.' },
   { q: 'Does AI learn from what I write to it?', a: 'It is not retrained by each conversation. Training and inference are separate moments: when you talk to it, its parameters do not change. If it seems to remember you, the application may have stored your text and included it in the request again.' },
 ] : [
@@ -49,7 +49,7 @@ const PREGUNTAS = lang === 'en' ? [
   { q: '¿Qué pasa con la renovación automática?', a: `Viene apagada: a los 30 días el acceso se pausa y no se cobra nada más. Si la activas, Mercado Pago cobra ${precioTxt} COP cada mes hasta que la canceles desde tu perfil en un clic, y sigues entrando hasta el final del mes pagado.` },
   { q: '¿Hay devolución si no me sirve?', a: 'Sí: 14 días desde la compra, sin explicar por qué, por el mismo medio de pago y en menos de 10 días hábiles.' },
   { q: '¿Está disponible en inglés?', a: 'Sí. La plataforma, esta página y el contenido de las lecciones están en español e inglés, y se cambia de idioma desde la barra superior.' },
-  { q: '¿Qué es un token en inteligencia artificial?', a: 'Un token es el trozo de texto con el que trabaja el modelo: no ve palabras ni letras, ve pedazos frecuentes. «Cartagena es hermosa» son tres palabras pero cinco tokens. Todo lo que se cobra y se limita se mide en tokens.' },
+  { q: '¿Qué es un token en inteligencia artificial?', a: 'Un token es el trozo de texto con el que trabaja el modelo: no ve palabras ni letras, ve pedazos frecuentes. «Cartagena es hermosa» son tres palabras pero cuatro tokens. Todo lo que se cobra y se limita se mide en tokens.' },
   { q: '¿Por qué la IA inventa datos que suenan ciertos?', a: 'Porque no siempre detecta que le falta información: completa el patrón más probable y puede presentar un dato inventado con seguridad. Por eso, todo dato con consecuencias se verifica en la fuente.' },
   { q: '¿La IA aprende de lo que le escribo?', a: 'No se reentrena con cada conversación. Entrenamiento e inferencia son momentos separados: cuando le hablas, sus parámetros no cambian. Si parece recordarte, la aplicación puede haber guardado tu texto y volver a incluirlo en el pedido.' },
 ];
@@ -469,7 +469,7 @@ section[id]{scroll-margin-top:72px}
   <div data-anim="1" style="font:400 17px/1.5 var(--f);color:var(--l2);max-width:620px;padding-bottom:30px">{P.espSub}</div>
   <div class="especimenes" style="border-top:1px solid var(--hair);border-left:1px solid var(--hair)">
     <div data-anim="1" style="border-right:1px solid var(--hair);border-bottom:1px solid var(--hair);padding:30px;display:flex;flex-direction:column;gap:20px">
-      <div style="display:flex;align-items:center;justify-content:space-between;font:600 10px/1 var(--m);letter-spacing:.2em;color:var(--l3)"><span>{P.aLbl}</span><span style="color:var(--ac)">{P.espInter}</span></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;font:600 10px/1 var(--m);letter-spacing:.2em;color:var(--l3)"><span>{P.aLbl}</span><span style="color:var(--ac)">{P.espInter} · {P.espIlus}</span></div>
       <div style="font:700 27px/1.1 var(--f);letter-spacing:-.032em">{P.aH}</div>
       <div style="font:400 16px/1.5 var(--f);color:var(--l2)">{P.aD}</div>
       <input id="tokin" class="tokin" type="text" placeholder={P.aEjemplo} maxlength="46" style="width:100%;background:var(--panel);border:1px solid var(--hair);border-radius:0;padding:15px 16px;font:400 17px/1.2 var(--f);color:var(--l1);outline:none">

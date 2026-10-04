@@ -1,0 +1,823 @@
+/* /v3 — AEGIS-style landing. Colors come only from TOKENS (theme-css.ts): --bg --panel --l1 --l2 --l3
+   --hair --hair2 --ac --btn-bg --btn-fg. Dark = black + white, Paper = #F2F2F2 + black; #0A84FF / #0A5AD6
+   is the only color. Type: system SF stack + SF Mono. */
+:root{--f:-apple-system,'SF Pro Display','SF Pro Text','Helvetica Neue',system-ui,sans-serif;--m:ui-monospace,'SF Mono',SFMono-Regular,Menlo,monospace;
+  --gut:clamp(16px,4vw,56px);--hdr:56px;--glass:rgba(0,0,0,.72);--pl:rgba(0,0,0,.82)}
+html[data-theme="paper"]{--glass:rgba(242,242,242,.82);--pl:rgba(242,242,242,.9)}
+@media (prefers-color-scheme:light){html[data-theme="auto"]{--glass:rgba(242,242,242,.82);--pl:rgba(242,242,242,.9)}}
+*{box-sizing:border-box}
+html{background:var(--bg);scroll-padding-top:72px}
+body{margin:0;background:var(--bg);color:var(--l1);font-family:var(--f);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+a{color:inherit;text-decoration:none}
+h1,h2,h3,h4,p{margin:0}
+.skip{position:absolute;left:8px;top:-60px;z-index:300;background:var(--btn-bg);color:var(--btn-fg);padding:12px 16px;font:600 11px/1 var(--m);letter-spacing:.16em}
+.skip:focus{top:8px}
+.lg{display:inline-grid;place-items:center;flex:none;box-sizing:border-box;width:var(--lg,24px);height:var(--lg,24px);border:max(1px,calc(var(--lg,24px)*.04)) solid currentColor;font:700 calc(var(--lg,24px)*.46)/1 var(--f);letter-spacing:-.02em}
+.buy{display:inline-flex;align-items:center;justify-content:center;gap:10px;background:var(--btn-bg);color:var(--btn-fg);font:600 11px/1 var(--m);letter-spacing:.16em;min-height:44px;padding:0 16px;white-space:nowrap;transition:background .2s,color .2s}
+.buy:hover{background:var(--ac);color:var(--on-ac,#fff)}
+.buy.big{font-size:12px;padding:19px 26px}
+.ac{color:var(--ac)}
+@media (max-width:1100px),(max-aspect-ratio:4/5){.hide-m{display:none!important}}
+
+/* ---------- header, progress, log ---------- */
+#hdr{position:fixed;left:0;right:0;top:0;z-index:60;border-bottom:1px solid var(--hair);background:var(--glass);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);padding-top:env(safe-area-inset-top)}
+.hdr-in{max-width:1440px;margin:0 auto;padding:0 var(--gut);min-height:var(--hdr);display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:12px;font:700 15px/1 var(--f);letter-spacing:-.01em}
+.brand b{font-weight:700}
+.hdr-lang{display:flex;margin-left:auto}
+.hdr-lang .seg{display:flex;align-items:center;gap:2px;border:0}
+.hdr-lang .prefs{gap:4px}
+.hdr-lang .segb{display:inline-flex;align-items:center;min-height:44px;padding:0 10px;background:none;border:0;cursor:pointer;font:500 10px/1 var(--m);letter-spacing:.18em;text-transform:uppercase;color:var(--l3);transition:color .15s}
+.hdr-lang .segb:hover{color:var(--l2)}.hdr-lang .segb[aria-pressed="true"]{color:var(--l1);font-weight:600}
+.hdr-lang .segb:focus-visible{outline:1px solid var(--l1);outline-offset:2px}
+.hdr-nav{display:flex;align-items:center;gap:18px}
+.nl{font:500 10px/1 var(--m);letter-spacing:.18em;color:var(--l2);min-height:44px;display:inline-flex;align-items:center}
+.nl:hover{color:var(--l1)}
+@media (max-width:640px){:root{--hdr:100px}
+  .hdr-in{display:grid;grid-template-columns:1fr auto;grid-template-areas:"brand nav" "lang lang";align-content:center;gap:0 12px;padding-top:2px;padding-bottom:0}
+  .brand{grid-area:brand;min-height:48px}.hdr-nav{grid-area:nav}.hdr-nav .nl{display:none}.hdr-lang{grid-area:lang;margin:0;justify-content:flex-start;margin-left:-10px}}
+#prog,#log,#gl,#ign{display:none}
+html.fx #prog{display:block;position:fixed;left:var(--gut);right:var(--gut);top:calc(var(--hdr) + 1px);height:1px;z-index:61;background:var(--hair);pointer-events:none}
+html.eng-off #prog{display:none}      /* the engine will not attach in this visit: a progress bar nothing drives is just a line */
+#prog u{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--l1)}
+#prog i{position:absolute;top:-2px;width:1px;height:5px;background:var(--l3)}
+html.fx #gl{display:block;position:fixed;inset:0;width:100%;height:100%;z-index:0;visibility:hidden;pointer-events:none}
+html.gl-on #log{display:block;position:fixed;left:var(--gut);bottom:24px;z-index:21;font:400 11px/1.75 var(--m);letter-spacing:.14em;color:var(--l2);pointer-events:none;min-width:240px;height:62px;text-shadow:0 0 12px var(--bg),0 0 3px var(--bg)}
+#log .ln{white-space:nowrap;display:flex;gap:10px}#log .ln::before{content:'›';color:var(--l3)}#log .ln.new{color:var(--l1)}
+html[data-ch="cL"] #log{opacity:0}
+html:not([data-ch="c01"]) #log{opacity:0}
+html.fx #log{transition:opacity .3s ease}      /* the bar and the lines come and go with a fade, not in one frame */
+
+/* ---------- ignition (chapter 00) ----------
+   Pure CSS, 1.0 s, no module and no gsap: nothing it waits for can be late or hang. The head script in v3.astro ENDS it (the animationend of
+   ign-life, 1.2 s from the first frame at the latest, or any click / key / wheel / touch), which also lifts the scroll lock below.
+   dot -> line -> the IA square draws -> IA -> glint -> the camera pushes through the square. Every part is transparent by 1.0 s, so a late
+   timer cannot leave a covering overlay behind (the fade runs on the compositor). The hero copy is under it, already painted. */
+html.ign-on #ign{display:grid;position:fixed;inset:0;z-index:100;place-items:center;overflow:hidden;color:var(--l1);animation:ign-life 1s linear both}
+html.ign-on,html.ign-on body{overflow:hidden}
+#ign .ibg{position:absolute;inset:0;background:var(--bg);animation:ign-bg 1s linear both}
+#ign .pt{position:absolute;left:50%;top:50%;width:6px;height:6px;margin:-3px 0 0 -3px;background:var(--l1);border-radius:50%;box-shadow:0 0 18px var(--l3);animation:ign-pt 1s linear both}
+#ign .iln{position:absolute;left:50%;top:50%;width:360px;height:2px;margin:-1px 0 0 -180px;background:var(--l1);opacity:0;animation:ign-ln 1s linear both}
+#ign .lock{position:relative;width:min(300px,56vw);aspect-ratio:1;transform-origin:50% 50%;will-change:transform;animation:ign-lock 1s linear both}
+#ign .isq{stroke-dasharray:1;stroke-dashoffset:1;opacity:0;animation:ign-sq 1s linear both}
+#ign .iia{opacity:0;animation:ign-ia 1s linear both}
+#ign .glint{position:absolute;inset:11%;pointer-events:none;opacity:0;background:linear-gradient(105deg,transparent 40%,var(--ac) 50%,transparent 60%);background-size:300% 100%;background-position:100% 0;animation:ign-gl 1s linear both}
+#ign .ilog{position:absolute;left:var(--gut);right:var(--gut);bottom:44px;font:400 11px/1.9 var(--m);letter-spacing:.16em;color:var(--l2);min-height:1em;animation:ign-log 1s linear both}
+#ign .iskip{position:absolute;right:var(--gut);top:calc(var(--hdr) + 18px);background:none;border:0;color:var(--l2);font:600 11px/1 var(--m);letter-spacing:.2em;cursor:pointer;min-height:44px;padding:0 8px;animation:ign-skip 1s linear both}
+#ign .iskip:hover{color:var(--l1)}
+@keyframes ign-life{0%,88%{opacity:1;pointer-events:auto}100%{opacity:0;pointer-events:none}}
+@keyframes ign-bg{0%,76%{opacity:1;animation-timing-function:ease-in}100%{opacity:0}}
+@keyframes ign-pt{0%,14%{transform:scale(1,1);opacity:1;animation-timing-function:cubic-bezier(.7,0,.84,0)}34%{transform:scale(60,.5);opacity:1}35%,100%{transform:scale(60,.5);opacity:0}}
+@keyframes ign-ln{0%,33%{opacity:0;transform:scaleY(1)}34%{opacity:1;transform:scaleY(1);animation-timing-function:cubic-bezier(.45,0,.55,1)}52%,100%{opacity:0;transform:scaleY(40)}}
+@keyframes ign-sq{0%,33%{opacity:0;stroke-dashoffset:1}34%{opacity:1;stroke-dashoffset:1;animation-timing-function:cubic-bezier(.65,0,.35,1)}66%,100%{opacity:1;stroke-dashoffset:0}}
+@keyframes ign-ia{0%,52%{opacity:0;transform:translateY(6px);animation-timing-function:cubic-bezier(.2,.7,.3,1)}72%,100%{opacity:1;transform:translateY(0)}}
+@keyframes ign-gl{0%,58%{opacity:0;background-position:100% 0}59%{opacity:1;background-position:100% 0;animation-timing-function:cubic-bezier(.65,0,.35,1)}82%{opacity:1;background-position:0 0}83%,100%{opacity:0;background-position:0 0}}
+@keyframes ign-lock{0%,70%{transform:scale(1);animation-timing-function:cubic-bezier(.7,0,.84,0)}100%{transform:scale(46)}}
+@keyframes ign-log{0%{clip-path:inset(0 100% 0 0);animation-timing-function:steps(24,end)}50%,72%{clip-path:inset(0 0 0 0);opacity:1}84%,100%{clip-path:inset(0 0 0 0);opacity:0}}
+@keyframes ign-skip{0%,72%{opacity:1}84%,100%{opacity:0}}
+
+/* ---------- chapters: STATIC FIRST (what reduced-motion / no-WebGL / no-JS sees) ---------- */
+.ch{position:relative;border-bottom:1px solid var(--hair2)}
+.stage{position:relative;padding:calc(var(--hdr) + 54px) var(--gut) 56px;max-width:1440px;margin:0 auto}
+.label{display:flex;align-items:center;gap:12px;font:500 11px/1.4 var(--m);letter-spacing:.26em;text-transform:uppercase;color:var(--l2)}
+.label i{display:block;flex:none;width:8px;height:8px;background:var(--ac)}
+.head{margin:18px 0 0;font:700 clamp(34px,5.2vw,84px)/.98 var(--f);letter-spacing:-.045em;text-wrap:balance}
+.head .ln{display:block}
+.rule{margin-top:24px;width:120px;height:1px;background:var(--hair);transform-origin:0 0}
+.sub{margin-top:20px;font:400 clamp(17px,1.5vw,21px)/1.45 var(--f);color:var(--l2);max-width:40ch}
+.cta{margin-top:26px;display:flex;flex-direction:column;gap:12px;align-items:flex-start}
+/* the hero pair (Hormozi's PRIMARY + SECONDARY): the paid button first and solid, the free one under it and outlined, the trust line under both.
+   One column as wide as the wider label, so the two buttons are the same size; both carry a 1px border so they are the same height too. */
+.ctas{display:grid;gap:10px;justify-items:stretch;width:max-content;max-width:100%}
+.ctas .buy{border:1px solid var(--btn-bg)}
+.ctas .buy:hover{border-color:var(--ac)}
+.ctas .buy.alt{background:transparent;color:var(--l1);border-color:var(--l2)}
+.ctas .buy.alt:hover{background:var(--ac);color:var(--on-ac,#fff);border-color:var(--ac)}
+.micro{font:400 14px/1.45 var(--f);color:var(--l2);max-width:52ch}
+.sub .h2l{margin-bottom:12px;font-weight:600;color:var(--l1)}
+#c01 .stage{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);gap:36px 44px;align-items:start}
+#c01 .copy{grid-column:1}
+.pstat{grid-column:2;grid-row:1 / span 2;margin:0;display:flex;justify-content:center}
+.pstat .poster{display:none}
+.plate{position:relative;width:min(100%,380px);aspect-ratio:9/16;border:1px solid var(--l1);background:var(--panel);overflow:hidden;box-shadow:0 18px 50px rgba(0,0,0,.18)}
+.plate .still{width:100%;height:100%;object-fit:cover;display:block}
+html:not([data-theme="paper"]) .plate{box-shadow:0 0 70px rgba(10,132,255,.14);border-color:var(--hair)}
+@media (prefers-color-scheme:light){html[data-theme="auto"] .plate{border-color:var(--l1);box-shadow:0 18px 50px rgba(0,0,0,.18)}}
+.sbk{position:absolute;left:14%;top:57%;width:72%;height:15%}
+.sbk .c{position:absolute;width:14px;height:14px;border:0 solid var(--ac)}
+.sbk .tl{left:0;top:0;border-left-width:2px;border-top-width:2px}.sbk .tr{right:0;top:0;border-right-width:2px;border-top-width:2px}
+.sbk .bl{left:0;bottom:0;border-left-width:2px;border-bottom-width:2px}.sbk .br{right:0;bottom:0;border-right-width:2px;border-bottom-width:2px}
+.sbk .plt{position:absolute;left:0;top:calc(100% + 8px)}
+.plt{display:flex;flex-direction:column;gap:4px;padding:8px 10px;background:var(--pl);border:1px solid var(--hair);font:500 10px/1.2 var(--m);letter-spacing:.14em;white-space:nowrap;color:var(--l1)}
+.plt em{font-style:normal;color:var(--ac);border:1px solid var(--ac);padding:3px 5px;align-self:flex-start;letter-spacing:.18em}
+.scrim,.pframe,.cue{display:none}
+.card{grid-column:1;background:var(--panel);border:1px solid var(--hair);padding:16px 18px 6px;max-width:460px}
+.card .hd,.pcard .hd{display:flex;justify-content:space-between;align-items:center;gap:16px;padding-bottom:12px;margin-bottom:4px;border-bottom:1px solid var(--hair)}
+.hd span{font:500 11px/1.3 var(--m);letter-spacing:.2em;text-transform:uppercase;color:var(--l2)}
+.hd b{display:flex;align-items:center;gap:8px;font:500 10px/1 var(--m);letter-spacing:.18em;color:var(--l1)}
+.hd em{font-style:normal;color:var(--ac)}
+.dot{display:inline-block;width:6px;height:6px;background:var(--ac)}
+.card .row{display:grid;grid-template-columns:64px 1fr;gap:12px;padding:12px 0;border-bottom:1px solid var(--hair2)}
+.card .row:last-child{border-bottom:0}
+.card .k{font:500 11px/1.3 var(--m);letter-spacing:.16em;color:var(--ac)}
+.card .v{font:600 15px/1.25 var(--f);letter-spacing:-.01em}
+.card .v small{display:block;margin-top:6px;font:500 10px/1.3 var(--m);letter-spacing:.12em;color:var(--l3)}
+.card .sweep{display:none}
+/* Δ static */
+#cL .stage{display:flex;flex-direction:column;gap:32px}
+.chips{display:flex;flex-wrap:wrap;gap:10px}
+/* The context row (specimen B words + the sampled token) only exists in engine mode; the static page shows the context inside the card, never next to the Cartagena tokens. */
+.chips.ctx{display:none}
+.sent{display:none}
+.tokref{margin:-14px 0 0;font:500 10px/1.4 var(--m);letter-spacing:.16em;color:var(--l3)}
+.tk{display:flex;align-items:center;justify-content:center;padding:14px 18px;border:1px solid var(--hair);font:400 clamp(20px,2.4vw,28px)/1 var(--m);white-space:nowrap;background:var(--panel)}
+.tk.ans{border-color:var(--ac);color:var(--ac)}
+.tk b{font-weight:400}
+.pcard{background:var(--panel);border:1px solid var(--hair);padding:16px 18px;max-width:420px}
+.pcard .ph{font:500 10px/1.35 var(--m);letter-spacing:.16em;color:var(--l3);margin:6px 0 8px}
+.pcard .pctx{margin:12px 0 2px;font:400 15px/1.4 var(--m);color:var(--l1)}
+.crow{display:grid;grid-template-columns:110px minmax(0,1fr) 52px;gap:12px;align-items:center;padding:7px 0;border-bottom:1px solid var(--hair2)}
+.cn{font:500 15px/1.2 var(--f);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cb{height:6px;background:var(--fill);position:relative;overflow:hidden}.cb i{display:block;height:100%;transition:width .18s ease-out}
+.cp{text-align:right;font:500 13px/1 var(--m);font-variant-numeric:tabular-nums}
+.crow.win .cn{color:var(--l1)}
+.dial{display:none;align-items:center;gap:12px;margin-top:12px;font:500 10px/1 var(--m);letter-spacing:.16em;color:var(--l3)}
+.dial .trk{position:relative;flex:1;height:1px;background:var(--hair)}.dial .trk i{position:absolute;top:-8px;width:2px;height:17px;background:var(--ac);left:0;will-change:transform}
+.dial b{color:var(--ac);font-weight:600;font-size:13px}
+.steps{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0}
+.steps li{padding:16px 18px 18px 0;border-top:1px solid var(--hair);position:relative}
+.steps u{display:none}
+.steps .n{font:600 10px/1 var(--m);letter-spacing:.2em;color:var(--ac)}
+.steps .t{margin-top:8px;font:500 11px/1.2 var(--m);letter-spacing:.2em;color:var(--l1)}
+.steps .h{margin-top:10px;font:700 18px/1.2 var(--f);letter-spacing:-.02em}
+.steps .d{margin-top:8px;font:400 14px/1.45 var(--f);color:var(--l2)}
+/* minmax(0,1fr), not 1fr: a bare 1fr is minmax(auto,1fr) and «auto» is the widest unbreakable thing in the column (the hero's width:max-content button pair),
+   which stretched the unscrolled hero to 354px at a 320px viewport; the body clips it, so nothing scrolled, but the copy sat 34px off the screen */
+@media (max-width:900px){#c01 .stage{grid-template-columns:minmax(0,1fr)}.pstat{grid-column:1;grid-row:auto;order:2}.card{order:3;max-width:none}.steps{grid-template-columns:1fr 1fr}.crow{grid-template-columns:96px minmax(0,1fr) 48px}}
+/* ---------- static sections ---------- */
+.sec{position:relative;z-index:2;margin:0;padding:86px max(var(--gut),calc(50% - 620px + var(--gut))) 0;background:var(--bg)}
+.sh{display:flex;align-items:baseline;flex-wrap:wrap;gap:12px 18px;padding-bottom:28px}
+.sn{font:600 10px/1 var(--m);letter-spacing:.22em;color:var(--ac)}
+.sx{font:500 10px/1 var(--m);letter-spacing:.18em;color:var(--l3);margin-left:auto}
+.lede{font:400 17px/1.5 var(--f);color:var(--l2);max-width:620px;padding-bottom:28px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--hair);border-left:1px solid var(--hair)}
+.spec{border-right:1px solid var(--hair);border-bottom:1px solid var(--hair);padding:30px;display:flex;flex-direction:column;gap:18px;min-width:0}
+.spec h3{font:700 27px/1.1 var(--f);letter-spacing:-.032em}.spec p{font:400 16px/1.5 var(--f);color:var(--l2)}
+.meta{display:flex;justify-content:space-between;align-items:center;gap:12px;font:600 10px/1 var(--m);letter-spacing:.2em;color:var(--l3)}
+.meta.sm{font-size:9px;letter-spacing:.14em;font-weight:500}.meta b{font:600 15px/1 var(--m)}
+.meta.sm > span:nth-child(2){flex:1 1 auto;text-align:center}   /* the verdict word changes with the dial: its box must not move (CLS) */
+.tokin{width:100%;background:var(--panel);border:1px solid var(--hair);border-radius:0;padding:15px 16px;font:400 17px/1.2 var(--f);color:var(--l1);outline:none}
+.tokin:focus{border-color:var(--l1)}
+.toks{display:flex;gap:7px;flex-wrap:wrap;min-height:46px}.tokc{border:1px solid var(--hair);font:500 15px/1 var(--m);padding:11px 12px}
+.stats{margin-top:auto;display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--hair);padding-top:18px;gap:14px}
+.stats div{display:flex;flex-direction:column;gap:6px}.stats b{font:700 26px/1 var(--m);font-variant-numeric:tabular-nums}.stats span{font:500 9px/1.3 var(--m);letter-spacing:.16em;color:var(--l3)}
+.cands{display:flex;flex-direction:column}
+.temp{margin-top:auto;display:flex;flex-direction:column;gap:14px;border-top:1px solid var(--hair);padding-top:18px}
+input[type=range]{-webkit-appearance:none;appearance:none;background:transparent;width:100%;height:26px;margin:0}
+.deslizador{height:26px}@media (max-width:900px){.deslizador{height:44px}}
+input[type=range]::-webkit-slider-runnable-track{height:1px;background:var(--hair)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:26px;margin-top:-13px;border-radius:0;background:var(--l1);cursor:ew-resize}
+input[type=range]::-moz-range-track{height:1px;background:var(--hair)}input[type=range]::-moz-range-thumb{width:14px;height:26px;border:0;border-radius:0;background:var(--l1);cursor:ew-resize}
+.idx{border-top:1px solid var(--hair)}
+.irow{display:grid;grid-template-columns:52px 1.05fr 1.25fr 250px;gap:24px;padding:22px 0;border-bottom:1px solid var(--hair2);align-items:start}
+.in{font:700 15px/1.2 var(--m);color:var(--l3)}
+.ie{font:600 10px/1 var(--m);letter-spacing:.18em;color:var(--ac);margin-bottom:7px}.ih{font:700 21px/1.16 var(--f);letter-spacing:-.028em}
+.irow p{font:400 16px/1.5 var(--f);color:var(--l2)}
+.ik{font:600 17px/1.15 var(--m);letter-spacing:-.01em}.ikc{font:400 12px/1.45 var(--f);color:var(--l3);margin-top:6px}
+.price{display:grid;grid-template-columns:1.2fr .8fr;border:1px solid var(--hair);background:var(--panel)}
+.pl,.pr{padding:44px 40px;display:flex;flex-direction:column;gap:22px;min-width:0}
+.pl{border-right:1px solid var(--hair)}
+.pl h2{font:700 clamp(30px,3.6vw,50px)/1.02 var(--f);letter-spacing:-.045em;text-wrap:balance}
+.pg{font:400 17px/1.5 var(--f);color:var(--l2);max-width:480px}
+.pp{display:flex;flex-direction:column;gap:9px;border-left:2px solid var(--ac);padding-left:14px}.pp p{font:400 14px/1.45 var(--f);color:var(--l2)}.pp small{font:500 11px/1.5 var(--m);letter-spacing:.1em;color:var(--l3);margin-top:2px}
+.inc{list-style:none;margin:auto 0 0;padding:0;border-top:1px solid var(--hair)}
+.inc li{display:flex;justify-content:space-between;gap:16px;padding:13px 0;border-bottom:1px solid var(--hair2);font:500 11px/1.3 var(--m);letter-spacing:.1em}.inc span{color:var(--l3)}.inc b{font-weight:500;text-align:right}
+.pbig{display:flex;flex-wrap:wrap;align-items:flex-end;gap:6px 12px}.pbig b{font:700 clamp(48px,5vw,68px)/.9 var(--f);letter-spacing:-.055em;white-space:nowrap}.pbig span{font:500 15px/1 var(--m);color:var(--l3);padding-bottom:8px}
+.pr>p{font:400 15px/1.45 var(--f);color:var(--l2)}
+.why2{display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--hair);padding-top:18px}.why2 h4{font:600 10px/1 var(--m);letter-spacing:.2em;color:var(--l3)}.why2 p{font:400 14px/1.45 var(--f);color:var(--l2)}
+.legal{margin-top:auto;display:flex;flex-direction:column;gap:9px;font:500 10px/1.5 var(--m);letter-spacing:.12em;color:var(--l3)}
+.pay{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center;padding:22px 0;border-bottom:1px solid var(--hair2)}
+.pay h4{font:600 10px/1 var(--m);letter-spacing:.2em;color:var(--l3)}.pay p{flex-basis:100%;font:400 14px/1.5 var(--f);color:var(--l2);max-width:760px}
+.chipsrow{display:flex;gap:8px;flex-wrap:wrap}.chipsrow span{border:1px solid var(--hair);padding:8px 12px;font:500 11px/1 var(--m);letter-spacing:.1em}
+.faq{border-top:1px solid var(--hair)}
+details{border-bottom:1px solid var(--hair2)}
+summary{list-style:none;cursor:pointer;display:grid;grid-template-columns:52px 1fr 30px;gap:24px;align-items:center;padding:22px 0;min-height:44px}
+summary::-webkit-details-marker{display:none}
+summary .in{font:600 11px/1 var(--m);letter-spacing:.14em}summary .q{font:600 19px/1.3 var(--f);letter-spacing:-.02em}
+summary i{justify-self:end;width:12px;height:12px;position:relative}summary i::before,summary i::after{content:'';position:absolute;left:0;right:0;top:50%;height:1px;background:var(--l2)}summary i::after{transform:rotate(90deg);transition:transform .2s}
+details[open] summary i::after{transform:rotate(0)}
+details p{padding:0 0 24px 76px;font:400 16px/1.55 var(--f);color:var(--l2);max-width:760px}
+.close{padding-bottom:110px;border-top:0}
+.close h2{font:700 clamp(34px,5.4vw,80px)/.96 var(--f);letter-spacing:-.05em;max-width:900px;text-wrap:balance;margin-top:48px}
+.crow2{display:flex;align-items:center;gap:26px;flex-wrap:wrap;margin:30px 0}.crow2 p{font:400 17px/1.45 var(--f);color:var(--l2);max-width:340px}
+.foot{display:grid;grid-template-columns:repeat(4,1fr);gap:24px;border-top:1px solid var(--hair2);padding:24px 0;font:500 10px/1.6 var(--m);letter-spacing:.14em;color:var(--l3)}
+.foot .lg{--lg:22px;margin-right:8px;vertical-align:middle}
+.legal2{display:block;border-top:1px solid var(--hair2)}
+@media (max-width:900px){.grid2,.price{grid-template-columns:1fr}.pl{border-right:0;border-bottom:1px solid var(--hair)}.pl,.pr{padding:28px 22px}.irow{grid-template-columns:44px 1fr;gap:6px 14px}.irow>p,.irow>div:last-child{grid-column:2}.foot{grid-template-columns:1fr}.spec{padding:22px}details p{padding-left:0}summary{grid-template-columns:36px 1fr 24px;gap:12px}.sx{margin-left:0;flex-basis:100%}}
+
+
+/* ---------- 02 suena ≠ cierto · 05 quién · 06 vivo ---------- */
+.s02{padding-top:110px}
+/* full engine layout only (html.fxl): a full screen, so it covers the held c01 frame when it arrives (there is none before the engine) */
+html.fxl .s02{padding-top:max(110px,22svh);padding-bottom:86px;min-height:100svh;display:flex;flex-direction:column;justify-content:flex-start}
+.s02 h2{font:700 clamp(32px,4.8vw,72px)/1 var(--f);letter-spacing:-.045em;max-width:16ch;text-wrap:balance}
+.lede.big{margin-top:28px;font:400 clamp(18px,1.7vw,24px)/1.45 var(--f);max-width:40ch;padding-bottom:0}
+.n3-hook{display:none}
+.bio{position:relative;border:1px solid var(--hair);background:var(--panel);padding:44px 40px;display:grid;grid-template-columns:1fr 1fr;gap:36px 48px}
+.bio .c,.cw .c,.sharp .c{position:absolute;width:16px;height:16px;border:0 solid var(--ac)}
+.bio .tl,.cw .tl,.sharp .tl{left:-1px;top:-1px;border-left-width:2px;border-top-width:2px}.bio .tr,.cw .tr,.sharp .tr{right:-1px;top:-1px;border-right-width:2px;border-top-width:2px}
+.bio .bl,.cw .bl,.sharp .bl{left:-1px;bottom:-1px;border-left-width:2px;border-bottom-width:2px}.bio .br,.cw .br,.sharp .br{right:-1px;bottom:-1px;border-right-width:2px;border-bottom-width:2px}
+@media (max-width:900px){.bio{grid-template-columns:1fr;padding:28px 22px}.s02{padding-top:72px}html.fxl .s02{padding-top:max(86px,20svh)}}
+
+/* ---------- ENGINE MODE: tall chapters, sticky stage, WebGL behind ----------
+   html.fx = the engine LOOK, set at first paint. html.fxl = the engine LAYOUT (tall chapters), set by main.ts only when the engine attaches to an
+   unscrolled page: never a pinned stage nothing animates, never a layout swapped under a scrolling reader. .lay = a chapter the engine lays out
+   (the hero from its markup, chapter 04 once registered). Until fxl the hero is one screen in its engine look and every other chapter is static. */
+html.fx main{position:relative;z-index:2}
+html.fx .lay{height:100svh;padding:0;border:0}
+html.fxl .lay{height:calc(var(--len) * 100svh)}
+html.fx .lay .stage{position:sticky;top:0;height:100svh;overflow:hidden;padding:0;max-width:none;margin:0;display:block;background:transparent}
+html.fx .lay .copy{position:absolute;left:var(--gut);top:calc(var(--hdr) + 14svh);width:var(--copyW,38vw);z-index:4;will-change:transform,opacity}
+html.fx .lay .head{margin-top:20px;font-size:clamp(34px,4.2vw,76px);max-width:var(--copyW,38vw)}
+html.fx .lay .head .ln{display:block;overflow:visible}
+html.fx .lay .chr{display:inline-block;will-change:transform,opacity,filter}
+html.fx .lay .label{color:var(--l1)}
+html.fx .lay .label i{display:block;flex:none;width:8px;height:8px;background:var(--ac)}
+html.fx .lay .sub{text-shadow:0 0 18px var(--bg),0 0 4px var(--bg)}
+/* The hero copy (eyebrow, h1, bold line, sub, CTA) is painted from the FIRST frame: nothing hides it until the engine is up, and the engine
+   never hides it again (it only moves and fades it with the scroll). Until the engine has taken over, the copy stands where the engine
+   will put it at scroll 0 (the 30px the parallax starts from, the column width of the plate layout), so attaching moves nothing. */
+html.fx #c01 .copy{transform:translate3d(0,30px,0)}
+html.fx #c01 .stage{--copyW:max(260px,min(38vw,calc(60vw - 24.1875vh - 80px)))}
+@media (max-width:1100px),(max-aspect-ratio:4/5){html.fx #c01 .stage{--copyW:260px}}
+/* until the engine has the first frames of 01, the page shows its blurred poster full-bleed (instant paint); html.foot-on = GL is drawing
+   the plate, and the poster fades out over it */
+html.fx .pstat{position:absolute;inset:0;display:block;margin:0;grid-column:auto;grid-row:auto}
+html.fx .pstat .poster{display:block;width:100%;height:100%;object-fit:cover;filter:blur(14px) contrast(1.1);transform:scale(1.1);opacity:.55}
+html.fx .pstat .plate{display:none}
+html.foot-on .pstat{opacity:0;visibility:hidden;transition:opacity .8s ease,visibility 0s linear .8s}
+html.fx .scrim{display:block;position:absolute;inset:0;pointer-events:none;z-index:3;background:linear-gradient(90deg,color-mix(in srgb,var(--bg) 94%,transparent) 0,color-mix(in srgb,var(--bg) 80%,transparent) 24%,transparent 43%)}
+html.gl-on #cL .scrim{display:none}
+html.fx .pframe{display:block;position:absolute;left:0;top:0;z-index:3;pointer-events:none;border:1px solid var(--hair);opacity:0;transform-origin:0 0;transition:opacity .8s ease}
+html.foot-on .pframe{opacity:1}
+html.fx .pframe::before,html.fx .pframe::after{content:'';position:absolute;width:18px;height:18px;border:0 solid var(--l1)}
+html.fx .pframe::before{left:-1px;top:-1px;border-left-width:2px;border-top-width:2px}
+html.fx .pframe::after{right:-1px;bottom:-1px;border-right-width:2px;border-bottom-width:2px}
+html[data-theme="paper"].fx .pframe{border-color:var(--l1);box-shadow:0 22px 60px rgba(0,0,0,.22)}
+html:not([data-theme="paper"]).fx .pframe{box-shadow:0 0 90px rgba(10,132,255,.16)}
+@media (prefers-color-scheme:light){html[data-theme="auto"].fx .pframe{border-color:var(--l1);box-shadow:0 22px 60px rgba(0,0,0,.22)}}
+html.fx .cue{display:flex;position:absolute;left:var(--gut);bottom:62px;z-index:4;align-items:center;gap:12px;font:500 10px/1 var(--m);letter-spacing:.26em;color:var(--l2)}
+html.fx .cue u{width:1px;height:34px;background:var(--l1);transform-origin:top;animation:cue 2s ease-in-out infinite}
+@keyframes cue{0%{transform:scaleY(0)}60%{transform:scaleY(1)}100%{transform:scaleY(1);opacity:0}}
+html.fx .card{position:absolute;right:var(--gut);bottom:11svh;z-index:5;width:clamp(270px,22vw,330px);max-width:none;background:var(--glass);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);opacity:0;overflow:hidden;padding:16px 18px 6px}
+html.fx .card .sweep{display:block;position:absolute;left:-40%;top:0;bottom:0;width:40%;background:linear-gradient(90deg,transparent,var(--hair2),transparent);pointer-events:none}
+/* HUD brackets (JS-made): transform-only, so tracking never shifts layout */
+.bk{position:absolute;inset:0;z-index:5;opacity:0;pointer-events:none;--c:var(--ac)}
+.bk>*{position:absolute;left:0;top:0;transform-origin:0 0;will-change:transform}
+.bk .c{width:16px;height:16px;border:0 solid var(--c)}
+.bk .c:nth-child(1){border-left-width:2px;border-top-width:2px}.bk .c:nth-child(2){border-right-width:2px;border-top-width:2px}
+.bk .c:nth-child(3){border-left-width:2px;border-bottom-width:2px}.bk .c:nth-child(4){border-right-width:2px;border-bottom-width:2px}
+.bk .fillg{width:1px;height:1px;background:linear-gradient(180deg,color-mix(in srgb,var(--ac) 14%,transparent),transparent 70%)}
+.bk .scan{width:1px;height:1px;background:linear-gradient(90deg,transparent,var(--c),transparent);opacity:.7}
+.bk .ldr{width:1px;height:26px;background:var(--c);opacity:.8}
+html.fx:not(.foot-on) .bk,html.fx:not(.gl-on) .sbk{display:none}
+html.gl-on .sbk{display:none}
+/* Δ engine */
+html.fxl #cL .copy{top:calc(var(--hdr) + 12svh)}
+html.fxl .chips{position:absolute;inset:0;display:block;z-index:3;pointer-events:none}
+html.fxl .sent{display:block;position:absolute;left:0;top:0;z-index:3;opacity:0;font:400 clamp(17px,1.7vw,26px)/1 var(--m);white-space:nowrap;color:var(--l1);will-change:transform,opacity;pointer-events:none}
+html.fxl .tokref{position:absolute;left:0;top:0;z-index:3;margin:0;opacity:0;white-space:nowrap;font-size:10px;will-change:transform,opacity;pointer-events:none}
+html.fxl .tk{position:absolute;left:0;top:0;visibility:hidden;opacity:0;padding:calc(var(--pad,0px)*.75) var(--pad,0px);border:1px solid transparent;background:transparent;font:400 clamp(17px,1.7vw,26px)/1 var(--m);color:var(--l1);will-change:transform,opacity;transition:border-color .25s,background .25s,box-shadow .25s}
+html.fxl .tk.on{border-color:var(--l3)}
+html.fxl .tk.h{border-color:var(--l1)}
+html.fxl .tk.f{border-color:var(--ac);box-shadow:0 0 26px color-mix(in srgb,var(--ac) 40%,transparent)}
+html.fxl .tk.ans{color:var(--ac);border-color:var(--ac)}
+html.fxl .tk.nw{background:color-mix(in srgb,var(--ac) 16%,transparent);box-shadow:0 0 34px color-mix(in srgb,var(--ac) 45%,transparent)}
+html.fxl .pcard .pctx{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}   /* the engine draws the context as chips; screen readers keep the line */
+html.fxl .pcard{position:absolute;z-index:5;right:var(--gut);top:calc(var(--hdr) + 18svh);width:clamp(250px,20vw,290px);max-width:none;background:var(--glass);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);opacity:0;visibility:hidden}
+html.fxl .dial{display:flex;opacity:0}
+html.fxl .steps-wrap{position:absolute;left:var(--gut);right:var(--gut);bottom:0;z-index:5;padding-bottom:14px;opacity:0}
+html.fxl .steps{gap:20px}
+html.fxl .steps li{padding:12px 0 0;border-top:0;opacity:.45;transition:opacity .3s}
+html.fxl .steps li.on{opacity:1}html.fxl .steps li.done{opacity:.7}
+html.fxl .steps u{display:block;position:absolute;left:0;right:0;top:0;height:1px;background:var(--hair)}
+html.fxl .steps u i{position:absolute;inset:0;background:var(--l1);transform-origin:0 50%;transform:scaleX(0)}
+html.fxl .steps .h{font-size:16px}html.fxl .steps .d{font-size:13px;max-width:34ch}
+html.fxl .steps li:not(.on) .d{visibility:hidden}   /* keeps the row height constant, so switching tab never moves the block (CLS 0) */
+html.fxl .steps li{transition:none}
+html[data-ch="cL"] .cue{display:none}
+@media (max-width:1100px),(max-aspect-ratio:4/5){
+  html.fx .lay .copy{top:calc(var(--hdr) + 54px);width:auto;right:var(--gut)}
+  html.fx .lay .head{font-size:clamp(32px,9.4vw,52px);max-width:none}
+  html.fx .scrim{background:linear-gradient(180deg,color-mix(in srgb,var(--bg) 96%,transparent) 0,color-mix(in srgb,var(--bg) 90%,transparent) 48%,transparent 76%)}
+  html.fx .card{left:var(--gut);right:var(--gut);width:auto;top:calc(var(--hdr) + 62px);bottom:auto}
+  html.fx .card .v small{display:none}
+  html.fx .lay .copy{isolation:isolate}
+  html.fx #c01 .copy::before{content:'';position:absolute;z-index:-1;inset:-52px calc(-1 * var(--gut)) -34px;background:linear-gradient(180deg,transparent 0,color-mix(in srgb,var(--bg) 90%,transparent) 40px,color-mix(in srgb,var(--bg) 90%,transparent) calc(100% - 44px),transparent 100%)}
+  html.fx .micro,html.fx .lay .sub{color:color-mix(in srgb,var(--l1) 84%,transparent)}
+  html.fx .cue{bottom:calc(18px + env(safe-area-inset-bottom,0px))}      /* the hero stack now carries two buttons: the cue goes to the very bottom, below the trust line (the HUD log that stood there is empty while the cue shows) */
+  /* In this layout the footage plate is full-bleed and rises from the bottom edge, where the cue stands, and it is dark in EVERY theme: paper's black ink
+     (and its 66% black text) would be invisible on it. Paper takes the dark theme's ink here: #fff, the value of --l1 in :root. */
+  html[data-theme="paper"].fx .cue{color:#fff}html[data-theme="paper"].fx .cue u{background:#fff}
+  @media (prefers-color-scheme:light){html[data-theme="auto"].fx .cue{color:#fff}html[data-theme="auto"].fx .cue u{background:#fff}}
+  html.fxl .pcard{left:var(--gut);right:var(--gut);width:auto;top:auto;bottom:128px;padding:10px 14px}
+  html.fxl .pcard .crow{padding:3px 0;grid-template-columns:92px minmax(0,1fr) 44px}
+  html.fxl .pcard .ph{display:none}
+  html.fxl .dial{margin-top:6px}
+  html.fxl .steps{gap:0 8px;grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:34px 1px auto auto}
+  html.fxl .steps li{display:contents;opacity:1}
+  html.fxl .steps li u{position:relative;grid-row:2;top:auto;left:auto;right:auto}
+  html.fxl .steps li .n{grid-row:3;margin-top:8px;opacity:.45}html.fxl .steps li .t{grid-row:4;font-size:9px;letter-spacing:.08em;opacity:.45}
+  html.fxl .steps li.on .n,html.fxl .steps li.on .t{opacity:1}html.fxl .steps li.done .n,html.fxl .steps li.done .t{opacity:.7}
+  html.fxl .steps li:nth-child(1)>:not(.h):not(.d){grid-column:1}html.fxl .steps li:nth-child(2)>:not(.h):not(.d){grid-column:2}
+  html.fxl .steps li:nth-child(3)>:not(.h):not(.d){grid-column:3}html.fxl .steps li:nth-child(4)>:not(.h):not(.d){grid-column:4}
+  html.fxl .steps .h,html.fxl .steps .d{display:none!important}
+  html.fxl .steps li.on .h{display:block!important;grid-row:1;grid-column:1/-1;font-size:14px;padding-bottom:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  html.fxl .tk,html.fxl .sent{font-size:14.5px}
+  html.fx #log{left:0;right:0;bottom:0;min-width:0;box-sizing:border-box;height:104px;padding:30px var(--gut) 0;color:var(--l1);text-shadow:none}
+  html.fx #log::before{content:'';position:absolute;inset:0;z-index:-1;background:linear-gradient(0deg,color-mix(in srgb,var(--bg) 92%,transparent) 0,color-mix(in srgb,var(--bg) 78%,transparent) 62%,transparent 100%);transition:opacity .35s ease}
+  html.fx #log:empty::before{opacity:0}
+}
+@media (prefers-reduced-motion:reduce){html.fx *{animation:none!important}}
+/* very small phones (320): the nowrap buttons may wrap instead of being clipped by the stage */
+@media (max-width:359px){.buy{white-space:normal;text-align:center;line-height:1.35;text-wrap:balance;padding:10px 14px;max-width:100%}}
+/* the Spanish hero pair is 338px wide and needs a 370px viewport: from 360 to 369 the unscrolled page lets its two labels wrap as well (the engine lays the hero out on its own and fits) */
+@media (max-width:369px){html:not(.fx) .ctas .buy{white-space:normal;text-align:center;line-height:1.35;text-wrap:balance}}
+/* short phones: the hero copy needs the room the scroll cue would take (the stack carries two buttons now, so «short» reaches 820px of height) */
+@media (max-width:900px) and (max-height:820px){html.fx .cue{display:none}}
+/* The hero stack (eyebrow, three-line headline, bold line, sub, CTA, trust line) now ends where the scroll cue used to stand on wide
+   windows that are not tall (1536x864, 1920x900): on desktop the cue lives in the right gutter, where nothing else is. On a 320px phone
+   the stack is taller than the room under it, so there is no cue there. */
+@media (min-width:901px){html.fx .cue{left:auto;right:var(--gut)}}
+@media (max-width:359px){html.fx .cue{display:none}}
+/* The stage-2A hero carries two lines more than phase 1's (the bold «Enseñada desde la frontera.» line and the trust line under the
+   free CTA). On a short screen the same copy gets tighter, in tiers, so the CTA and its line stay inside the 100svh stage: the stage
+   clips, and a CTA below the fold of a pinned hero is a CTA nobody can press. */
+@media (max-width:1100px) and (max-height:780px){
+  html.fx #c01 .copy{top:calc(var(--hdr) + 22px)}
+  html.fx #c01 .head{margin-top:12px;font-size:clamp(28px,8.4vw,44px)}
+  html.fx #c01 .sub{margin-top:12px;font-size:15.5px;line-height:1.38}
+  html.fx #c01 .sub .h2l{margin-bottom:6px}
+  html.fx #c01 .cta{margin-top:16px;gap:8px}
+  html.fx #c01 .micro{font-size:12.5px;line-height:1.4}
+  html.fx #c01 .buy.big{padding:14px 22px}
+}
+@media (max-width:1100px) and (max-height:640px){
+  html.fx #c01 .copy{top:calc(var(--hdr) + 10px)}
+  html.fx #c01 .head{margin-top:8px;font-size:clamp(26px,7.6vw,38px)}
+  html.fx #c01 .sub{margin-top:8px;font-size:14px;line-height:1.35}
+  html.fx #c01 .cta{margin-top:12px}
+  html.fx #c01 .micro{font-size:12px}
+}
+/* The hero stack now carries the pair of buttons (two buttons, not one). Between 820 and 940px of height the copy rises from its tall-window spot (14svh)
+   to the laptop spot (6svh) in proportion, so the second button and the trust line under it stay inside the pinned stage on 1440x844, 1920x864 and 1920x900
+   with no jump at 820 or at 940. */
+@media (min-width:1101px) and (min-height:821px) and (max-height:939px){
+  html.fx #c01 .copy{top:calc(var(--hdr) + 6svh + (100svh - 820px) * .627)}
+}
+@media (min-width:1101px) and (max-height:820px){   /* laptop windows: everything scales with the height that is there */
+  html.fx #c01 .copy{top:calc(var(--hdr) + 6svh)}
+  html.fx #c01 .head{margin-top:12px;font-size:clamp(30px,min(4.2vw,7.2svh),76px)}
+  html.fx #c01 .sub{margin-top:12px;font-size:clamp(14px,2.45svh,21px);line-height:1.4}
+  html.fx #c01 .sub .h2l{margin-bottom:6px}
+  html.fx #c01 .cta{margin-top:clamp(12px,2.6svh,26px);gap:8px}
+  html.fx #c01 .micro{font-size:12.5px;line-height:1.4}
+  html.fx #c01 .buy.big{padding:15px 24px}
+}
+/* chapter 04's headline is longer too («Por dentro no hay magia. Hay números.»): on a short phone it takes three lines and the engine
+   places the sentence under the copy, so the copy gets tighter to leave the room the step tabs at the bottom need */
+@media (max-width:1100px) and (max-height:640px){
+  html.fxl #cL .copy{top:calc(var(--hdr) + 14px)}
+  html.fxl #cL .head{margin-top:10px;font-size:clamp(25px,7.8vw,34px)}
+  html.fxl #cL .sub{margin-top:10px;font-size:14px;line-height:1.38}
+}
+/* chapter 04 on a desktop: the engine puts the token row at 64% of the height, so the longer headline («Por dentro no hay magia. Hay números.»)
+   takes two lines in a wider column instead of three, and scales with the height of a laptop window; otherwise the row lands on the copy */
+@media (min-width:1101px){html.fxl #cL .head{max-width:min(62vw,940px);font-size:clamp(34px,min(4.2vw,7.4svh),76px)}}
+@media (min-width:1101px) and (max-height:820px){
+  html.fxl #cL .copy{top:calc(var(--hdr) + 7svh)}
+  html.fxl #cL .head{margin-top:12px;font-size:clamp(30px,min(4.2vw,6.6svh),76px)}
+  html.fxl #cL .sub{margin-top:12px;font-size:clamp(14px,2.4svh,21px);line-height:1.4}
+}
+/* 641-790px wide the header wraps to two rows (103px) while --hdr stays 56: on a short landscape phone the copy must clear it */
+@media (min-width:641px) and (max-width:790px) and (max-height:640px){
+  html.fx #c01 .copy,html.fxl #cL .copy{top:calc(var(--hdr) + 36px)}
+}
+/* A landscape phone (932x430, 844x390, 667x375, 568x320) is wide and short. The hero's measure goes full width (the 38vw column that
+   suits a desktop takes four lines per paragraph there) and the sizes follow the height, so the free CTA and its line stay inside the
+   pinned stage: on a grid of 80 landscape and short viewports they were below it on 62 and are on 0 with these three tiers. */
+@media (max-width:1100px) and (max-height:480px){
+  html.fx #c01 .copy{top:calc(var(--hdr) + 8px)}
+  html.fx #c01 .head{max-width:none;margin-top:6px;font-size:clamp(22px,4.6vw,34px)}
+  html.fx #c01 .sub{max-width:none;margin-top:6px;font-size:13px;line-height:1.35}
+  html.fx #c01 .sub .h2l{margin-bottom:4px}
+  html.fx #c01 .cta{margin-top:8px;gap:6px}
+  html.fx #c01 .micro{font-size:11.5px}
+  html.fx #c01 .buy.big{padding:10px 18px}
+}
+@media (min-width:641px) and (max-width:790px) and (max-height:480px){html.fx #c01 .copy{top:calc(var(--hdr) + 44px)}}
+@media (max-width:1100px) and (max-height:380px){
+  html.fx #c01 .head{font-size:clamp(20px,4vw,28px)}
+  html.fx #c01 .sub{font-size:12px;line-height:1.3}
+  html.fx #c01 .rule{display:none}
+  html.fx #c01 .buy.big{padding:8px 16px}
+}
+@media (max-width:1100px) and (max-height:345px){
+  html.fx #c01 .copy{top:calc(var(--hdr) + 4px)}
+  html.fx #c01 .head{margin-top:4px;font-size:clamp(18px,3.6vw,25px)}
+  html.fx #c01 .sub{margin-top:4px;font-size:11.5px;line-height:1.28}
+  html.fx #c01 .sub .h2l{margin-bottom:2px}
+  html.fx #c01 .cta{margin-top:6px}
+  html.fx #c01 .micro{font-size:11px;line-height:1.3}
+  html.fx #c01 .buy.big{padding:7px 14px}
+}
+@media (min-width:641px) and (max-width:790px) and (max-height:345px){html.fx #c01 .copy{top:calc(var(--hdr) + 40px)}}
+/* short landscape: the two buttons of the pair sit side by side (the stack has no room for a second 44px row), in smaller type so both labels fit
+   from 568px of width; the 44px touch target stays */
+@media (max-width:1100px) and (max-height:480px){
+  html.fx #c01 .ctas{grid-auto-flow:column;width:auto;gap:8px}
+  html.fx #c01 .ctas .buy.big{font-size:10.5px;letter-spacing:.12em;padding:0 14px;gap:8px}
+}
+/* chapter 01's eyebrow is scrambled in by the engine and its final text («01 — IA DESDE CERO · 12 LECCIONES · ES/EN») takes two lines on a
+   phone: it reserves both from the first frame, with the dot on the first line, so the headline under it never moves (CLS 0) */
+@media (max-width:460px){
+  html.fx #c01 .label{align-items:flex-start;min-height:calc(2 * 1.4em)}
+  html.fx #c01 .label i{margin-top:.34em}
+}
+/* at 320 the header wraps to three rows (155px), taller than the 100px the rest of the page assumes for phones */
+@media (max-width:359px){:root{--hdr:154px}
+  html.fx #c01 .ctas .buy.big{font-size:10.5px;letter-spacing:.1em;padding:0 10px;gap:8px}}      /* both labels fit on one line in 288px */
+@media (max-width:359px) and (max-height:700px){html.fx #c01 .rule{display:none}}
+@media (max-width:359px) and (max-height:640px){
+  html.fx #c01 .copy{top:calc(var(--hdr) - 8px)}
+  html.fx #c01 .head{font-size:25px}
+  html.fx #c01 .sub{font-size:13.5px}
+  html.fx #c01 .cta{margin-top:10px;gap:6px}
+  html.fx #c01 .ctas{gap:8px}
+}
+
+
+/* ---------- STAGE 2A · the Hormozi chapters 02, 03, 05–08, 10–16. STATIC, AEGIS tokens only (no new color). Each chapter carries a
+   data-fx name and data-* hooks: those are what stage 2B animates, so the markup below is the state the motion lands on. ---------- */
+.cx .sh{flex-wrap:nowrap;align-items:center;gap:12px 18px;border-top:1px solid var(--hair);padding-top:16px;padding-bottom:26px}
+.cx .sn{flex:1 1 auto;min-width:0;line-height:1.5}
+.cx .sx{flex:none;margin-left:auto;font:500 10px/1 var(--m);letter-spacing:.18em;color:var(--l3);font-variant-numeric:tabular-nums}
+.hx{font:700 clamp(30px,4.6vw,66px)/1.02 var(--f);letter-spacing:-.045em;text-wrap:balance;max-width:22ch}
+.hx.wide{max-width:27ch}
+.hx.xl{font-size:clamp(46px,9vw,136px);line-height:.92;letter-spacing:-.058em;max-width:11ch}
+.cx .lede{margin-top:22px;max-width:52ch;padding-bottom:0}
+.cx .lede + .grid2{margin-top:44px}
+.xsub{margin:18px 0 34px;font:500 10px/1.4 var(--m);letter-spacing:.18em;color:var(--l3)}
+.ctarow{display:flex;align-items:center;flex-wrap:wrap;gap:16px 26px;margin-top:60px;padding-top:28px;border-top:1px solid var(--hair2)}
+.ctarow p{flex:1 1 260px;font:500 10px/1.6 var(--m);letter-spacing:.14em;color:var(--l3)}
+.buy.ghost{background:transparent;color:var(--l1);border:1px solid var(--hair)}
+.buy.ghost:hover:not(:disabled){background:var(--ac);color:var(--on-ac,#fff);border-color:var(--ac)}
+.buy.ghost:disabled{opacity:.45;cursor:default}
+
+/* 02 · te ha pasado: three chat windows, one per case. A chat's look (the user's message in a soft grey pill on the right, the answer as plain text, a composer at the bottom) in our straight HUD
+   frame, with our mark where a chat shows its name. The pill, the composer, its send button, the dot and the ghosts are rounded: the owner's one exception, and only inside the windows.
+   The diagnosis tag is outside, under its window, square, with a leader line up to it. Colours are the page's tokens: a dark chat in dark, a light chat in paper. */
+.cases{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:52px 28px;margin:54px 0 0}
+.case{display:flex;flex-direction:column;min-width:0}
+.bn{margin:0 0 12px;font:600 11px/1 var(--m);letter-spacing:.18em;color:var(--ac)}
+.cw{position:relative;flex:1;display:flex;flex-direction:column;margin:0;border:1px solid var(--hair);background:var(--panel)}
+.cwh{display:flex;align-items:center;padding:16px 18px 2px;--lg:22px}
+.cwb{position:relative;flex:1;display:flex;flex-direction:column;gap:16px;padding:14px 18px 26px}
+.sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+.you{align-self:flex-end;max-width:86%;padding:10px 16px;border-radius:20px;background:var(--fill);font:400 clamp(15px,1.1vw,16px)/1.45 var(--f);color:var(--l1)}
+.you.faint{opacity:.62}
+.gap{align-self:center;padding:2px 0;font:500 10px/1.5 var(--m);letter-spacing:.14em;color:var(--l3);text-align:center}
+.ia{position:relative;font:400 clamp(15px,1.1vw,16px)/1.65 var(--f);color:var(--l1)}
+.ctx{position:relative;display:flex;flex-direction:column;gap:16px;padding-left:16px}
+.ctx::before{content:'';position:absolute;left:0;top:0;bottom:0;width:7px;border:1px solid var(--ac);border-right:0}
+.cwc{display:flex;align-items:center;justify-content:space-between;margin:0 14px 14px;min-height:52px;padding:7px 7px 7px 20px;border-radius:26px;background:var(--fill)}
+.caret{width:2px;height:20px;background:var(--l1)}
+.send{display:grid;place-items:center;flex:none;width:36px;height:36px;border-radius:50%;background:var(--btn-bg);color:var(--btn-fg)}
+.tag{position:relative;display:flex;align-items:flex-start;gap:10px;align-self:flex-start;max-width:100%;margin-top:18px;padding:9px 13px;border:1px solid var(--ac);font:600 11px/1.5 var(--m);letter-spacing:.1em;color:var(--l1)}
+.tag::before{content:'';position:absolute;left:18px;bottom:100%;width:1px;height:18px;background:var(--ac)}
+.tag i{flex:none;width:7px;height:7px;margin-top:5px;background:var(--ac)}
+.tag a{text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:3px}
+.tag a:hover{color:var(--ac)}
+.tag a:focus-visible{outline:1px solid var(--l1);outline-offset:3px}
+.shout{margin-top:46px;max-width:22ch;font:700 clamp(26px,3.4vw,50px)/1.06 var(--f);letter-spacing:-.04em;text-wrap:balance}
+@media (max-width:1099px){.cases{grid-template-columns:minmax(0,1fr);max-width:640px}}
+
+/* 03 · qué cambia: ONE display headline (the h2). Under it a drawing of the process the chapter is about (the request as its real tokens, the three things it lacked as accent chips, the
+   distribution over the next word going from flat to one winner: ILUSTRATIVO), then three plates whose title is a mono label, not a second headline. Square, flat, hairline: no round shapes. */
+.sharp{position:relative;display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);margin:40px 0 0;padding:34px 36px;border:1px solid var(--hair);background:var(--panel)}
+.spl{display:flex;flex-direction:column;align-items:flex-start;gap:14px;min-width:0;padding-right:40px}
+.spr{display:flex;flex-direction:column;gap:20px;min-width:0;padding-left:40px;border-left:1px solid var(--hair2)}
+.sq,.sl{display:flex;flex-wrap:wrap;gap:8px}
+.sl{margin-top:18px}
+.sk{display:inline-flex;align-items:center;min-height:42px;padding:0 14px;border:1px solid var(--hair);background:var(--bg);font:400 clamp(15px,1.5vw,20px)/1 var(--m);color:var(--l1);white-space:nowrap}
+.sk.ask{border-color:var(--ac);color:var(--ac);font:600 clamp(11px,1vw,12px)/1 var(--m);letter-spacing:.16em}
+.src{margin:0;font:500 10px/1.4 var(--m);letter-spacing:.16em;color:var(--l3)}
+.ilt{margin:0;display:flex;align-items:center;gap:8px;font:500 10px/1 var(--m);letter-spacing:.18em;color:var(--ac)}
+.ilt em{font-style:normal}
+.sb{position:relative;display:flex;align-items:flex-end;justify-content:space-between;gap:6px;height:clamp(124px,13vw,176px);border-bottom:1px solid var(--hair)}
+.bw{flex:1 1 0;min-width:0;max-width:40px;height:100%;display:flex;align-items:flex-end}
+.bw i{display:block;width:100%;height:100%;background:var(--l3);transform-origin:50% 100%;transform:scaleY(var(--v))}
+.bw i.hi{background:var(--ac)}
+.trio{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin-top:48px;border-top:1px solid var(--hair)}
+.tri{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:baseline;column-gap:14px;align-content:start;padding:26px 32px 36px 0}
+.tri + .tri{padding-left:32px;border-left:1px solid var(--hair2)}
+.tri .no{font:600 11px/1 var(--m);letter-spacing:.2em;color:var(--ac)}
+.tri h3{margin:0;font:600 12px/1.3 var(--m);letter-spacing:.2em;text-transform:uppercase;color:var(--l1);overflow-wrap:anywhere}
+.tri p{grid-column:1/-1;margin:16px 0 0;max-width:36ch;font:400 clamp(16px,1.3vw,18px)/1.55 var(--f);color:var(--l2)}
+
+/* 05 · cifras: six figures. The size of each comes from its container, so «70.000.000.000» never leaves its plate */
+.figs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-top:1px solid var(--hair);border-left:1px solid var(--hair)}
+.fig{position:relative;container-type:inline-size;display:flex;flex-direction:column;gap:14px;min-width:0;padding:30px 28px 32px;border-right:1px solid var(--hair);border-bottom:1px solid var(--hair);background:var(--panel)}
+.fig .ie{padding-right:36px;font:600 10px/1.3 var(--m);letter-spacing:.18em;color:var(--ac)}
+.fig .no{position:absolute;right:24px;top:26px;font:700 14px/1 var(--m);color:var(--l3)}
+.fig .big{margin:26px 0 2px;font:700 44px/.95 var(--f);letter-spacing:-.055em;white-space:nowrap}
+.fig .k-xs{font-size:min(30cqw,92px)}.fig .k-s{font-size:min(17cqw,66px)}.fig .k-m{font-size:min(11.5cqw,46px)}
+.fig .k-l{font-size:min(9.4cqw,36px);line-height:1;white-space:normal}
+.fig .cap{font:400 14px/1.5 var(--f);color:var(--l2)}
+/* 05 · under five of the six figures, a drawing of the process it measures (V3Viz: aria-hidden, ILUSTRATIVO). The HTML draws the FINISHED picture; fx/c05v.ts plays it once. Square, flat,
+   hairline: no round shape. Sizes come from the drawing's own width (cqw), so a card of 248px and one of 376px draw the same picture. */
+.viz{display:flex;flex-direction:column;gap:9px;margin:4px 0 2px}
+.vz-tag{margin:0;align-self:flex-end;display:flex;align-items:center;gap:8px;font:500 10px/1 var(--m);letter-spacing:.18em;color:var(--ac)}
+.vz-tag em{font-style:normal}
+.vz-g{position:relative;container-type:inline-size;height:96px}
+.vz-eg{--t:clamp(26px,9cqw,36px);--s:clamp(42px,14cqw,56px);display:flex;align-items:center;justify-content:flex-end;gap:clamp(12px,5cqw,22px);overflow:hidden}
+.vz-eg::before{content:'';position:absolute;left:0;right:0;top:50%;border-top:1px solid var(--hair2)}
+.vz-q{display:flex;gap:clamp(5px,2cqw,8px)}
+.vz-t{position:relative;display:block;flex:none;width:var(--t);height:var(--t);border:1px solid var(--hair);background:var(--bg)}
+.vz-t::before{content:'';position:absolute;left:var(--a,20%);top:var(--b,28%);width:34%;height:34%;background:var(--l3)}
+.vz-t::after{content:'';position:absolute;left:0;right:0;bottom:28%;border-top:1px solid var(--hair)}
+.vz-s{position:relative;flex:none;width:var(--s);height:var(--s);border:1px solid var(--ac);background:var(--bg)}
+.vz-f{position:absolute;inset:4px;background:var(--ac);transform-origin:50% 100%}
+.vz-c{position:absolute;inset:0}
+.vz-c svg{display:block;width:100%;height:100%;overflow:visible}
+.vz-ax{fill:none;stroke:var(--hair);stroke-width:1;vector-effect:non-scaling-stroke}
+.vz-ln{fill:none;stroke:var(--l1);stroke-width:2;vector-effect:non-scaling-stroke}
+.vz-m{position:absolute;width:9px;height:9px;margin:-4.5px 0 0 -4.5px;background:var(--ac)}
+.vz-dl{height:auto;display:grid;grid-template-columns:repeat(var(--cols),minmax(0,1fr));gap:clamp(3px,1.4cqw,6px);align-content:start}
+.vz-dl i{position:relative;aspect-ratio:1;border:1px solid var(--hair);background:var(--bg)}
+.vz-dl i::after{content:'';position:absolute;left:50%;top:50%;width:2px;height:36%;margin:-36% 0 0 -1px;background:var(--l1);transform-origin:50% 100%;transform:rotate(var(--fx-r,var(--r,0deg)))}
+.vz-fz{display:flex;flex-direction:column;justify-content:space-between}
+.vz-w{position:relative;display:flex;align-items:flex-end;gap:clamp(2px,1cqw,4px);height:66px;border-bottom:1px solid var(--hair)}
+.vz-w i{position:relative;flex:1 1 0;min-width:0;height:calc(var(--h)*100%);background:var(--l3);box-shadow:inset 0 2px 0 var(--l1);transform-origin:50% 100%}
+.vz-a{display:flex;justify-content:flex-end;gap:clamp(5px,2cqw,8px);height:14px}
+.vz-a b{display:block;width:clamp(16px,7cqw,28px);height:14px;border:1px solid var(--hair);background:var(--bg)}
+.vz-sk{display:flex;flex-direction:column;justify-content:center;gap:9px}
+.vz-r{display:flex;justify-content:space-between;height:8px}
+.vz-r i{width:1px;height:100%;background:var(--hair)}
+.vz-r i:first-child,.vz-r i:last-child{background:var(--l2)}
+.vz-b{display:flex;height:32px}
+.vz-b i{flex:0 0 calc(var(--w)*1%);min-width:0;background:var(--l3);box-shadow:inset -1px 0 0 var(--panel)}
+.vz-b i:first-child{background:var(--ac)}
+.vz-k{height:8px;border:1px solid var(--l2);border-top:0;transform-origin:0 50%}
+.figs-sec{padding-bottom:0}
+
+/* 06 · lo que no necesitas: the six words struck out, then the line */
+.nots{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-top:1px solid var(--hair);border-left:1px solid var(--hair)}
+.nots li{padding:34px 28px;border-right:1px solid var(--hair);border-bottom:1px solid var(--hair);background:var(--panel)}
+.nots s{font:700 clamp(26px,3.4vw,52px)/1 var(--f);letter-spacing:-.045em;color:var(--l3);text-decoration:line-through;text-decoration-thickness:2px;text-decoration-color:var(--l1)}
+.cx .hx.xl[data-final]{margin-top:64px;max-width:13ch}
+
+/* 07 · el tiempo: the twelve lesson titles as their real tokens, one row each in the course's order (the finished pile; src/aegis/fx/c07.ts drops the chips into it), the course's minutes under
+   them; then the four figures. Every class is stk-, apart from the counter's. The chip text, its padding and the rows scale with the pile's own width, so a row never outgrows it, and the text is never under
+   10px, the page's floor for mono labels: where the pile is narrower than 300px (a 320px phone gives it 288) the padding is tighter, which is what keeps the widest row (lesson 09) inside */
+.time{display:grid;grid-template-columns:minmax(0,340px) minmax(0,1fr);gap:40px 72px;align-items:center}
+.stk{container-type:inline-size;width:100%;max-width:340px;display:grid;gap:14px}
+.stk-src{margin:0;font:500 10px/1.4 var(--m);letter-spacing:.16em;color:var(--l3)}
+.stk-rows{--tf:clamp(10px,3.1cqw,11px);position:relative;overflow:hidden;display:grid;gap:calc(var(--tf) * .45);padding:1px}
+.stk-r{display:flex;gap:calc(var(--tf) * .3);height:calc(var(--tf) * 2.1);white-space:nowrap}
+.stk-t{position:relative;flex:none;display:flex;align-items:center;padding:0 .5em;border:1px solid var(--hair);background:var(--panel);font:500 var(--tf)/1 var(--m);color:var(--l2)}
+.stk-t::after{content:'';position:absolute;inset:-1px;border:1px solid var(--ac);opacity:var(--fx-l,0)}
+@container (max-width:300px){.stk-t{padding:0 .35em}}
+.stk .ctr{display:flex;align-items:baseline;gap:14px;padding-top:12px;border-top:1px solid var(--hair2)}
+.stk .ctr b{font:700 clamp(56px,6.4vw,96px)/1 var(--f);letter-spacing:-.06em;font-variant-numeric:tabular-nums}
+.stk .ctr span{font:500 11px/1 var(--m);letter-spacing:.32em;color:var(--l3)}
+.specs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));margin:60px 0 0;border-top:1px solid var(--hair)}
+.srow{padding:26px 24px 30px 0}
+.srow + .srow{padding-left:24px;border-left:1px solid var(--hair2)}
+.srow dt{font:700 clamp(44px,4.8vw,70px)/1 var(--f);letter-spacing:-.055em;font-variant-numeric:tabular-nums}
+.srow dd{margin:14px 0 0;max-width:24ch;font:400 15px/1.45 var(--f);color:var(--l2)}
+
+/* 08 · prueba: the temperature specimen asks the dog question; «Pídele un nombre» draws from the very distribution the bars show */
+.spec .pctx{font:400 16px/1.4 var(--m);color:var(--l1)}
+.spec .ph{margin:-6px 0 -8px;font:500 10px/1.35 var(--m);letter-spacing:.16em;color:var(--l3)}
+.askrow{display:flex;flex-wrap:wrap;align-items:center;gap:12px 16px;border-top:1px solid var(--hair);padding-top:18px}
+.picks{display:flex;flex-wrap:wrap;align-items:center;gap:8px;min-height:36px}
+.pk{padding:8px 12px;border:1px solid var(--hair);font:500 13px/1 var(--m)}
+.pk.new{border-color:var(--ac);color:var(--ac)}
+
+/* 10 · la oferta: seven items down a spine. Stage 2B docks them one by one */
+.stack{position:relative;list-style:none;margin:50px 0 0;padding:0;border-top:1px solid var(--hair)}
+.stack::before{content:'';position:absolute;left:27px;top:0;bottom:0;width:1px;background:var(--hair)}
+.stack li{display:grid;grid-template-columns:54px minmax(0,1fr);gap:0 20px;align-items:start;padding:24px 0;border-bottom:1px solid var(--hair2)}
+.stack .no{position:relative;z-index:1;width:54px;padding:5px 0;background:var(--bg);text-align:center;font:700 13px/1 var(--m);letter-spacing:.06em;color:var(--ac)}
+.stack .it{display:flex;flex-direction:column;gap:6px;min-width:0}
+.stack .t{max-width:68ch;font:700 clamp(17px,1.6vw,21px)/1.3 var(--f);letter-spacing:-.02em;color:var(--l1)}
+.stack .d{max-width:68ch;font:400 clamp(15px,1.4vw,18px)/1.5 var(--f);color:var(--l2)}
+
+/* 11 · garantía: the seal. The ring of text turns in stage 2B; the 14 stays */
+.gar{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,.8fr);gap:40px 72px;align-items:center}
+.seal{position:relative;width:min(100%,360px);aspect-ratio:1;justify-self:center}
+.seal svg{display:block;width:100%;height:100%;overflow:visible}
+.seal .sr{stroke:var(--hair);stroke-width:1}.seal .sr2{stroke:var(--hair2);stroke-width:1}
+.seal .st{font:600 10.5px var(--m);fill:var(--l2)}
+.seal .core{position:absolute;inset:0;display:grid;place-items:center;font:700 clamp(96px,13vw,168px)/1 var(--f);letter-spacing:-.07em}
+
+/* 12 · quién: the bio plate (HUD corners), the claim and what backs it */
+.bio-l{font:700 clamp(28px,3.4vw,50px)/1.05 var(--f);letter-spacing:-.045em;text-wrap:balance}
+.bio-h{display:flex;flex-direction:column;gap:20px}
+.bio-body{font:400 clamp(16px,1.4vw,18px)/1.6 var(--f);color:var(--l2)}
+.bio-em{padding-left:16px;border-left:2px solid var(--ac);font:700 clamp(20px,2vw,28px)/1.2 var(--f);letter-spacing:-.03em}
+.bio-close{padding-top:20px;border-top:1px solid var(--hair2);font:500 15px/1.55 var(--f);color:var(--l2)}
+/* 12 · the harness as a loop (V3Loop.astro; src/aegis/fx/c12v.ts plays it once). The markup is the finished picture: the loop at rest. Square, flat, hairline; every class is lp- and styled only here.
+   On a wide screen it sits under the heading and the text takes both rows of the right column; on a narrow one it follows the text. */
+.bio{grid-template-rows:auto 1fr}
+.bio-l{grid-column:1;grid-row:1}
+.bio-h{grid-column:2;grid-row:1 / span 2}
+.lp{grid-column:1;grid-row:2;align-self:start;container-type:inline-size;display:flex;flex-direction:column;gap:14px;min-width:0;pointer-events:none;user-select:none}
+@media (max-width:900px){.bio{grid-template-rows:none}.bio-l,.bio-h,.lp{grid-column:1;grid-row:auto}}
+.lp-tag{margin:0;display:flex;align-items:center;gap:8px;font:500 10px/1 var(--m);letter-spacing:.18em;color:var(--ac)}
+.lp-tag em{font-style:normal}
+.lp-fig{position:relative;width:100%;aspect-ratio:16/10;--sq:clamp(8px,2.6cqw,12px);--tk:clamp(5px,1.7cqw,8px);--tg:clamp(3px,1.1cqw,6px)}
+@container (max-width:300px){.lp-fig{aspect-ratio:4/3}}                /* the chips are 10px at every width: on the narrowest phones the drawing is taller, so WORKFLOWS, SKILLS and the track's corner keep their air */
+.lp-fig > *{position:absolute}
+.lp-wf{inset:0;border:1px solid var(--hair)}
+.lp-c{display:block;padding:.5em .75em;border:1px solid var(--hair);background:var(--bg);font:500 10px/1 var(--m);letter-spacing:.14em;text-transform:uppercase;color:var(--l2);white-space:nowrap}
+.lp-c::after{content:'';position:absolute;inset:-1px;border:1px solid var(--ac);opacity:var(--fx-l,0)}
+.lp-wl{left:3%;top:0;translate:0 -50%}
+.lp-ag{left:50%;top:calc(var(--y) + var(--h) / 2);translate:-50% -50%}
+.lp-sk{left:var(--x);top:8%}
+.lp-hk{right:calc(100% - var(--x) - var(--w));top:8%}
+.lp-e{background:var(--l3)}
+.lp-e0{left:var(--x);top:var(--y);width:var(--w);height:1px;transform-origin:0 0}
+.lp-e1{left:calc(var(--x) + var(--w));top:var(--y);width:1px;height:var(--h);transform-origin:0 0}
+.lp-e2{left:var(--x);top:calc(var(--y) + var(--h));width:var(--w);height:1px;transform-origin:100% 0}
+.lp-e3{left:var(--x);top:var(--y);width:1px;height:var(--h);transform-origin:0 100%}
+.lp-s,.lp-p,.lp-k,.lp-g{width:var(--sq);height:var(--sq);margin:calc(var(--sq) / -2) 0 0 calc(var(--sq) / -2)}
+.lp-s{border:1px solid var(--l1);background:var(--bg)}
+.lp-p{border:1px solid var(--ac);opacity:0}
+.lp-k,.lp-g{background:var(--ac)}
+.lp-g{left:var(--x);top:var(--y);opacity:0}
+.lp-s0,.lp-p0,.lp-k,.lp-s3,.lp-p3{left:var(--x)}
+.lp-s1,.lp-p1,.lp-s2,.lp-p2{left:calc(var(--x) + var(--w))}
+.lp-s0,.lp-p0,.lp-k,.lp-s1,.lp-p1{top:var(--y)}
+.lp-s2,.lp-p2,.lp-s3,.lp-p3{top:calc(var(--y) + var(--h))}
+.lp-b{left:var(--x);width:var(--w);bottom:5%;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.lp-q{display:flex;gap:var(--tg)}
+.lp-t{display:block;width:var(--tk);height:var(--tk);background:var(--ac)}
+.lp-pl{position:relative}
+
+/* 13 · para quién */
+.para{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));border:1px solid var(--hair);background:var(--panel)}
+.pcol{padding:36px 36px 40px}
+.pcol + .pcol{border-left:1px solid var(--hair)}
+.pcol h2{font:700 clamp(26px,2.8vw,40px)/1.05 var(--f);letter-spacing:-.042em}
+.pcol ul{list-style:none;margin:28px 0 0;padding:0}
+.pcol li{position:relative;padding:17px 0 17px 34px;border-top:1px solid var(--hair2);font:400 16px/1.5 var(--f)}
+.pcol li::before{content:'+';position:absolute;left:0;top:17px;font:700 15px/1.5 var(--m);color:var(--ac)}
+.pcol.no li{color:var(--l2)}
+.pcol.no li::before{content:'\00d7';color:var(--l3)}
+
+/* 14 · precio: the prod block plus a 30-segment bar (30 days) */
+.segbar{display:grid;grid-template-columns:repeat(30,minmax(0,1fr));gap:2px;height:8px;margin-top:-6px}
+.segbar i{display:block;background:var(--ac)}
+
+/* 16 · cierre: the three steps as a constellation of nodes on one line */
+.steps3{position:relative;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0 28px;list-style:none;margin:6px 0 0;padding:0 0 48px;border-bottom:1px solid var(--hair2)}
+.steps3::before{content:'';position:absolute;left:0;right:0;top:7px;height:1px;background:var(--hair)}
+.steps3 li{position:relative;padding-top:34px}
+.steps3 li i{position:absolute;left:0;top:0;width:15px;height:15px;border:1px solid var(--ac);background:var(--bg)}
+.steps3 li i::after{content:'';position:absolute;inset:3px;background:var(--ac)}
+.steps3 p{max-width:26ch;font:600 clamp(17px,1.6vw,21px)/1.3 var(--f);letter-spacing:-.02em}
+.close .ctarow{margin-top:34px;margin-bottom:56px;padding-top:0;border-top:0}
+/* 15 · faq: the heading keeps clear of the list's top rule (descenders of «Preguntas») */
+#c15 .hx{margin-bottom:40px}
+
+@media (max-width:1100px){
+  .figs{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .specs{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .srow:nth-child(odd){padding-left:0;border-left:0}
+  .srow:nth-child(n+3){border-top:1px solid var(--hair2)}
+  .nots{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:900px){
+  .cx .sh{padding-bottom:20px}
+  .cwh{padding:14px 14px 0}.cwb{padding:12px 14px 22px}.cwc{margin:0 10px 10px}
+  .sharp{grid-template-columns:minmax(0,1fr);margin-top:30px;padding:26px 20px}
+  .spl{padding-right:0}
+  .spr{padding:24px 0 0;margin-top:26px;border-left:0;border-top:1px solid var(--hair2)}
+  .sb{height:124px}
+  .trio{grid-template-columns:1fr;margin-top:34px}
+  .tri,.tri + .tri{padding:24px 0 28px;border-left:0;border-top:1px solid var(--hair2)}
+  .tri:first-child{border-top:0}
+  .time,.gar{grid-template-columns:1fr;gap:34px}
+  .seal{width:min(100%,300px)}
+  .para{grid-template-columns:1fr}
+  .pcol{padding:28px 22px 30px}
+  .pcol + .pcol{border-left:0;border-top:1px solid var(--hair)}
+  .steps3{grid-template-columns:1fr;gap:26px 0;margin-top:0;padding-bottom:40px}
+  .steps3::before{left:7px;right:auto;top:0;bottom:40px;width:1px;height:auto}
+  .steps3 li{padding:0 0 0 38px}
+  .steps3 li i{top:2px}
+  .stack li{grid-template-columns:42px minmax(0,1fr);gap:0 14px}
+  .stack::before{left:21px}.stack .no{width:42px}
+  .ctarow{margin-top:44px}
+}
+@media (max-width:640px){
+  .figs{grid-template-columns:1fr}
+  .nots li{padding:24px 18px}
+  .specs{margin-top:44px}
+  .hx.xl{max-width:none}
+  .meta{line-height:1.55}
+}
+/* below 360 the longest struck words («computador», «background») are 140px at 26px in a cell 106px wide: they ran under the next cell. Less padding and a size that follows the
+   width (21px at 320, 24px at 359) keep every word inside its own cell */
+@media (max-width:359px){.nots li{padding:24px 12px}.nots s{font-size:clamp(18px,6.6vw,26px)}}
+
+/* ---------- the end of the page: a BLACK plate in every theme (paper, auto-light and dark alike). Its tokens are the dark ones of theme-css.ts, scoped to it by v3.astro (.endp{--bg:#000;--l1:…}),
+   so its text and hairlines are the light ones and nothing in it follows the page's theme. A straight cut at the top (no gradient, no corners). It holds the brand row, the legal line and the wordmark ---------- */
+.endp{position:relative;z-index:2;background:var(--bg);color:var(--l1)}
+.endp .foot{margin-left:max(var(--gut),calc(50% - 620px + var(--gut)));margin-right:max(var(--gut),calc(50% - 620px + var(--gut)))}
+.endp .foot:first-child{border-top:0;padding-top:44px}
+/* the wordmark: «AI FROM SCRATCH», the outlines of its letters (src/aegis/wordmark.ts). Static = the outline, fully drawn; the effect is in the stage-2B block */
+.wmk{--wm-ink:242,244,246;--wm-ls:.15;--wm-fs:.022;position:relative;overflow:hidden;padding:32px var(--gut) 0;line-height:0}
+.wmk .wmg{position:absolute;inset:0;background:radial-gradient(ellipse 58% 100% at 50% 100%,rgba(242,244,246,.075),transparent);pointer-events:none}   /* a halo rising from the bottom edge of the page, gone before the top and the sides of the band: no visible edge */
+.wmk .wmr{position:relative}
+.wmk svg{display:block;width:100%;height:auto;overflow:visible}
+.wmk .wm2{display:none}
+.wmk path{fill:none;vector-effect:non-scaling-stroke}          /* the stroke keeps its pixel width (and its dashes their pixel length) at every size of the mark */
+.wmk path.o{fill:rgba(var(--wm-ink),var(--wm-fs));stroke:rgba(var(--wm-ink),var(--wm-ls));stroke-width:1.2}
+@keyframes fx-wm-lap{from{stroke-dashoffset:var(--fx-P)}to{stroke-dashoffset:0}}
+/* chapter 02's two loops (the composer's caret, the stream's dot); keyframes stay above the stage-2B block, whose rules are all checked against what an effect owns */
+@keyframes fx-caret{0%,55%{opacity:1}56%,100%{opacity:0}}
+@keyframes fx-dot{0%,100%{transform:scale(.78);opacity:.55}50%{transform:scale(1.12);opacity:1}}
+@media (max-width:640px){.wmk .wm1{display:none}.wmk .wm2{display:block}.wmk{--wm-ls:.24;--wm-fs:.03;padding-top:24px}}
+
+/*! ---------- STAGE 2B · chapter effects (src/aegis/fx). Everything here hangs on html.fxl (the engine is attached) and on attributes or classes the effect itself
+   sets, so without the engine (no WebGL2, reduced motion, declined, still loading) none of it exists and the chapters above are the whole page. ---------- */
+/* 02: a window is armed (its pill, its answer and its tag waiting) only while it is below the viewport. The answer streams through .ty, an overlay laid over the real text, which stays in the
+   page and is hidden until the stream ends; .ty holds the same text (what has come, what is still to come in transparent ink), so the answer wraps exactly as it will when it is final. Its dot is a
+   separate absolute part moved with transform (a dot that moved by layout would count as a layout shift).
+   The composer's caret blinks while the effect is attached ([data-fx-live] on the section). The ghosts are the messages that pass through the context bracket of the second case. */
+html.fxl [data-fx-s="arm"] .you:not(.faint),html.fxl [data-fx-s="arm"] .gap,html.fxl [data-fx-s="arm"] .rp,html.fxl [data-fx-s="run"] .rp{opacity:0}
+html.fxl [data-fx-s="arm"] .tag,html.fxl [data-fx-s="run"] .tag{opacity:0}
+html.fxl [data-fx-live] .caret{animation:fx-caret 1.1s linear infinite}
+html.fxl .ty{position:absolute;left:0;right:0;top:0;pointer-events:none;contain:layout}
+html.fxl .ty .off{color:transparent}
+html.fxl .ty .cur{position:absolute;left:0;top:0;width:0;height:0;will-change:transform}
+html.fxl .ty .cur::after{content:'';position:absolute;left:3px;top:-.3em;width:.6em;height:.6em;border-radius:50%;background:var(--l1);animation:fx-dot .9s ease-in-out infinite}
+html.fxl .gh{position:absolute;left:16px;top:var(--fx-t);width:var(--fx-w);height:30px;border-radius:15px;background:var(--fill);pointer-events:none}
+/* 03: the panel is drawn by the effect once (arm, run, clear); while it plays its chips and bars are promoted. The winner's bar lights up with the distribution: its accent is an overlay
+   whose opacity is the effect's --fx-s (an opacity is cheap to animate, a colour is not). Everything else the effect writes is a transform or an opacity. */
+html.fxl [data-sharp][data-fx-s="run"] .sk,html.fxl [data-sharp][data-fx-s="run"] .bw i{will-change:transform,opacity}
+html.fxl [data-sharp][data-fx-s] .bw i.hi{position:relative;background:var(--l3)}
+html.fxl [data-sharp][data-fx-s] .bw i.hi::after{content:'';position:absolute;inset:0;background:var(--ac);opacity:var(--fx-s,0)}
+/* the pinned stage (05 and 06): the section is tall and its stage pins; `pin` is added with the engine, only if everything in the stage fits the viewport's height */
+html.fxl .pin{padding:0}
+html.fxl .pin .pstage{position:sticky;top:0;height:100svh;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-start;justify-content:safe center;padding:calc(var(--hdr) + 18px) 0 40px}
+/* 05: the page's vertical scroll slides the track sideways. The length of the track is CSS (six cards and the page's own side padding, less one screen) */
+html.fxl #c05.pin{--fx-cw:clamp(300px,30vw,460px);--fx-pad:max(var(--gut),calc(50vw - 620px + var(--gut)));height:calc(100svh + max(0px,6 * var(--fx-cw) + 2 * var(--fx-pad) - 100vw))}
+html.fxl #c05.pin .sh{padding-left:var(--fx-pad);padding-right:var(--fx-pad)}
+html.fxl .pin .figs{position:relative;display:flex;width:max-content;border:0;padding:0 var(--fx-pad);will-change:transform}
+html.fxl .pin .fig{flex:0 0 var(--fx-cw);min-height:clamp(300px,54svh,480px);justify-content:space-between;border-top:1px solid var(--hair)}
+html.fxl .pin .fig:first-child{border-left:1px solid var(--hair)}
+html.fxl .pin .big{margin:0;will-change:transform}
+html.fxl .pin .rail{height:1px;margin:26px var(--fx-pad) 0;background:var(--hair)}
+html.fxl .pin .rail i{display:block;height:100%;background:var(--l1);transform-origin:0 50%;transform:scaleX(0)}
+@media (max-width:900px){html.fxl #c05.pin{--fx-cw:min(78vw,340px)}}
+/* 05: the drawings play once (arm, run, clear; fx/c05v.ts). `vx` is a part the effect adds (the tiles that go into the slot, the scan lines): empty, aria-hidden, absolute. While a drawing
+   plays what moves is promoted; the frozen weights are lit by an overlay whose opacity is the effect's --fx-l (a colour is not cheap to animate, an opacity is). */
+html.fxl .vx{position:absolute;pointer-events:none}
+html.fxl .vz-eg .vx{left:0;top:calc(50% - var(--t)/2)}
+html.fxl .vx.vz-sc{top:0;bottom:0;width:1px;height:auto;background:var(--ac);box-shadow:none}
+html.fxl [data-viz][data-fx-s="run"] .vz-t,html.fxl [data-viz][data-fx-s="run"] .vz-m,html.fxl [data-viz][data-fx-s="run"] .vz-a b,html.fxl [data-viz][data-fx-s="run"] .vx{will-change:transform,opacity}
+html.fxl [data-viz][data-fx-s] .vz-w i::after{content:'';position:absolute;inset:0;background:var(--ac);opacity:var(--fx-l,0)}
+/* 06: scrubbed by the scroll. The particles are a canvas over the stage; the stage keeps the page's own side padding */
+html.fxl #c06.pin{--fx-len:2.6;height:calc(var(--fx-len) * 100svh)}
+html.fxl #c06.pin .pstage{padding-left:max(var(--gut),calc(50% - 620px + var(--gut)));padding-right:max(var(--gut),calc(50% - 620px + var(--gut)))}
+html.fxl #c06.pin .hx{will-change:transform,opacity,filter}
+html.fxl .imp{position:absolute;inset:0;width:100%;height:100%;z-index:3;pointer-events:none}
+/* 07: the chips fall into the pile once, only if it was below the viewport when the engine attached ([data-fx-s] is set then); a chip lands on its bottom edge. Its counter is an overlay on the
+   number: the real text stays in the page, transparent while the overlay runs, and is what the reader ends with */
+html.fxl .stk[data-fx-s] .stk-t{transform-origin:50% 100%}
+html.fxl [data-fx-s] [data-count]{position:relative;color:transparent}
+html.fxl .num{position:absolute;left:0;top:0;white-space:nowrap;font-style:normal;color:var(--l1);pointer-events:none}   /* an <i>, not a <span>: the page styles `.ctr span` (the MIN label) */
+html.fxl .ctr .num{right:0;text-align:right}
+/* 08: the bars of the temperature specimen grow once, from their left end, the first time the card is seen ([data-fx-s] is on the list only while that is pending) */
+html.fxl [data-fx-s] .cb i{transform-origin:0 50%;will-change:transform}
+/* 09: each row's title is made by the chips of its real tokens once, when the row comes up the screen (only if it was below the viewport when the engine attached: [data-fx-s] is on the row while that is
+   pending). The chips are the effect's own (`irt`, in the layer `irv`, both added by it): square mono chips that the effect moves with transform and opacity alone, in a layer of no size at the corner of its
+   containing block (the effect measures where that is, so the list needs no positioning of its own). */
+html.fxl .irv{position:absolute;left:0;top:0;width:0;height:0;overflow:visible;pointer-events:none;z-index:2}
+html.fxl .irt{position:absolute;left:0;top:0;display:flex;align-items:center;height:24px;padding:0 .5em;border:1px solid var(--hair);background:var(--panel);font:500 12px/1 var(--m);color:var(--l2);white-space:nowrap}
+@media (max-width:480px){html.fxl .irt{padding:0 .35em;font-size:10px}}
+
+/* 17 · the wordmark: the runners are an extra svg laid over each outline (`.wrs`, added by the effect, with one path `.wr` per contour of the letters): a short bright dash that laps its contour,
+   every contour with a phase of its own, so lines are always running somewhere on the mark. Always white on the black plate. The glow is a drop-shadow on that one svg (WebKit does not paint
+   a CSS filter on a path inside an svg, it does on the svg itself). They run only while `.run` (the effect sets it while the mark is on screen and drawn). The dash (--fx-d), the gap (--fx-g)
+   and the pattern (--fx-P) are screen pixels (the stroke is non-scaling), set by the effect from the real size of the mark; --fx-T is the lap and --fx-ph a contour's phase. While the outline
+   draws itself ([data-fx-s]) its dash is --fx-dw (the longest contour) and --fx-o is how much of it is still to draw. */
+html.fxl .wmk .wrs{position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;filter:drop-shadow(0 0 6px rgba(255,255,255,.9));opacity:0;transition:opacity .8s}
+html.fxl .wmk.run .wrs{opacity:.85}
+html.fxl .wmk .wr{stroke:#fff;stroke-width:1.6;stroke-linecap:square;stroke-dasharray:var(--fx-d,1) var(--fx-g,99999)}
+html.fxl .wmk.run .wr{animation:fx-wm-lap var(--fx-T,4.5s) linear var(--fx-ph,0s) infinite}
+html.fxl .wmk[data-fx-s] path.o{stroke-dasharray:var(--fx-dw);stroke-dashoffset:var(--fx-o)}

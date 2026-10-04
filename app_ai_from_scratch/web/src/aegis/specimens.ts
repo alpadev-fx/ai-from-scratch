@@ -1,0 +1,94 @@
+// The two interactive specimens, exactly as index.astro runs them (same
+// tokenizer, same softmax, same markup per row). Pure functions + a mount() for
+// the browser.
+// `tokenize` is index.astro's heuristic (cuts of 5 and then 4 letters), NOT a real tokenizer: it only runs the free-typing box of chapter 08
+// (specimen A), which says so (ILUSTRATIVO). Every other chip on /v3 is a real o200k token: see tokens.ts. Nothing else may call it
+// (web/test/v3-guard.test.mts fails if chapter 04 or an effect does).
+import type { Candidate } from '../data/landing';
+
+/** index.astro's tokenizer, verbatim. ILLUSTRATIVE: a heuristic, used only by chapter 08's free-typing specimen. */
+export function tokenize(s: string): string[] {
+  const out: string[] = [];
+  (s || '').trim().split(/\s+/).filter(Boolean).forEach((w) => {
+    if (w.length <= 4) { out.push(w); return; }
+    let i = 0;
+    while (i < w.length) { const take = i === 0 ? 5 : 4; out.push(w.slice(i, i + take)); i += take; }
+  });
+  return out.slice(0, 26);
+}
+
+/** The published context of specimen B: the first sentence of its description («Le pediste un nombre para tu
+ *  perro.» / «You asked it to name your dog.»). The candidates are answers to THIS context, so the Δ chapter
+ *  shows them after it and never after the specimen-A sentence. No new string: it is a cut of `bD`. */
+export function ctxOf(s: string): string {
+  const t = (s || '').trim(), i = t.indexOf('. ');
+  return i > 0 ? t.slice(0, i + 1) : t;
+}
+
+/** Probabilities (0..1) of every candidate at temperature T (slider/100). */
+export function softmax(c: Candidate[], T: number): number[] {
+  const ex = c.map((x) => Math.exp(x.logit / Math.max(0.08, T)));
+  const sum = ex.reduce((a, b) => a + b, 0);
+  return ex.map((e) => e / sum);
+}
+/** One draw from a distribution: `r` in [0,1) -> the index whose slice of the unit interval contains it.
+ *  Fail closed: an empty list, a probability that is not a finite number >= 0, or an `r` outside [0,1) throws, so a broken
+ *  distribution can never answer «the last candidate» by accident. The only fallthrough is float rounding at the very top. */
+export function draw(pr: readonly number[], r: number): number {
+  if (!pr.length) throw new RangeError('draw: no candidates');
+  if (!(r >= 0 && r < 1)) throw new RangeError(`draw: r must be in [0,1), got ${r}`);
+  if (pr.some((p) => !Number.isFinite(p) || p < 0)) throw new RangeError('draw: probabilities must be finite and >= 0');
+  let c = 0;
+  for (let i = 0; i < pr.length; i++) { c += pr[i]; if (r < c) return i; }
+  return pr.length - 1;
+}
+export const pctText = (p: number) => { const pct = p * 100; return pct >= 9.5 ? Math.round(pct) + '%' : pct < 0.5 ? '~0%' : pct.toFixed(1) + '%'; };
+const esc = (s: unknown) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+export function candRowsHTML(c: Candidate[], T: number) {
+  const pr = softmax(c, T);
+  return c.map((x, i) => {
+    const p = pr[i], pct = p * 100, w = Math.max(1.2, pct) + '%';
+    const color = i === 0 ? 'var(--l1)' : p > 0.08 ? 'var(--l2)' : 'var(--l3)';
+    return `<div class="crow"><div class="cn" style="color:${color}">${esc(x.name)}</div><div class="cb"><i style="width:${w};background:${i === 0 ? 'var(--ac)' : 'var(--l3)'}"></i></div><div class="cp" style="color:${color}">${pctText(p)}</div></div>`;
+  }).join('');
+}
+
+export function mountSpecimens(D: { candidatos: Candidate[]; txt: Record<string, string> }) {
+  const tokin = document.getElementById('tokin') as HTMLInputElement | null;
+  const tokens = document.getElementById('tokens');
+  if (tokin && tokens) {
+    const render = () => {
+      const txt = tokin.value, toks = tokenize(txt);
+      tokens.innerHTML = toks.map((t) => `<div class="tokc">${esc(t)}</div>`).join('');
+      document.getElementById('tokenCount')!.textContent = String(toks.length);
+      document.getElementById('wordCount')!.textContent = txt.trim() ? String(txt.trim().split(/\s+/).length) : '0';
+      document.getElementById('charCount')!.textContent = String(txt.replace(/\s/g, '').length);
+    };
+    tokin.addEventListener('input', render); render();
+  }
+  const tempin = document.getElementById('tempin') as HTMLInputElement | null;
+  const cands = document.getElementById('cands');
+  if (tempin && cands) {
+    const render = () => {
+      const T = +tempin.value / 100;
+      cands.innerHTML = candRowsHTML(D.candidatos, T);
+      document.getElementById('tempLabel')!.textContent = T.toFixed(2);
+      document.getElementById('tempVerdict')!.textContent = T < 0.5 ? D.txt.predecible : T < 1.05 ? D.txt.equilibrada : D.txt.impredecible;
+    };
+    tempin.addEventListener('input', render); render();
+  }
+  // «Pídele un nombre» (chapter 08): one draw from the SAME distribution the bars show, kept in a list of the last five.
+  // The button is rendered `disabled`; only this code enables it, so without JS it stays an honest, inert control.
+  const ask = document.getElementById('ask') as HTMLButtonElement | null;
+  const picks = document.getElementById('picks');
+  if (ask && picks && tempin) {
+    const hist: string[] = [];
+    ask.disabled = false;
+    ask.addEventListener('click', () => {
+      const i = draw(softmax(D.candidatos, +tempin.value / 100), Math.random());
+      hist.unshift(D.candidatos[i].name); hist.length = Math.min(hist.length, 5);
+      picks.innerHTML = hist.map((n, k) => `<span class="pk${k === 0 ? ' new' : ''}">${esc(n)}</span>`).join('');
+    });
+  }
+}

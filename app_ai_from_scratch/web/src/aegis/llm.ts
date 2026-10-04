@@ -14,7 +14,8 @@ import { card as _c, headline } from './hud';
 import { softmax, pctText } from './specimens';
 import { piecesOf, show, tokensFromPage } from './tokens';
 import type { GL } from './engine';
-import { $, $$, clamp, eio, eo, lerp, rng, seg, squareFrame, squareGlow, ss, toward } from './util';
+import { $, $$, clamp, eio, eo, followStep, lerp, rng, seg, squareFrame, squareGlow, ss } from './util';
+import type { Follow } from './util';
 
 const SP = [0.1, 0.32, 0.56, 0.78, 0.94];          // stage boundaries (progress)
 // The timeline below was authored over a 6.4-screen chapter and ends at p = 0.96, where the panel and the card have faded. The chapter no longer
@@ -185,8 +186,8 @@ export function initLLM(gl: GL) {
   const sample = (T: number) => { const pr = softmax(cands, T); let c = 0; for (let i = 0; i < pr.length; i++) { c += pr[i]; if (U0 <= c) return i; } return 0; };
   const winChars = (() => { let m = 0; for (let T = 0.3; T <= 1.6001; T += 0.05) m = Math.max(m, nextTxt[sample(T)].length); return m; })();
 
-  let paperPrev: boolean | null = null, tShown = -1, winShown = -1, padA = -1, padFrame = -1;
-  const PAD_STEP = 2.4;
+  let paperPrev: boolean | null = null, tShown = -1, winShown = -1;
+  const PAD_STEP = 2.4, padS: Follow = { cur: -1, frame: -1 };       // row A's padding follows its target by at most PAD_STEP per rendered frame
   function theme() {
     const paper = A.paper(); if (paper === paperPrev) return; paperPrev = paper;
     uPaper.value = paper ? 1 : 0; uCol.value.set(paper ? 0x15171b : 0xe6edf8);
@@ -223,8 +224,8 @@ export function initLLM(gl: GL) {
     // Row A's padding (--pad) follows the split, but never by more than PAD_STEP px between two RENDERED frames: padding is layout, so a jump of the scroll (a link, a flick) that
     // moved it 5 px in one frame moved the text of every chip with it, and the browser counts a move of 3 px or more as a layout shift (CLS 2.8e-5 over a pass). A reader's own scroll
     // never gets there (the padding changes at most 0.08 px per scrolled px, so it takes about 1800 px/s of scroll to move it 2.4 px in a frame): the picture is the same unless the page jumps.
-    const padT = (mob ? 6 : 9) * tpA;
-    if (padA < 0) padA = padT; else if (A.st.f !== padFrame) { padFrame = A.st.f; padA = toward(padA, padT, PAD_STEP); }
+    // The review hook __v3Go is the one jump that arrives at once (A.st.snap): its forced ticks paint no frame, so a capture would otherwise show the padding wherever the frames before it left it.
+    const padA = followStep(padS, (mob ? 6 : 9) * tpA, PAD_STEP, A.st.f, A.st.snap);
     const kA = rowLayout(NQ, widthsA, posA, tpA, copyBot ? copyBot + 34 : 0), kB = rowLayout(NT, widthsB, posB, 1, 0, true);   // A drops below the headline copy when that runs long (EN on a phone)
     const T0 = 0.3;
     // temperature dial over stage 4: 0.30 → 1.60 → 0.70

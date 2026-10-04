@@ -88,11 +88,15 @@ export function startScroll() {
   }));
 }
 export const scrollToY = (y: number) => { if (A.lenis) A.lenis.scrollTo(y, { immediate: true, force: true }); else scrollTo(0, y); };
-// Review hook for automated screenshots: jump a chapter to progress p.
-(globalThis as any).__v3Go = (id: string, p: number) => {
+// The two forced ticks of a review jump. They paint no frame of their own (A.st.f does not move), so what follows its target one step per rendered frame could never get there through them: with `snap` it arrives at
+// once, for the length of the ticks only (the real ticker never sets it, and a throw cannot leave it set).
+const forcedTicks = (snap: boolean) => { A.st.snap = snap; try { tick(performance.now(), true); tick(performance.now() + 16, true); } finally { A.st.snap = false; } };
+// Review hook for automated screenshots: jump a chapter to progress p. The picture is the settled one (row A's padding in chapter 04 is where a reader would find it once the page stopped moving). A probe of layout
+// shifts that wants the reader's own limit on that padding (at most PAD_STEP px per rendered frame: a 9 px jump in one frame is the hook's doing, not the page's) passes snap = false.
+(globalThis as any).__v3Go = (id: string, p: number, snap = true) => {
   const ch = A.byId[id]; if (!ch) return -1;
   const y = p > 1 ? ch.top + ch.span + (p - 1) * A.H : ch.top + p * ch.span;
-  scrollToY(y); tick(performance.now(), true); tick(performance.now() + 16, true); return y;
+  scrollToY(y); forcedTicks(snap); return y;
 };
-// Same, by scroll position (chapters the engine does not register: the effects of src/aegis/fx).
-(globalThis as any).__v3Y = (y: number) => { scrollToY(y); tick(performance.now(), true); tick(performance.now() + 16, true); return y; };
+// Same, by scroll position (chapters the engine does not register: the effects of src/aegis/fx). It never snaps: it is what a layout-shift probe scrolls with, and that must see what a reader's scroll does.
+(globalThis as any).__v3Y = (y: number) => { scrollToY(y); forcedTicks(false); return y; };

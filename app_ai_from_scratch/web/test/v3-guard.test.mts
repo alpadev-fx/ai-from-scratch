@@ -12,7 +12,7 @@ import { piecesOf, show, wordsOf, type TokenFile } from '../src/aegis/tokens.ts'
 import { ANSWERS, CURVE, DIALS, END, NODES, NODE_BUDGET, T, TRACK_NODES, VIZ, WEIGHTS, curveOf, dialAngles, figureInts, stackOf, weightHeights } from '../src/aegis/c05-data.ts';
 import { DEFAULTS, LADDER, WHAT, createRatchet, type Step } from '../src/aegis/quality.ts';
 import { ahead } from '../src/aegis/seq.ts';
-import { glowAlpha, squareFrame, squareGlow, toward } from '../src/aegis/util.ts';
+import { followStep, glowAlpha, rng, squareFrame, squareGlow, toward, type Follow } from '../src/aegis/util.ts';
 import { END as C12_END, GEO as C12_GEO, LAP as C12_LAP, LAPS, LAPS_END, NODES as C12_NODES, NODE_BUDGET as C12_BUDGET, T as C12_T, beat, loopOf, nodeCount, tickAt } from '../src/aegis/c12-data.ts';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 
@@ -757,24 +757,57 @@ test('the two hitches the fps pass found stay fixed (chapter 06 samples its word
   assert.ok(/fps:v3/.test(readFileSync(new URL('../../RUNBOOK.md', import.meta.url), 'utf8')), 'the RUNBOOK says how to run it');
 });
 
-test('chapter 04: the arcs are one draw call in the order they were made, and row A\'s padding never jumps by 3 px or more between two rendered frames', () => {
+test('chapter 04: the arcs are one draw call in the order they were made, and row A\'s padding never jumps by 3 px or more between two rendered frames (only the review hook __v3Go lets it arrive at once)', () => {
   const llm = readFileSync(new URL('../src/aegis/llm.ts', import.meta.url), 'utf8').replace(/\/\/.*$/gm, ''), core = readFileSync(new URL('../src/aegis/core.ts', import.meta.url), 'utf8').replace(/\/\/.*$/gm, '');
   // the arcs: one LineSegments, one index buffer, an alpha per vertex (0 while an arc is hidden), none of the old per-arc Line objects or materials
   assert.ok(/new THREE\.LineSegments\(arcGeo, arcMat\)/.test(llm) && /setIndex\(new THREE\.BufferAttribute\(arcIdx, 1\)\)/.test(llm), 'the 45 curves are one LineSegments with an index buffer');
   assert.ok(!/new THREE\.Line\(/.test(llm) && !/a\.line\b/.test(llm) && !/\.line\.material/.test(llm), 'no per-arc Line object or material is left');
   assert.ok(/arcAlpha\.fill\(shown \? Math\.min\(1, o\) : 0, a\.base, a\.base \+ AS \+ 1\)/.test(llm), 'an arc that is not drawn has alpha exactly 0');
   assert.ok(/flat varying float vA/.test(llm), 'the alpha is flat: the arc\'s own opacity to the last bit, not an interpolation of it');
-  // the padding: written from a value that follows its target by at most PAD_STEP per rendered frame (A.st.f counts the real ticker's frames; a forced tick for a review jump is not one)
-  assert.ok(/c\.style\.setProperty\('--pad', padA\.toFixed\(1\) \+ 'px'\)/.test(llm) && /padA = toward\(padA, padT, PAD_STEP\)/.test(llm) && /A\.st\.f !== padFrame/.test(llm), 'row A reads padA, which moves once per rendered frame');
-  const PAD_STEP = Number(/const PAD_STEP = ([0-9.]+);/.exec(llm)?.[1]);
+  // the padding: written from a value that follows its target by at most PAD_STEP per rendered frame (A.st.f counts the real ticker's frames; a forced tick for a review jump is not one), except on the review hook
+  // __v3Go, where it arrives at once (A.st.snap)
+  assert.ok(/c\.style\.setProperty\('--pad', padA\.toFixed\(1\) \+ 'px'\)/.test(llm), 'row A writes padA');
+  assert.ok(/const padA = followStep\(padS, \(mob \? 6 : 9\) \* tpA, PAD_STEP, A\.st\.f, A\.st\.snap\);/.test(llm), 'padA is the follower\'s value, given the rendered frame count and the snap flag');
+  assert.ok(/padS: Follow = \{ cur: -1, frame: -1 \}/.test(llm), 'the follower starts with no value, so it starts at its target');
+  const PAD_STEP = Number(/const PAD_STEP = ([0-9.]+)[,;]/.exec(llm)?.[1]);
   assert.ok(PAD_STEP > 0 && PAD_STEP < 3, `PAD_STEP is under the 3 px a layout shift needs (${PAD_STEP})`);
   assert.equal((core.match(/A\.st\.f\+\+/g) ?? []).length, 2, 'the two ticker callbacks (smooth scroll and reduced motion) count rendered frames, and nothing else does');
-  // the follower itself: never past its target, never more than a step, and it gets there
+  // the hooks: the flag is raised for the forced ticks of __v3Go and nothing else (not __v3Y: the layout-shift probes scroll with it and must see what a reader's scroll does, and the real ticker never sets it)
+  const FORCED = /const forcedTicks = \(snap: boolean\) => \{ A\.st\.snap = snap; try \{ tick\(performance\.now\(\), true\); tick\(performance\.now\(\) \+ 16, true\); \} finally \{ A\.st\.snap = false; \} \};/;
+  const GO = /__v3Go = \(id: string, p: number, snap = true\) => \{[^}]*scrollToY\(y\); forcedTicks\(snap\); return y;/, GOY = /__v3Y = \(y: number\) => \{ scrollToY\(y\); forcedTicks\(false\); return y; \}/;
+  const hookRules = (src: string) => FORCED.test(src) && GO.test(src) && GOY.test(src) && (src.match(/A\.st\.snap\s*=[^=]/g) ?? []).length === 2;
+  assert.ok(hookRules(core), 'forcedTicks raises the flag for the two ticks and always lowers it (finally); __v3Go snaps unless asked not to; __v3Y never does; the flag is written nowhere else (the resize handler\'s own forced tick never snaps)');
+  for (const [name, mutant] of [
+    ['the flag is not lowered after the ticks', core.replace('finally { A.st.snap = false; }', 'finally { }')],
+    ['__v3Y snaps', core.replace('forcedTicks(false); return y; };', 'forcedTicks(true); return y; };')],
+    ['__v3Go does not snap', core.replace('snap = true) =>', 'snap = false) =>')],
+    ['the ticker raises the flag', core.replace('A.st.f++; tick();', 'A.st.f++; A.st.snap = true; tick();')],
+    ['a hook ticks on its own', core.replace('forcedTicks(false); return y; };', 'tick(performance.now(), true); return y; };')],
+    ['the flag is lowered only when a tick throws', core.replace('finally { A.st.snap = false; }', 'catch { A.st.snap = false; }')],
+  ] as const) { assert.notEqual(mutant, core, `the mutant "${name}" changed the source`); assert.ok(!hookRules(mutant), `the hook rules catch: ${name}`); }
+  const state = readFileSync(new URL('../src/aegis/state.ts', import.meta.url), 'utf8').replace(/\/\/.*$/gm, '');
+  assert.ok(/st: \{ y: 0, v: 0, t: 0, f: 0, snap: false, mouse/.test(state), 'the flag is false until a hook raises it');
+  // the follower itself (toward): never past its target, never more than a step, and it gets there
   for (const [cur, tgt] of [[0, 9], [9, 0], [4.5, 4.5], [0, 1], [8.9, 9], [3, -3]]) {
     let c = cur, n = 0; while (c !== tgt && n < 100) { const nx = toward(c, tgt, PAD_STEP); assert.ok(Math.abs(nx - c) <= PAD_STEP + 1e-9, 'a step is at most PAD_STEP'); assert.ok((nx - tgt) * (c - tgt) >= 0, 'never past the target'); c = nx; n++; }
     assert.equal(c, tgt, `${cur} -> ${tgt} arrives`); assert.ok(n <= Math.ceil(Math.abs(cur - tgt) / PAD_STEP) + 1);
   }
   assert.equal(toward(0, 9, 2.4), 2.4); assert.equal(toward(9, 0, 2.4), 6.6);
+  // followStep: it starts at its target, moves once per rendered frame however many calls the frame makes, and arrives at once (and keeps its frame) when the call is a forced review jump
+  const fresh = (): Follow => ({ cur: -1, frame: -1 }), r1 = (v: number) => +v.toFixed(1);
+  { const s = fresh(); assert.equal(followStep(s, 6, PAD_STEP, 5, false), 6, 'its first value is its target'); assert.equal(s.frame, -1, 'and is not the move of a frame'); }
+  { const s = fresh(); followStep(s, 0, PAD_STEP, 1, false); assert.deepEqual([2, 2, 2, 3, 3, 4, 5].map((f) => r1(followStep(s, 9, PAD_STEP, f, false))), [2.4, 2.4, 2.4, 4.8, 4.8, 7.2, 9], 'one step per rendered frame, none for a second call of the same frame'); }
+  { const s: Follow = { cur: 0, frame: 1 }; assert.equal(followStep(s, 9, PAD_STEP, 1, false), 0, 'a frozen clock (no new frame, ever) never moves it'); assert.equal(followStep(s, 9, PAD_STEP, 1, true), 9, 'but a forced jump arrives anyway'); }
+  for (const [cur, tgt] of [[0, 9], [9, 0], [2.4, 6.6], [4.5, 4.5], [0, 6]]) for (const f of [7, 8]) { const s: Follow = { cur, frame: 7 }; assert.equal(followStep(s, tgt, PAD_STEP, f, true), tgt, `${cur} -> ${tgt} at once (frame ${f})`); assert.equal(s.frame, 7, 'a forced jump does not use up a rendered frame'); }
+  // the jump lands where the page settles: for 400 random starting points, targets and frames, the snapped value is the one the ordinary follower reaches (to the tenth of a pixel that is written) after the frames it needs
+  { const r = rng(11); for (let i = 0; i < 400; i++) { const cur = r() * 9, tgt = r() < 0.2 ? 0 : r() * 9, s: Follow = { cur, frame: 0 }, o: Follow = { cur, frame: 0 }; let v = 0; for (let f = 1; f <= 6; f++) v = followStep(o, tgt, PAD_STEP, f, false); assert.equal(r1(followStep(s, tgt, PAD_STEP, 99, true)), r1(v), `${cur.toFixed(2)} -> ${tgt.toFixed(2)}`); } }
+  // and without the hook nothing changed: call for call the follower is the logic llm.ts had inline (`if (padA < 0) padA = padT; else if (A.st.f !== padFrame) { padFrame = A.st.f; padA = toward(padA, padT, PAD_STEP); }`)
+  { const r = rng(5), old = { padA: -1, padFrame: -1 }, s = fresh(); let f = 0;
+    for (let i = 0; i < 4000; i++) {
+      if (r() < 0.55) f++; const t = r() < 0.15 ? 0 : r() < 0.3 ? 9 : r() * 9;
+      if (old.padA < 0) old.padA = t; else if (f !== old.padFrame) { old.padFrame = f; old.padA = toward(old.padA, t, PAD_STEP); }
+      assert.equal(followStep(s, t, PAD_STEP, f, false), old.padA, `call ${i}`);
+    } }
 });
 
 test('chapter 04: the output node is a square outline (no round geometry in the scene), in the box of the ring it replaced, and its pulse grows as a square', () => {

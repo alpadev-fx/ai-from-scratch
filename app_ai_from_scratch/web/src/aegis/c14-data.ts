@@ -3,25 +3,27 @@
 //
 // What the chapter draws: the published price (the page's own figure, «$39.990» or «39,990 COP») is made by its REAL o200k tokens (src/data/v3-tokens.json), each in a square chip laid over its own
 // characters (a symbol's chip holds the token's own text, a leading space included: it is the figure's own space, so the text stands on the figure's glyphs in any browser). When the figure comes up the
-// screen the chips come in (the symbols in them, the numeric ones EMPTY) and the digits of every numeric token rise into their chips, left to right, each on a wheel of ONE row: its own digit, which slides up
+// screen the chips come in (the symbols in them, the numeric ones EMPTY) and the digits of every numeric token rise into their chips ALL TOGETHER, each on a wheel of ONE row: its own digit, which slides up
 // from below its one-row window into the window, over the figure's own digit. The wheels stop, the price stands as its tokens for a moment, and the real figure comes in underneath the chips, which fade
 // away: the figure is the page's own text and is what the reader ends with. Next to it the 30 segments of the bar light up one after the other, a day each. The page's text is never changed and never
 // typed here: the markup is the finished picture.
 //
 // THE HARD RULE of the price: no currency amount other than the published one is ever legible, at any frame. So a wheel never carries a digit that is not the price's own at its place (no 0 to 9 strip that
-// rolls past other figures, no rest state on zeros): it shows its own digit, or nothing. c14-frames.mjs reads every frame of the play and fails on any other digit in a wheel's window (h4).
+// rolls past other figures, no rest state on zeros): it shows its own digit, or nothing. c14-frames.mjs reads every frame of the play and fails on any other digit in a wheel's window (h4). And the wheels
+// rise TOGETHER (T.cascade is 0): wheels that set off one after the other would show a prefix of the price while the later ones are still under their windows («$39.99», with the last «0» to come, is a
+// price that is not the published one), so at every frame all the wheels are at the same rise, and the only number that can ever be legible is the whole price (h5).
 //
 // The contract's node counter (v3-fps --nodes) counts every element a chapter ADDS (descendants included) and every element it writes a style on: the layer, one chip per token, one column and one strip
 // per digit, the figure and the 30 segments.
 
 /** Seconds. Every picture of the roll is a pure function of the second it is at (the harness seeks it). */
 export const T = {
-  pop: 0.18,                                                         // the overlay (the price as its tokens, in their chips, the numeric ones empty) comes in over this long
-  spin: 0.7,                                                         // a wheel's rise: ONE row, from below its window up to its own digit, an ease out
-  cascade: 0.12,                                                     // between one wheel's setting off and the next one's, left to right
-  hold: 0.5,                                                         // the wheels have stopped: the price stands as its tokens
+  pop: 0.25,                                                         // the overlay (the price as its tokens, in their chips, the numeric ones empty) comes in over this long; the wheels set off when it is whole
+  spin: 0.9,                                                         // the wheels' rise, all together: ONE row, from below its window up to its own digit, an ease out
+  cascade: 0,                                                        // between one wheel's setting off and the next one's: NONE. They rise together (a stagger shows a prefix of the price, «$39.99», which is not the price)
+  hold: 0.6,                                                         // the wheels have stopped: the price stands as its tokens
   swap: 0.06,                                                        // the real figure comes in underneath the chips, which are still whole
-  dissolve: 0.4,                                                     // the chips fade away over the figure
+  dissolve: 0.45,                                                    // the chips fade away over the figure
   seg: 0.22,                                                         // a segment of the bar lights up over this long
   segLead: 0.1,                                                      // the first segment starts this long after the wheels' first setting off
   segGap: 0.03,                                                      // between one segment and the next
@@ -68,7 +70,7 @@ export interface Wheel {
   stop: number;
 }
 
-/** The wheels, left to right: one per digit of a numeric token. */
+/** The wheels, in the figure's order: one per digit of a numeric token. */
 export const wheelsOf = (tokens: readonly Token[]) => tokens.flatMap((tk, token) => tk.digits.map((digit, j) => ({ token, at: tk.start + j, digit })));
 
 /** The ONE row a wheel carries: its own digit, and nothing else (a digit that is not the price's is a figure that is not the price). Fail closed: a value that is not a digit is an error. */

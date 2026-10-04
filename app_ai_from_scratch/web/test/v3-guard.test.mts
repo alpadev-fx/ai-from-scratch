@@ -1641,11 +1641,11 @@ test('chapter 14: the price\'s tokens are its real o200k pieces with their place
   assert.equal(C14_SEGS, 30);
 });
 
-test('chapter 14: the schedule (the real price, both languages): the wheels set off left to right and each rises ONE row into its window, easing out, the price stands as its tokens, the real figure comes in under the chips and only then do they fade, and the segments light up in order', () => {
+test('chapter 14: the schedule (the real price, both languages): the five wheels set off together and each rises ONE row into its window, easing out, the price stands as its tokens, the real figure comes in under the chips and only then do they fade, and the segments light up in order', () => {
   for (const lang of ['es', 'en'] as const) {
     const { tokens } = c14Price(lang), P = c14Plan(tokens, C14_SEGS), W = P.wheels;
     W.forEach((w, k) => {
-      assert.ok(Math.abs(w.start - (C14_T.pop + k * C14_T.cascade)) < 1e-12 && Math.abs(w.stop - (w.start + C14_T.spin)) < 1e-12, 'a wheel sets off a cascade after the one on its left and rises for T.spin');
+      assert.ok(w.start === C14_T.pop && Math.abs(w.stop - (w.start + C14_T.spin)) < 1e-12, 'a wheel sets off when the overlay is whole (not a stagger after the one on its left) and rises for T.spin');
       assert.equal(c14Below(P, k, 0), 1); assert.equal(c14Below(P, k, w.start), 1, 'its row lies under its window (nothing of it is seen) until it sets off');
       assert.ok(Math.abs(c14Below(P, k, w.stop)) < 1e-12, 'it is in its window, over its own digit, when it stops'); assert.equal(c14Below(P, k, P.end + 5), 0, 'and stays');
       let prev = 1, prevV = 0, peak = 0;
@@ -1659,7 +1659,9 @@ test('chapter 14: the schedule (the real price, both languages): the wheels set 
       assert.ok(peak / 0.004 / 60 < 0.1, `wheel ${k} (a ${w.digit}) never covers a tenth of a row a frame at 60 fps (${(peak / 0.004 / 60).toFixed(3)}): it never jumps`);
     });
     for (let x = 0; x <= P.end + 0.004; x += 0.004) W.forEach((_, k) => { const r = c14Below(P, k, x); assert.ok(r >= 0 && r <= 1, `at ${x.toFixed(3)} s wheel ${k} is within its own row and the one under it`); });
-    assert.ok(W.every((w, k) => !k || (w.start > W[k - 1]!.start && w.stop > W[k - 1]!.stop)), 'left to right');
+    assert.equal(C14_T.cascade, 0, 'no stagger: a prefix of the price («$39.99», the last digit still to come) is a number that is not the price');
+    assert.ok(W.every((w) => w.start === W[0]!.start && w.stop === W[0]!.stop), 'all together: no wheel sets off after another');
+    for (let x = 0; x <= P.end + 0.004; x += 0.004) W.forEach((_, k) => assert.equal(c14Below(P, k, x), c14Below(P, 0, x), `at ${x.toFixed(3)} s wheel ${k} is at the same rise as the first: the only number that is ever legible is the whole price`));
     assert.ok(Math.abs(P.rest - W[W.length - 1]!.stop) < 1e-12 && Math.abs(P.swapAt - (P.rest + C14_T.hold)) < 1e-12 && Math.abs(P.fadeAt - (P.swapAt + C14_T.swap)) < 1e-12, 'the last wheel stops, the price stands for T.hold, the figure comes in over T.swap');
     const lastSeg = P.seg[P.seg.length - 1]! + C14_T.seg;
     assert.ok(Math.abs(P.end - Math.max(P.fadeAt + C14_T.dissolve, lastSeg)) < 1e-12 && P.end > 2 && P.end < 2.6, `${lang}: it plays for ${P.end.toFixed(2)} s, once`);
@@ -1685,11 +1687,11 @@ test('chapter 14: the schedule (the real price, both languages): the wheels set 
     });
     assert.ok(lastSeg <= P.end, 'the whole bar is lit by the end');
     // the clocks are where the design needs them
-    assert.ok(C14_T.pop >= 0.1 && C14_T.spin >= 0.4 && C14_T.spin <= 1 && C14_T.cascade >= 0.05 && C14_T.hold >= 0.25 && C14_T.swap > 0 && C14_T.dissolve >= 0.2 && C14_T.seg >= 0.1 && C14_T.segGap >= 0.01, 'the clocks');
+    assert.ok(C14_T.pop >= 0.1 && C14_T.spin >= 0.4 && C14_T.spin <= 1.2 && C14_T.cascade === 0 && C14_T.hold >= 0.25 && C14_T.swap > 0 && C14_T.dissolve >= 0.2 && C14_T.seg >= 0.1 && C14_T.segGap >= 0.01, 'the clocks');
   }
   // the rule can fail: a roll that took 4 s to settle would not leave the 2.6 s the whole is allowed
-  assert.ok(C14_T.pop + 4 * C14_T.cascade + 4 + C14_T.hold + C14_T.swap + C14_T.dissolve > 2.6);
-  assert.ok(C14_T.pop + 4 * C14_T.cascade + C14_T.spin + C14_T.hold + C14_T.swap + C14_T.dissolve > 2.2, 'about 2.3 s in all, as the roll it replaces: five wheels, the price standing, the figure under the chips');
+  assert.ok(C14_T.pop + 4 + C14_T.hold + C14_T.swap + C14_T.dissolve > 2.6);
+  assert.ok(C14_T.pop + C14_T.spin + C14_T.hold + C14_T.swap + C14_T.dissolve > 2.2, 'about 2.3 s in all, as the roll it replaces: the five wheels rising together, the price standing, the figure under the chips');
 });
 
 test('chapter 14: the clocks of one wheel and the geometry of the chips, and what the schedule and the geometry refuse', () => {

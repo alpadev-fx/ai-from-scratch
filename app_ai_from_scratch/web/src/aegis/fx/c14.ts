@@ -1,6 +1,6 @@
 // 14 · PRECIO. The price is made by its real tokens and rises into place: when the figure comes well up the screen the REAL o200k tokens of the published price («$39.990» is «$», «39», «.», «990»;
 // «39,990 COP» is «39», «,», «990», « COP») come in as square chips laid over their own characters, the symbols already in them, the numeric ones empty, and the digits of the numeric tokens rise into
-// them, left to right, a wheel to each digit; a symbol's chip holds the token's own text (a leading space stays a space, laid over the figure's own, so every glyph of a chip stands on the figure's glyph
+// them all together, a wheel to each digit (a stagger would show a prefix of the price, «$39.99»: the wheels rise at the same rate, c14-data.ts T.cascade is 0); a symbol's chip holds the token's own text (a leading space stays a space, laid over the figure's own, so every glyph of a chip stands on the figure's glyph
 // in any browser, which a «·» in the space's place would not: its advance is not the space's everywhere). A chip's edges are where its characters begin: its right edge is the left of the next token's
 // first character (a browser's rect of a glyph can be a pixel wider than its advance), so the chips meet exactly.
 // THE HARD RULE: no currency amount other than the published price is ever legible, at any frame. A wheel is ONE row, its own digit, which slides up from below its one-row window into it: it shows its own

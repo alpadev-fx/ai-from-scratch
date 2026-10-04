@@ -631,7 +631,7 @@ function sortSelfTest(html, lang) {
 
 // ---------- chapter 14: the price, made by its real tokens and rolling up to itself ----------
 // The plan's verb for chapter 14 is «rodar»: when the price's figure comes into view the REAL o200k tokens of the published price («$39.990» is $ 39 . 990, «39,990 COP» is 39 , 990 « COP») are square chips laid
-// over their own characters, the digits of the numeric ones rise into them, each on a wheel of ONE row (its own digit: no figure but the published price is ever legible), the price stands as its tokens, and the real figure comes in under the chips, which fade away
+// over their own characters, the digits of the numeric ones rise into them all together, each on a wheel of ONE row (its own digit: no figure but the published price is ever legible, and never a prefix of it), the price stands as its tokens, and the real figure comes in under the chips, which fade away
 // (src/aegis/fx/c14.ts), while the 30 segments of the bar light up. The server renders only the figure and the bar as they always were: the published price in ONE text node (the effect measures where each of
 // its characters stands and finds its tokens in the page's own token file, so a price that is not in it would stop the effect at attach, and this gate says so before it ships) and 30 empty segments. The layer, the
 // chips and the wheels are the effect's own. The layer is set in the figure's own typeface (one rule, shared with the figure, so that the wheels are the figure's glyphs), the chips are square accent hairline boxes,

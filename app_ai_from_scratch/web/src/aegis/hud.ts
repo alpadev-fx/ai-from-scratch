@@ -122,7 +122,9 @@ export function card(c: HTMLElement) {
       c.style.clipPath = a < 0.999 ? `inset(0 ${(100 * (1 - a)).toFixed(2)}% 0 0)` : '';
       c.style.transform = `translate3d(${((1 - a) * 28).toFixed(1)}px,0,0)`;
       parts.forEach((r, i) => { r.style.opacity = seg(a, 0.25 + i * 0.1, 0.55 + i * 0.1).toFixed(3); });
-      sweep.style.left = (-40 + 180 * clamp(p * 1.2)) + '%';
+      // The light crosses the card from just left of it (the stylesheet's left: -40%) to just right of it: 180 % of the card's width, which is 450 % of its own (it is 40 % wide). A transform:
+      // `left` is layout, and a band that moves ~30 px in one scroll step is a layout shift to the browser (it was the one source of CLS left in a pass).
+      sweep.style.transform = `translate3d(${(450 * clamp(p * 1.2)).toFixed(1)}%,0,0)`;
       if (a > 0.35 && !boot && !A.rm) {
         boot = true;
         $$('.hd span, .row .k', c).forEach((e, i) => { const t0 = e.textContent || ''; gsap.to(e, { duration: 0.7, delay: i * 0.06, ease: 'none', scrambleText: { text: t0, chars: SCR, speed: 0.7 } }); });

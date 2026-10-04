@@ -800,3 +800,15 @@ test('chapter 04: the output node is a square outline (no round geometry in the 
     const O = Math.fround(o), I = Math.fround(i); assert.ok(Math.abs(area - (4 * O * O - 4 * I * I)) < 1e-9, 'the triangles cover exactly the outer square minus the inner one');
   }
 });
+
+test('chapter 01: the data card\'s light moves by transform, not by layout, and covers the same ground as the `left` it replaced', () => {
+  const hud = readFileSync(new URL('../src/aegis/hud.ts', import.meta.url), 'utf8').replace(/\/\/.*$/gm, '');
+  const css = readFileSync(new URL('../src/aegis/v3.css', import.meta.url), 'utf8');
+  assert.ok(!/sweep\.style\.(left|right|top|bottom|width|height|margin|padding)\b/.test(hud), 'the sweep never writes a layout property: a band that moves 3 px or more in a frame is a layout shift');
+  const k = Number(/sweep\.style\.transform = `translate3d\(\$\{\(([0-9.]+) \* clamp\(p \* 1\.2\)\)\.toFixed\(1\)\}%,0,0\)`/.exec(hud)?.[1]);
+  const rule = /html\.fx \.card \.sweep\{([^}]*)\}/.exec(css)?.[1] ?? '', left = Number(/left:(-?[0-9.]+)%/.exec(rule)?.[1]), width = Number(/width:([0-9.]+)%/.exec(rule)?.[1]);
+  assert.ok(Number.isFinite(k) && Number.isFinite(left) && Number.isFinite(width), 'the transform, the stylesheet\'s left and its width are all there to read');
+  // it starts just outside the card on the left (its right edge on the card's left edge) and ends just outside on the right: 100 + 2 x width % of the card, and k % of its own width is that much
+  assert.equal(left, -width, 'it starts with its right edge on the card\'s left edge');
+  assert.ok(Math.abs((k * width) / 100 - (100 + 2 * width)) < 1e-9, `${k} % of a ${width} %-wide band is ${(k * width) / 100} % of the card; the way across is ${100 + 2 * width} %`);
+});

@@ -431,6 +431,9 @@ function loopRule(html, lang) {
   for (const [cls, want, what] of parts) { const got = (box.match(new RegExp(`class="${cls}"`, 'g')) ?? []).length; if (got !== want) out.push(`the drawing has ${got} ${what}, expected ${want}`); }
   if (!box.includes(`<div class="lp-fig" style="--x:${C12_GEO.x}%;--y:${C12_GEO.y}%;--w:${C12_GEO.w}%;--h:${C12_GEO.h}%">`)) out.push('the track does not stand where c12-data says (the effect reads the same numbers)');
   if (/<img\b|<canvas\b|<video\b|<picture\b|<svg\b|<circle\b|<ellipse\b|\brx=|border-radius/i.test(box)) out.push('the drawing carries an image, a canvas, a video, an svg or a round shape');
+  // the chips are the drawing's only text: 10px at every width, the page's floor for mono labels, never a clamp that shrinks with the drawing
+  const chipCss = /\.lp-c\{([^}]*)\}/.exec(html)?.[1] ?? '', chipPx = /(?:^|;)font:\s*\d+\s+(\d+(?:\.\d+)?)px\//.exec(chipCss);
+  if (!chipPx || +chipPx[1] < 10) out.push(`the chips' text is ${chipPx ? chipPx[1] + 'px' : 'not a fixed pixel size'}: the page's floor for mono labels is 10px at every width (no clamp that shrinks it)`);
   const plate = c12.indexOf('<div class="bio">') < 0 ? '' : balanced(c12, c12.indexOf('<div class="bio">'), 'div');
   if (!plate.includes('<div class="lp" data-loop')) out.push('the drawing is not inside the bio plate');
   if (!(c12.indexOf('class="bio-close"') >= 0 && c12.indexOf('class="bio-close"') < at)) out.push('the drawing does not follow the closing sentence (on a phone it comes after the text; on a wide screen the grid puts it under the heading)');
@@ -470,10 +473,16 @@ function loopSelfTest(html, lang) {
     'a circular clip on the loop': html.replace('.lp-fig{position:relative;', '.lp-fig{clip-path:circle(50%);position:relative;'),
     'a rounded chip (border-radius on .lp-c)': html.replace('.lp-c{display:block;', '.lp-c{border-radius:6px;display:block;'),
   };
+  const size = {
+    'chips that shrink with the drawing (a clamp down to 8px)': html.replace('font:500 10px/1 var(--m);letter-spacing:.14em;', 'font:500 clamp(8px,2.5cqw,10px)/1 var(--m);letter-spacing:.14em;'),
+    'chips at 9px': html.replace('font:500 10px/1 var(--m);letter-spacing:.14em;', 'font:500 9px/1 var(--m);letter-spacing:.14em;'),
+    'chips with no pixel size (rem)': html.replace('font:500 10px/1 var(--m);letter-spacing:.14em;', 'font:500 .6rem/1 var(--m);letter-spacing:.14em;'),
+  };
   let bad = 0;
   for (const [what, m] of Object.entries(mut)) if (m === html || !loopRule(m, lang).length) { console.error(`FAIL self-test: loopRule does not catch "${what}"`); bad++; }
+  for (const [what, m] of Object.entries(size)) if (m === html || !loopRule(m, lang).some((x) => /^the chips' text is /.test(x))) { console.error(`FAIL self-test: loopRule does not catch "${what}"`); bad++; }
   for (const [what, m] of Object.entries(css)) if (m === html || !judge(m, lang).some((x) => /^round: /.test(x))) { console.error(`FAIL self-test: the round-shape rule does not catch "${what}"`); bad++; }
-  return [bad, Object.keys(mut).length + Object.keys(css).length];
+  return [bad, Object.keys(mut).length + Object.keys(size).length + Object.keys(css).length];
 }
 
 // ---------- real tokens: what the page ships for the effects (#v3-tokens) ----------

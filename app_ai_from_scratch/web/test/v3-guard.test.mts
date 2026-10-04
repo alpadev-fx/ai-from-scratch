@@ -916,8 +916,15 @@ test('chapter 12: the drawing has no copy of its own (the component writes only 
   assert.ok(mine.length >= 28, `the drawing's rules are found (${mine.length})`);
   const round = (b: string) => /border-radius\s*:\s*(?!0(?:px)?\s*(?:;|$))|clip-path\s*:\s*(?:circle|ellipse)/i.test(b);
   for (const r of mine) assert.ok(!round(r.body), `«${r.sel}» is round`);
+  // the chips are the drawing's only text: 10px at every width, the page's floor for mono labels (a clamp that went down to 8px once made them too small to read on a phone)
+  const px = (b: string) => { const m = /(?:^|;)font(?:-size)?\s*:[^;]*?(clamp\([^)]*\)|\d+(?:\.\d+)?px)/.exec(b); return m ? m[1]! : null; };
+  const sized = mine.filter((r) => px(r.body) !== null);
+  assert.ok(sized.some((r) => r.sel === '.lp-c') && sized.some((r) => r.sel === '.lp-tag'), 'the chips\' and the tag\'s rules are found');
+  for (const r of sized) assert.ok(/^\d/.test(px(r.body)!) && parseFloat(px(r.body)!) >= 10, `«${r.sel}» sets its text at ${px(r.body)}: a fixed size of 10px or more at every width`);
+  assert.equal(px(mine.find((r) => r.sel === '.lp-c')!.body), '10px', 'the chips are 10px');
   // the rule can fail
   assert.ok(round('border-radius:50%;width:1px') && round('clip-path:circle(50%)') && !round('border:1px solid red;border-radius:0'));
+  assert.equal(px('display:block;font:500 clamp(8px,2.5cqw,10px)/1 var(--m);color:red'), 'clamp(8px,2.5cqw,10px)'); assert.equal(px('font:500 8px/1 var(--m)'), '8px'); assert.equal(px('color:red'), null);
 });
 
 test('chapter 12\'s class names are its own: no rule outside its block styles an `lp` class, and the plate\'s grid puts the loop under the heading (wide) or after the text (narrow)', () => {

@@ -804,6 +804,12 @@ html.fxl .num{position:absolute;left:0;top:0;white-space:nowrap;font-style:norma
 html.fxl .ctr .num{right:0;text-align:right}
 /* 08: the bars of the temperature specimen grow once, from their left end, the first time the card is seen ([data-fx-s] is on the list only while that is pending) */
 html.fxl [data-fx-s] .cb i{transform-origin:0 50%;will-change:transform}
+/* 09: each row's title is made by the chips of its real tokens once, when the row comes up the screen (only if it was below the viewport when the engine attached: [data-fx-s] is on the row while that is
+   pending). The chips are the effect's own (`irt`, in the layer `irv`, both added by it): square mono chips that the effect moves with transform and opacity alone, in a layer of no size at the corner of its
+   containing block (the effect measures where that is, so the list needs no positioning of its own). */
+html.fxl .irv{position:absolute;left:0;top:0;width:0;height:0;overflow:visible;pointer-events:none;z-index:2}
+html.fxl .irt{position:absolute;left:0;top:0;display:flex;align-items:center;height:24px;padding:0 .5em;border:1px solid var(--hair);background:var(--panel);font:500 12px/1 var(--m);color:var(--l2);white-space:nowrap}
+@media (max-width:480px){html.fxl .irt{padding:0 .35em;font-size:10px}}
 
 /* 17 · the wordmark: the runners are an extra svg laid over each outline (`.wrs`, added by the effect, with one path `.wr` per contour of the letters): a short bright dash that laps its contour,
    every contour with a phase of its own, so lines are always running somewhere on the mark. Always white on the black plate. The glow is a drop-shadow on that one svg (WebKit does not paint

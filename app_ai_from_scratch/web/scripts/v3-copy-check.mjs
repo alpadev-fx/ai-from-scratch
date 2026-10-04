@@ -54,10 +54,11 @@ const FX_HOOKS = {
   c06: { fx: 'implode', hooks: [['data-nots', 1], ['data-word', 6], ['data-final', 1]], stage: true },
   c07: { fx: 'stack', hooks: [['data-pile', 1], ['data-row', 12], ['data-count', 1]] },   // one counter only: the four figures under the pile never count
   c08: { fx: 'bars-once', hooks: [['data-bars', 1]] },
+  c09: { fx: 'group', hooks: [['data-lesson', 12]] },   // the twelve rows of the temario, in the lessons' order: each plays its own river of tokens
   c12: { fx: 'plate-parallax', hooks: [['data-loop', 1]] },   // the loop drawing under the heading (the plate's parallax is the engine's own)
 };
 // the parts that exist only because an effect added them (they must hang on html.fxl) · the selectors that name the copy of an effect chapter · what hides it
-const FX_ONLY = /\.(?:ty|gh|pin|rail|imp|pen|num|wrs?|vx)\b|\[data-fx-/;
+const FX_ONLY = /\.(?:ty|gh|pin|rail|imp|pen|num|wrs?|vx|irv|irt)\b|\[data-fx-/;
 const FX_COPY = /\.(?:rp|tag|you|ia|who|shout|bt|beat|chat|trio|tri|figs|fig|big|cap|ie|nots|hx|ctr|specs|srow|tcopy|lede|clock)\b|cb|cn|cp|crow|cands|spec|\bs\[data-word\]|\bdt\b|\bdd\b|#c(?:0[2-9]|1[0-6])\b/;
 const FX_HIDES = /(?:^|;)\s*(?:opacity\s*:\s*0(?![.\d])|visibility\s*:\s*hidden|display\s*:\s*none|clip-path\s*:|color\s*:\s*transparent|font-size\s*:\s*0\b|transform\s*:\s*scale\(0\b)/;
 const CTA_CHAPTERS = ['c03', 'c07', 'c10', 'c11'];       // CTA rows with the price label + the guarantee line; c14 has its in-card button; c16 closes
@@ -482,6 +483,64 @@ function pileSelfTest(html, lang) {
   return [bad, Object.keys(mut).length + Object.keys(size).length + Object.keys(css).length];
 }
 
+// ---------- chapter 09: the temario, each title made by its real tokens ----------
+// The plan's verb for chapter 09 is «agrupar»: when a row of the temario comes into view the REAL o200k tokens of its title run in from the left edge of the screen, in the order the title reads and at one
+// speed, and close up into it (src/aegis/fx/c09.ts). The server renders only the temario, which the Flip used to reorder and no effect reorders any more: the twelve lessons in their order, each with its
+// number as the hook and its title in .ih. The chips are the effect's own (made when a row plays, removed when it is done); but the effect reads each title and finds its tokens in the page's own token file,
+// so a title that is not in it would stop the effect at attach, and this gate says so before it ships. The chips are never under the page's floor for mono labels, and nothing in it is round.
+const C09_CSS = /(?:^|[\s,>+~])\.irt(?![\w-])|\.irv(?![\w-])/;
+function groupRule(html, lang) {
+  const out = [], mods = modulos(lang), map = TOKEN_FILE[lang], c09 = (html.match(/<section id="c09"[\s\S]*?<\/section>/) ?? [''])[0];
+  if (!c09) return ['chapter 09 is missing'];
+  const rows = [...c09.matchAll(/<div class="irow" data-lesson="([^"]*)">[\s\S]*?<div class="ih">([\s\S]*?)<\/div>/g)].map((m) => [m[1], norm(m[2])]);
+  if (rows.length !== mods.length) out.push(`the temario has ${rows.length} rows, expected ${mods.length} (one per lesson)`);
+  mods.forEach((m, i) => {
+    const got = rows[i] ?? [];
+    if (got[0] !== m.n) out.push(`row ${i + 1} is lesson «${got[0]}», expected «${m.n}» (the temario's order never changes)`);
+    if (got[1] !== norm(m.h)) out.push(`row ${i + 1}'s title is «${got[1]}», expected «${norm(m.h)}»`);
+    try { piecesOf(map, m.h); } catch (e) { out.push(`lesson ${m.n}'s title has no real tokens in the token file (the effect would stop at attach): ${e.message}`); }
+  });
+  if (/\birt\b|\birv\b|fxk|data-flip/.test(c09)) out.push('chapter 09 carries a part only the effect adds (a chip, its layer, an fxk node) or the Flip it replaced');
+  if (/<img\b|<canvas\b|<video\b|<picture\b|<svg\b|<circle\b|<ellipse\b|\brx=|border-radius/i.test(c09)) out.push('chapter 09 carries an image, a canvas, a video, an svg or a round shape');
+  // the chips' text: 12px, and 10px on a phone (the page's floor for mono labels is 10px at every width; 12px does not fit the longest title in the title's box of a 360px phone)
+  const base = /html\.fxl \.irt\{[^}]*\bfont:\d+ (\d+(?:\.\d+)?)px\//.exec(html), narrow = /@media \(max-width:480px\)\{html\.fxl \.irt\{[^}]*\bfont-size:(\d+(?:\.\d+)?)px/.exec(html);
+  if (!base || +base[1] < 10) out.push(`the chips' text is ${base ? base[1] + 'px' : 'not sized in pixels'}: the page's floor for mono labels is 10px at every width`);
+  if (!narrow || +narrow[1] < 10) out.push(`the chips' text on a phone is ${narrow ? narrow[1] + 'px' : 'not set'}: the floor is 10px, and 12px does not fit the longest title in the title's box of a 360px phone`);
+  return out;
+}
+// A gate that cannot fail proves nothing: each way the temario can stop being the lessons in their order, lose the real tokens of a title, carry what only the effect adds, or turn round must be caught.
+function groupSelfTest(html, lang) {
+  if (groupRule(html, lang).length) return [0, 0];                   // the real page is judged by the loop below
+  const inC09 = (fn) => { const at = html.indexOf('<section id="c09"'), end = html.indexOf('</section>', at); return html.slice(0, at) + fn(html.slice(at, end)) + html.slice(end); };
+  const mods = modulos(lang), rowOf = (c, i) => balanced(c, c.indexOf(`<div class="irow" data-lesson="${mods[i].n}">`), 'div');
+  const mut = {
+    'two lessons swapped (the temario out of order)': inC09((c) => c.replace(rowOf(c, 0), '\u0000').replace(rowOf(c, 1), rowOf(c, 0)).replace('\u0000', rowOf(c, 1))),
+    'a row gone': inC09((c) => c.replace(rowOf(c, 11), '')),
+    'a title with no real tokens (a letter more)': inC09((c) => c.replace(`<div class="ih">${esc(mods[3].h)}</div>`, `<div class="ih">${esc(mods[3].h)}x</div>`)),
+    'a lesson number changed': inC09((c) => c.replace('data-lesson="03"', 'data-lesson="30"')),
+    'the Flip back (data-flip instead of data-lesson)': inC09((c) => c.replace('data-lesson="01"', 'data-flip="01"')),
+    'a chip rendered by the server': inC09((c) => c.replace(`<div class="irow" data-lesson="01">`, `<div class="irow" data-lesson="01"><i class="irt">x</i>`)),
+    'an image in the temario': inC09((c) => c.replace(`<div class="irow" data-lesson="01">`, `<div class="irow" data-lesson="01"><img src="/x.png" alt="">`)),
+    'a round part (an svg circle)': inC09((c) => c.replace(`<div class="irow" data-lesson="01">`, `<div class="irow" data-lesson="01"><svg><circle cx="1" cy="1" r="1"></circle></svg>`)),
+    'no temario at all': html.replace('<section id="c09"', '<section id="c09x"'),
+  };
+  const css = {
+    'a round chip (border-radius on .irt)': html.replace('html.fxl .irt{position:absolute;', 'html.fxl .irt{border-radius:50%;position:absolute;'),
+    'a circular clip on the layer': html.replace('html.fxl .irv{position:absolute;', 'html.fxl .irv{clip-path:circle(50%);position:absolute;'),
+  };
+  const size = {
+    'chips at 9px on a desktop': [html.replace('font:500 12px/1 var(--m);color:var(--l2);white-space:nowrap}', 'font:500 9px/1 var(--m);color:var(--l2);white-space:nowrap}'), /^the chips' text is 9px/],
+    'chips with no pixel size (rem)': [html.replace('font:500 12px/1 var(--m);color:var(--l2);white-space:nowrap}', 'font:500 .6rem/1 var(--m);color:var(--l2);white-space:nowrap}'), /^the chips' text is not sized in pixels/],
+    'chips at 8px on a phone': [html.replace('@media (max-width:480px){html.fxl .irt{padding:0 .35em;font-size:10px}}', '@media (max-width:480px){html.fxl .irt{padding:0 .35em;font-size:8px}}'), /^the chips' text on a phone is 8px/],
+    'the phone size gone': [html.replace('@media (max-width:480px){html.fxl .irt{padding:0 .35em;font-size:10px}}', ''), /^the chips' text on a phone is not set/],
+  };
+  let bad = 0;
+  for (const [what, m] of Object.entries(mut)) if (m === html || !groupRule(m, lang).length) { console.error(`FAIL self-test: groupRule does not catch "${what}"`); bad++; }
+  for (const [what, [m, re]] of Object.entries(size)) if (m === html || !groupRule(m, lang).some((x) => re.test(x))) { console.error(`FAIL self-test: groupRule does not catch "${what}"`); bad++; }
+  for (const [what, m] of Object.entries(css)) if (m === html || !judge(m, lang).some((x) => /^round: /.test(x))) { console.error(`FAIL self-test: the round-shape rule does not catch "${what}"`); bad++; }
+  return [bad, Object.keys(mut).length + Object.keys(size).length + Object.keys(css).length];
+}
+
 // ---------- chapter 12: the harness as a loop under the heading ----------
 // The owner's brief (stage 2C): «bucle de agente: plan → herramienta → observar → repetir, con hooks y skills disparándose; usa solo los términos del copy (skills, hooks, agentes, workflows)». The
 // instructor's closing sentence lists what his harness includes between two dashes; the drawing under the heading is made of exactly those five terms, and a token going round a track lights them
@@ -763,8 +822,8 @@ function judge(html, lang) {
     if (FX_COPY.test(sel) && FX_HIDES.test(r.body) && !(/\bhtml\.fxl\b/.test(sel) && /\[data-fx-/.test(sel))) f.push(`fx: "${sel}" hides the copy of an effect chapter by default (only html.fxl [data-fx-…], an attribute the armed effect sets, may)`);
   }
 
-  // chapters 03, 05, 07 and 12 are square: no rule that styles one of their parts may round it or cut it into a circle (the circular lenses are gone and stay gone)
-  for (const [what, re] of [['chapter 03', C03_CSS], ['chapter 05', C05_CSS], ['chapter 07', C07_CSS], ['chapter 12', C12_CSS]]) for (const r of rules) if (r.sel.split(',').some((sel) => re.test(sel)) && /border-radius\s*:\s*(?!0(?:px)?\s*(?:;|$))|clip-path\s*:\s*(?:circle|ellipse)/i.test(r.body)) f.push(`round: "${r.sel}" makes a round shape in ${what} (square HUD geometry, no circles, no rounded corners)`);
+  // chapters 03, 05, 07, 09 and 12 are square: no rule that styles one of their parts may round it or cut it into a circle (the circular lenses are gone and stay gone)
+  for (const [what, re] of [['chapter 03', C03_CSS], ['chapter 05', C05_CSS], ['chapter 07', C07_CSS], ['chapter 09', C09_CSS], ['chapter 12', C12_CSS]]) for (const r of rules) if (r.sel.split(',').some((sel) => re.test(sel)) && /border-radius\s*:\s*(?!0(?:px)?\s*(?:;|$))|clip-path\s*:\s*(?:circle|ellipse)/i.test(r.body)) f.push(`round: "${r.sel}" makes a round shape in ${what} (square HUD geometry, no circles, no rounded corners)`);
 
   // chapter 04 ends with its last tab: no closing line that points at specimens now living in chapter 08, and a scroll length the engine's
   // timeline is scaled for (llm.ts: GIVEN). A mismatch would change the pacing of every beat without any error.
@@ -780,6 +839,7 @@ function judge(html, lang) {
   for (const m of sharpRule(html, lang)) f.push(`sharp: ${m}`);
   for (const m of vizRule(html, lang)) f.push(`viz: ${m}`);
   for (const m of pileRule(html, lang)) f.push(`pile: ${m}`);
+  for (const m of groupRule(html, lang)) f.push(`group: ${m}`);
   for (const m of loopRule(html, lang)) f.push(`loop: ${m}`);
   for (const m of gifRule(html)) f.push(`gif: ${m}`);
   return f;
@@ -1050,6 +1110,12 @@ function mutants(html, lang) {
     ['the closing line of chapter 06 hidden by default', html.replace('</head>', '<style>.hx{opacity:0}</style></head>'), /fx: "\.hx" hides the copy/],
     ['the struck words hidden by default', html.replace('</head>', '<style>s[data-word]{color:transparent}</style></head>'), /fx: "s\[data-word\]" hides the copy/],
     ['chapter 08 without its data-fx name', html.replace('data-fx="bars-once"', 'data-fx="x"'), /fx: #c08 lost its data-fx/],
+    ['chapter 09 without its data-fx name', html.replace('data-fx="group"', 'data-fx="x"'), /fx: #c09 lost its data-fx/],
+    ['a chapter 09 row without its hook', inChapter('c09', (c) => c.replace(' data-lesson="05"', '')), /fx: #c09 has 11 data-lesson/],
+    ['chapter 09 with the pin class in the markup', html.replace('<section id="c09" class="sec cx"', '<section id="c09" class="sec cx pin"'), /layout: #c09 carries the effects' `pin` class/],
+    ['the chapter 09 chips styled without html.fxl', html.replace('html.fxl .irt{position:absolute;', '.irt{position:absolute;'), /fx: "\.irt" styles a part that only an effect adds/],
+    ['the chapter 09 layer styled without html.fxl', html.replace('html.fxl .irv{position:absolute;', '.irv{position:absolute;'), /fx: "\.irv" styles a part that only an effect adds/],
+    ['a stage-2B rule on the temario list itself (it would outlive dispose)', html.replace('html.fxl .irv{position:absolute;', 'html.fxl .idx{position:absolute;'), /fx: "html\.fxl \.idx" is in the stage-2B block but styles an element no effect owns/],
     ['chapter 08 without its bars hook', inChapter('c08', (c) => c.replace(' data-bars', '')), /fx: #c08 has 0 data-bars/],
     ['the chapter 08 bar pre-state styled without html.fxl', html.replace('html.fxl [data-fx-s] .cb i{', '[data-fx-s] .cb i{'), /fx: "\[data-fx-s\] \.cb i" styles a part that only an effect adds/],
     ['the chapter 08 bars hidden by default', html.replace('</head>', '<style>.cb i{opacity:0}</style></head>'), /fx: "\.cb i" hides the copy/],
@@ -1210,8 +1276,8 @@ function engineBootSelfTest(src) {
 // The effects are code that touches a page whose copy is its own gate's business. They write no copy (text comes from the DOM), they animate only transform,
 // opacity, clip-path and filter (layout is CSS under html.fxl, decided once at attach), and an effect that pre-arms something (hides it, waiting) does it only to
 // what is below the fold. `files` is { 'c02.ts': source, ... }.
-const FX_PREARM = ['c02.ts', 'c03.ts', 'c05v.ts', 'c07.ts', 'c08.ts', 'c12v.ts', 'wordmark.ts'];                              // modules that arm pre-states for play-once effects: they must ask belowFold() first (a scrubbed one is a function of the scroll position and arms nothing)
-const FX_MODULES = ['index.ts', 'common.ts', 'c02.ts', 'c03.ts', 'c05.ts', 'c05v.ts', 'c06.ts', 'c07.ts', 'c08.ts', 'c12v.ts', 'wordmark.ts'];
+const FX_PREARM = ['c02.ts', 'c03.ts', 'c05v.ts', 'c07.ts', 'c08.ts', 'c09.ts', 'c12v.ts', 'wordmark.ts'];                              // modules that arm pre-states for play-once effects: they must ask belowFold() first (a scrubbed one is a function of the scroll position and arms nothing)
+const FX_MODULES = ['index.ts', 'common.ts', 'c02.ts', 'c03.ts', 'c05.ts', 'c05v.ts', 'c06.ts', 'c07.ts', 'c08.ts', 'c09.ts', 'c12v.ts', 'wordmark.ts'];
 const ANIMATED = new Set(['transform', 'opacity', 'clipPath', 'filter', 'willChange']);
 function fxSource(files) {
   const f = [];
@@ -1264,6 +1330,10 @@ function fxSourceSelfTest(files) {
     ['a layout property animated (chapter 07, style.width)', { ...files, 'c07.ts': files['c07.ts'].replace('export function initC07', "document.body.style.width = '1px';\nexport function initC07") }, /c07\.ts: sets style\.width/],
     ['a pre-state armed without once() or belowFold() (chapter 08)', { ...files, 'c08.ts': files['c08.ts'].replace('once(box, undo', 'go(box, undo') }, /c08\.ts: arms a pre-state without asking belowFold/],
     ['a layout property animated (chapter 08, style.width)', { ...files, 'c08.ts': files['c08.ts'].replace('export function initC08', "document.body.style.width = '1px';\nexport function initC08") }, /c08\.ts: sets style\.width/],
+    ['a pre-state armed without once() or belowFold() (chapter 09)', { ...files, 'c09.ts': files['c09.ts'].replace('once(l.row, undo', 'go(l.row, undo') }, /c09\.ts: arms a pre-state without asking belowFold/],
+    ['a layout property animated (chapter 09, style.width)', { ...files, 'c09.ts': files['c09.ts'].replace('export function initC09', "document.body.style.width = '1px';\nexport function initC09") }, /c09\.ts: sets style\.width/],
+    ['a literal written by the chapter 09 chips', { ...files, 'c09.ts': files['c09.ts'].replace('c.textContent = p;', "c.textContent = 'x';") }, /c09\.ts: writes a string literal/],
+    ['a custom property of the page set by chapter 09 (--lg)', { ...files, 'c09.ts': files['c09.ts'].replace('export function initC09', "document.body.style.setProperty('--lg', '1px');\nexport function initC09") }, /c09\.ts: sets the custom property --lg/],
     ['a pre-state armed without once() or belowFold() (chapter 12 loop)', { ...files, 'c12v.ts': files['c12v.ts'].replace('once(box!, undo', 'go(box!, undo') }, /c12v\.ts: arms a pre-state without asking belowFold/],
     ['a layout property animated (chapter 12 loop, style.width)', { ...files, 'c12v.ts': files['c12v.ts'].replace('export function initC12V', "document.body.style.width = '1px';\nexport function initC12V") }, /c12v\.ts: sets style\.width/],
     ['a literal written by the chapter 12 loop', { ...files, 'c12v.ts': files['c12v.ts'].replace('export function initC12V', "document.body.textContent = 'x';\nexport function initC12V") }, /c12v\.ts: writes a string literal/],
@@ -1331,7 +1401,7 @@ for (const m of fxSource(fxFiles)) { console.error(`FAIL fx: ${m}`); fail++; }
 for (const lang of LANGS) {
   const html = pages.get(`${lang}/none`);
   fail += selfTest(html, lang); mutantCount += mutants(html, lang).length;
-  for (const t of [deltaSelfTest, tokensSelfTest, chatSelfTest, sharpSelfTest, vizSelfTest, pileSelfTest, loopSelfTest, gifSelfTest]) { const [bad, n] = t(html, lang); fail += bad; mutantCount += n; }
+  for (const t of [deltaSelfTest, tokensSelfTest, chatSelfTest, sharpSelfTest, vizSelfTest, pileSelfTest, groupSelfTest, loopSelfTest, gifSelfTest]) { const [bad, n] = t(html, lang); fail += bad; mutantCount += n; }
 }
 for (const lang of LANGS) for (const cc of MARKETS) {
   const tag = `${lang}/${cc ?? 'none'}`, html = pages.get(tag);

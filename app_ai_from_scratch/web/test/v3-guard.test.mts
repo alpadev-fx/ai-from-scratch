@@ -15,6 +15,7 @@ import { ahead } from '../src/aegis/seq.ts';
 import { followStep, glowAlpha, rng, squareFrame, squareGlow, toward, type Follow } from '../src/aegis/util.ts';
 import { END as C12_END, GEO as C12_GEO, LAP as C12_LAP, LAPS, LAPS_END, NODES as C12_NODES, NODE_BUDGET as C12_BUDGET, T as C12_T, beat, loopOf, nodeCount, tickAt } from '../src/aegis/c12-data.ts';
 import { NODE_BUDGET as C07_BUDGET, ROWS as C07_ROWS, T as C07_T, count as c07Count, fall as c07Fall, nodeCount as c07Nodes, plan as c07Plan } from '../src/aegis/c07-data.ts';
+import { NODE_BUDGET as C09_BUDGET, T as C09_T, chip as c09Chip, flight as c09Flight, nodeCount as c09Nodes, plain as c09Plain, plan as c09Plan, title as c09Title, wrap as c09Wrap } from '../src/aegis/c09-data.ts';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 
 test('guard throws on a city, on plural courses, and lets the tokenizer sentence through', () => {
@@ -1097,4 +1098,134 @@ test('chapter 07: the effect writes only transform, opacity and --fx-l, writes n
   assert.ok(/CHAPTERS[^\n]*\['c07', initC07\]/.test(readFileSync(new URL('../src/aegis/fx/index.ts', import.meta.url), 'utf8')), 'the effect is registered in the list of chapters');
   // the number is an overlay: the real text stays, transparent while it runs, and the overlay goes in the task the last number lands
   assert.ok(/ov = el\('i', 'fxk num'\)/.test(code) && /onComplete: done/.test(code), 'the counter overlay is made when the effect arms and removed when it is done');
+});
+
+test('chapter 09: the river runs in the order the title reads at one speed, its head (the last token) comes to rest first and each chip behind it comes to rest against the one in front, and no chip is ever over another (the real titles, both languages, every width of the title\'s box)', () => {
+  // a 12px mono chip is 7.2 px a character plus 14 px of padding and border (the harness measures the real ones in three browsers); the box is 208 px (a 901px desktop) to 585 px (a tablet), the title starts 74 px (a phone) or 232 px (desktop) from the screen's edge
+  const MONO = 7.2, PAD = 14, GAP = 3, LINE = 28, OUT = 24;
+  const titles = (lang: 'es' | 'en') => modulos(lang).map((m) => piecesOf(TOKENS[lang], m.h).map((p) => show(p[0])));
+  let cases = 0, minGapSeen = Infinity;
+  for (const lang of ['es', 'en'] as const) for (const chips of titles(lang)) for (const maxW of [208, 259, 300, 344, 494, 585]) for (const left of [74, 232]) {
+    const w = chips.map((t) => t.length * MONO + PAD), at = c09Wrap(w, maxW, GAP, LINE), n = w.length, dist = w.map((cw, k) => left + at.pos[k]![0] + cw + OUT), P = c09Plan(dist);
+    assert.ok(Math.abs(Math.min(...P.set) - C09_T.lead) < 1e-9, 'the first chip sets off at the lead and no chip before it');
+    // the head of the river is the title's LAST token: it comes to rest first, then each one before it, one pace apart (the river closes up behind its head)
+    for (let k = 0; k < n - 1; k++) assert.ok(Math.abs(P.dock[k]! - P.dock[k + 1]! - C09_T.pace) < 1e-9, `${lang}: chip ${k} comes to rest ${C09_T.pace} s after chip ${k + 1}`);
+    assert.ok(Math.abs(P.last - P.dock[0]!) < 1e-9 && Math.abs(P.m0 - (P.last + C09_T.hold)) < 1e-9 && Math.abs(P.end - (P.m0 + C09_T.merge)) < 1e-9, 'the clocks add up: the last chip at rest, the hold, the merge');
+    assert.ok(P.end > 1 && P.end < 2.3, `a row plays for ${P.end.toFixed(2)} s, once`);
+    // a chip waits OUT px beyond the screen's left edge: its right edge is at -OUT in the screen's coordinates (title box + offset - distance + width)
+    w.forEach((cw, k) => assert.ok(Math.abs(left + at.pos[k]![0] - c09Chip(P, k, 0).r + cw + OUT) < 1e-9, `chip ${k} waits with its right edge ${OUT} px beyond the screen's left edge`));
+    // the pictures, every 4 ms: nothing runs back, nothing runs faster than the river, nobody waiting is seen, and no two chips of a line touch
+    const prev = dist.map((d) => d);
+    for (let x = 0; x <= P.end + 0.004; x += 0.004) {
+      const cs = dist.map((_, k) => c09Chip(P, k, x));
+      cs.forEach((c, k) => {
+        assert.ok(c.r >= 0 && c.r <= dist[k]! + 1e-9 && c.r <= prev[k]! + 1e-9, `chip ${k} never runs back (${c.r} after ${prev[k]})`);
+        assert.ok(prev[k]! - c.r <= C09_T.speed * 0.004 + 1e-6, `chip ${k} never runs faster than the river: ${(prev[k]! - c.r) / 0.004} px/s`);
+        if (x <= P.set[k]!) assert.ok(c.a === 0 && c.r === dist[k], `chip ${k} waits unseen until it sets off`);
+        else if (x <= P.m0) assert.equal(c.a, 1, `chip ${k} is whole from its set-off to the merge`);
+        prev[k] = c.r;
+      });
+      for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
+        if (at.pos[i]![1] !== at.pos[j]![1] || cs[i]!.a <= 0 || cs[j]!.a <= 0) continue;
+        const gap = (at.pos[j]![0] - cs[j]!.r) - (at.pos[i]![0] - cs[i]!.r + w[i]!);
+        assert.ok(gap >= GAP - 1e-6, `${lang}, box ${maxW}: chips ${i} and ${j} are ${gap.toFixed(2)} px apart at ${x.toFixed(3)} s`); minGapSeen = Math.min(minGapSeen, gap);
+      }
+    }
+    cases++;
+  }
+  assert.equal(cases, 2 * 12 * 6 * 2); assert.ok(Math.abs(minGapSeen - GAP) < 1e-6, `the closest two chips ever get is the 3 px of the finished title (${minGapSeen})`);
+  // the chips of a title that wraps stand on lines 28 px apart (a chip is 24 px tall: no chip of one line touches another's)
+  assert.ok(LINE >= 24 + 4);
+});
+
+test('chapter 09: the clocks of one row (the stop, the hold, the merge, the words coming back) and what the schedule refuses', () => {
+  const P = c09Plan([400, 300, 250, 500, 340]);
+  // a chip runs at one speed, then slows to a stop in T.stop: the stop covers speed * stop / 2 px, so the whole run takes distance / speed + stop / 2
+  for (let k = 0; k < 5; k++) assert.ok(Math.abs(P.dock[k]! - P.set[k]! - c09Flight(P.dist[k]!)) < 1e-12 && Math.abs(c09Flight(P.dist[k]!) - (P.dist[k]! / C09_T.speed + C09_T.stop / 2)) < 1e-12);
+  const k = 3, F = c09Flight(P.dist[k]!), at = (tau: number) => c09Chip(P, k, P.set[k]! + tau).r;
+  assert.equal(at(-0.1), 500); assert.equal(at(0), 500); assert.equal(at(F), 0); assert.equal(at(F + 1), 0);
+  assert.ok(Math.abs(at(0.1) - (500 - C09_T.speed * 0.1)) < 1e-9, 'one speed all along the river');
+  const s0 = F - C09_T.stop; assert.ok(Math.abs(at(s0) - C09_T.speed * C09_T.stop / 2) < 1e-9, 'the stop begins where the speed leaves exactly speed * stop / 2 px to go');
+  assert.ok(Math.abs(at(s0 + 1e-6) - at(s0) + C09_T.speed * 1e-6) < 1e-6, 'and it begins at the river\'s own speed (no jolt)');
+  assert.ok(at(F - 1e-4) > 0 && at(F - 1e-4) / 1e-4 < 1, 'and it ends at rest (the speed is under 1 px/s a tenth of a millisecond before it stops)');
+  // opacity: unseen until it sets off, whole until the merge, gone 70 % of the merge later; the words come back after the chips begin to go and are whole at the end
+  assert.equal(c09Chip(P, 0, 0).a, 0); assert.equal(c09Chip(P, 0, P.m0).a, 1); assert.ok(Math.abs(c09Chip(P, 0, P.m0 + C09_T.merge * 0.35).a - 0.5) < 1e-9); assert.equal(c09Chip(P, 0, P.end).a, 0);
+  assert.equal(c09Title(P, 0), 0); assert.equal(c09Title(P, P.m0 + C09_T.merge * 0.3), 0); assert.equal(c09Title(P, P.end), 1); assert.equal(c09Title(P, P.end + 5), 1);
+  let prev = 0; for (let x = 0; x <= P.end; x += 0.005) { const t = c09Title(P, x); assert.ok(t >= prev && t >= 0 && t <= 1); prev = t; }
+  // no chips: the words just come in (the narrowest phones, where a second line of chips would stand over the lesson's paragraph)
+  assert.equal(c09Plain.dist.length, 0); assert.ok(Math.abs(c09Plain.end - (C09_T.lead + C09_T.merge)) < 1e-12); assert.equal(c09Title(c09Plain, 0), 0); assert.equal(c09Title(c09Plain, c09Plain.end), 1);
+  // fail closed: no chips, a distance that is not a number, a run too short to stop in
+  assert.throws(() => c09Plan([]), /c09:/); assert.throws(() => c09Plan([300, NaN]), /c09:/); assert.throws(() => c09Plan([300, Infinity]), /c09:/); assert.throws(() => c09Plan([300, -5]), /c09:/); assert.throws(() => c09Plan([300, 0]), /c09:/);
+  assert.throws(() => c09Plan([300, (C09_T.speed * C09_T.stop) / 2]), /c09:/); assert.doesNotThrow(() => c09Plan([300, (C09_T.speed * C09_T.stop) / 2 + 1]));
+  // wrap(): left to right in the title's box, a new line where the next chip would not fit, a chip wider than the box on a line of its own
+  const w = c09Wrap([100, 100, 100], 250, 3, 28); assert.deepEqual(w.pos, [[0, 0], [103, 0], [0, 28]]); assert.equal(w.lines, 2); assert.equal(w.h, 56);
+  assert.deepEqual(c09Wrap([300, 50], 250, 3, 28).pos, [[0, 0], [0, 28]]); assert.equal(c09Wrap([100, 100], 203, 3, 28).lines, 1, 'a chip that fits to the pixel stays on its line');
+  // the rule can fail: a river that closed up at 0.2 s a chip would take more than the 2.3 s a row is allowed for the longest title (nine chips)
+  assert.ok(C09_T.lead + 8 * 0.2 + 0.5 + C09_T.hold + C09_T.merge > 2.3);
+});
+
+test('chapter 09: the effect writes a style on one node per chip and one per title and adds one layer (75 of the contract\'s 80, however many rows are read one by one), and the markup is the temario as it was: twelve rows in the lessons\' order, nothing added to it', () => {
+  assert.equal(C09_BUDGET, 80, 'the budget of the contract');
+  for (const lang of ['es', 'en'] as const) {
+    const chips = modulos(lang).reduce((n, m) => n + piecesOf(TOKENS[lang], m.h).length, 0);
+    assert.equal(c09Nodes(chips, 12), 75); assert.ok(c09Nodes(chips, 12) <= C09_BUDGET, `${lang}: ${chips} chips, 12 titles and the layer`);
+  }
+  assert.ok(c09Nodes(68, 12) > C09_BUDGET, 'the rule can fail');
+  const page = readFileSync(new URL('../src/pages/v3.astro', import.meta.url), 'utf8'), a = page.indexOf('<section id="c09"'), b = page.indexOf('<section id="c10"'), sec = page.slice(a, b);
+  assert.ok(a > 0 && b > a, 'chapter 09 is where this test looks for it');
+  assert.ok(/data-fx="group"/.test(sec) && !/data-flip|data-fx="flip"/.test(sec), 'the effect\'s name, and the Flip it replaced is gone');
+  assert.ok(/\{mods\.map\(\(m\) => \(\s*<div class="irow" data-lesson=\{m\.n\}>/.test(sec), 'one row per lesson in the lessons\' order, each with its number as the hook');
+  assert.ok(/<div class="ih">\{m\.h\}<\/div>/.test(sec), 'the title is the lesson\'s own text (the effect reads it)');
+  assert.ok(!/\birt\b|\birv\b|fxk/.test(sec), 'the chips and their layer are the effect\'s: the server renders none of them');
+  assert.ok(!/<circle|<svg|<img|<canvas|border-radius/.test(sec), 'nothing round, no image');
+  assert.equal(modulos('es').length, 12); assert.deepEqual(modulos('es').map((m) => m.n), ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12']);
+});
+
+test('chapter 09 is square and its class names are its own: no round shape in an `irt` or `irv` rule, the chips\' text is 10px or more at every width, and every rule of them hangs on html.fxl', () => {
+  const css = readFileSync(new URL('../src/aegis/v3.css', import.meta.url), 'utf8').replace(/\/\*(?!!)[\s\S]*?\*\//g, '');
+  const NAMES = /\.irt(?![\w-])|\.irv(?![\w-])/;
+  const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ sel: m[1]!.trim(), body: m[2]! })), mine = rules.filter((r) => r.sel.split(',').some((x) => NAMES.test(x)));
+  assert.equal(mine.length, 3, 'the layer, the chip, and the chip on a narrow phone');
+  const round = (b: string) => /border-radius\s*:\s*(?!0(?:px)?\s*(?:;|$))|clip-path\s*:\s*(?:circle|ellipse)/i.test(b);
+  for (const r of mine) { assert.ok(!round(r.body), `«${r.sel}» is round`); assert.ok(/^(?:@media[^{]*\{)?\s*html\.fxl /.test(r.sel) || r.sel.startsWith('html.fxl '), `«${r.sel}» is not keyed to html.fxl (it would outlive dispose())`); assert.ok(!/transition|animation|will-change|filter|box-shadow|text-shadow/.test(r.body), `«${r.sel}»: the effect moves the chips, the stylesheet does not`); }
+  // the text: 12px, and 10px on a phone (the page's floor for mono labels); the chips stand in the title's box, which is 230 px wide on a 320px phone and 300 on a 390
+  const sized = (b: string) => { const m = /(?:^|;)font(?:-size)?\s*:[^;]*?(\d+(?:\.\d+)?)px/.exec(b); return m ? parseFloat(m[1]!) : null; };
+  const chip = mine.find((r) => /^html\.fxl \.irt$/.test(r.sel)), narrow = mine.find((r) => /\.irt$/.test(r.sel) && r !== chip);
+  assert.ok(chip && sized(chip.body) === 12 && /position:absolute/.test(chip.body) && /height:24px/.test(chip.body) && /white-space:nowrap/.test(chip.body), 'the chip: 12px mono, 24px tall, never wrapping');
+  assert.ok(narrow && sized(narrow.body) === 10 && /padding:0 \.35em/.test(narrow.body), 'on a phone: 10px, padded tighter');
+  assert.ok(css.includes('@media (max-width:480px){html.fxl .irt{'), 'at 480px and under');
+  for (const r of mine) { const z = sized(r.body); if (z !== null) assert.ok(z >= 10, `«${r.sel}» sets its text at ${z}px`); }
+  assert.ok(sized('font:500 10px/1 var(--m)') === 10 && sized('font:500 9px/1 var(--m)') === 9 && sized('font-size:8px') === 8 && sized('color:red') === null);
+  const layer = mine.find((r) => /\.irv$/.test(r.sel));
+  assert.ok(layer && /position:absolute/.test(layer.body) && /width:0/.test(layer.body) && /height:0/.test(layer.body) && /pointer-events:none/.test(layer.body), 'the layer is a point at the corner of its box, and never takes a click');
+  assert.ok(!/html\.fxl \.idx\s*\{/.test(css), 'the list is not positioned by the stylesheet (the effect measures the corner of the layer, wherever the page puts it)');
+  const stray = (t: string) => [...t.matchAll(/([^{}]+)\{([^{}]*)\}/g)].flatMap((m) => m[1]!.split(',').map((x) => x.trim())).filter((x) => NAMES.test(x));
+  assert.deepEqual(stray(css), ['html.fxl .irv', 'html.fxl .irt', 'html.fxl .irt'], 'no other rule of the stylesheet styles an `irt` or `irv`');
+  const page = readFileSync(new URL('../src/pages/v3.astro', import.meta.url), 'utf8');
+  assert.ok(!/class="[^"]*\b(?:irt|irv)\b/.test(page), 'and the page uses neither class: they are the effect\'s');
+  // the rule can fail
+  assert.deepEqual(stray('.irt{padding:8px}.x .irv{y:1}.foo{z:1}.irtx{a:1}'), ['.irt', '.x .irv']);
+  assert.ok(round('border-radius:50%;width:1px') && round('clip-path:circle(50%)') && !round('border:1px solid red'));
+});
+
+test('chapter 09: the effect writes only transform and opacity, adds no node but the chips and their layer, writes no copy but a token\'s own text, plays each row once on c09-data\'s clocks, gives a row back whole when anything fails, and is registered', () => {
+  const src = readFileSync(new URL('../src/aegis/fx/c09.ts', import.meta.url), 'utf8'), code = src.replace(/\/\/.*$/gm, '');
+  assert.ok(!/\.style\.(?!opacity\b|transform\b)\w+\s*=(?!=)/.test(code), 'it sets only style.opacity and style.transform');
+  assert.ok(!/setProperty\(/.test(code), 'it sets no custom property');
+  assert.deepEqual([...new Set([...code.matchAll(/style\.removeProperty\('([^']+)'\)/g)].map((m) => m[1]))], ['opacity'], 'what it gives back is the title\'s opacity');
+  assert.deepEqual([...code.matchAll(/\.textContent\s*=\s*([^;]+);/g)].map((m) => m[1]), ['p'], 'the only text it writes is a token piece, read from the page\'s own token file');
+  assert.ok(/piecesOf\(map, ih\.textContent \?\? ''\)\.map\(\(p\) => show\(p\[0\]\)\)/.test(code) && /tokensFromPage\(\)/.test(code), 'the pieces are the real ones, a leading space shown as «·» by show()');
+  assert.deepEqual([...code.matchAll(/\bel\('([a-z]+)', '([^']+)'\)/g)].map((m) => `${m[1]}.${m[2]}`), ['div.fxk irv', 'i.fxk irt'], 'the nodes it adds: its layer and its chips, both marked fxk');
+  assert.ok(/layer\.setAttribute\('aria-hidden', 'true'\)/.test(code), 'and the layer is a decoration (aria-hidden)');
+  assert.ok(!/innerHTML|innerText|insertAdjacent|\.prepend\(|cloneNode|replaceWith|createElement|createTextNode/.test(code), 'it moves no node and writes no markup');
+  assert.ok(!/canvas|drawImage|fetch\(|\.webp|\.gif|\.apng/i.test(code), 'no footage, no sprite, no animated image');
+  assert.ok(/import \{[^}]*\bplan\b[^}]*\} from '\.\.\/c09-data'/.test(src) && /duration: s\.plan\.end\b/.test(code) && /x: s\.plan\.end\b/.test(code), 'it plays for the end of c09-data\'s plan');
+  assert.ok(/once\(l\.row, undo/.test(code) && /REG\[`c09:\$\{l\.n\}`\]/.test(code) && /margin:/.test(code), 'every row is a play-once effect that asks once(), and shows itself to the review hooks');
+  assert.ok(/CHAPTERS[^\n]*\['c09', initC09\]/.test(readFileSync(new URL('../src/aegis/fx/index.ts', import.meta.url), 'utf8')), 'the effect is registered in the list of chapters');
+  // a row whose picture cannot be drawn, or whose chips cannot be placed, is given back whole (fail open), and a width change gives back the rows that are playing
+  assert.ok(/catch \(e\) \{ off\(e\); \}/.test(code) && /const off = \(e: unknown\) => \{ console\.warn\([^;]*; done\(\); \}/.test(code), 'a failure is a warning and the row given back whole');
+  assert.ok(/onWidth\(\(\) => \{[^}]*state\(\) === 'run'[^}]*\.clear\(\)/.test(code), 'a width change gives back the rows that are playing');
+  assert.ok(/plain/.test(code) && /P\.top - H\.top < at\.h - LINES/.test(code), 'a title whose chips would stand over the paragraph under it has no chips');
+  assert.ok(/onComplete: done/.test(code) && /const clear = \(l: Lesson\) => \{[^}]*s\.chips\.forEach\(\(c\) => c\.remove\(\)\); runs\.delete\(l\);/.test(code), 'the chips are removed in the very task the row is done (clear() is what once() calls then)');
+  assert.ok(/const release = \(\) => \{ if \(layer && !layer\.firstChild && ones\.every\(\(o\) => o\.state\(\) === 'static'\)\) \{ layer\.remove\(\);/.test(code), 'the one layer is kept while any row is waiting or playing (a list read row by row makes one layer, not twelve) and goes with the last row');
 });

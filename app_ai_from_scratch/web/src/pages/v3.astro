@@ -460,14 +460,14 @@ setTimeout(function(){
   </div>
 </section>
 
-<!-- ===== 09 · TEMARIO (the 12 lessons). Stage 2B: the bento reorders with Flip. ===== -->
-<section id="c09" class="sec cx" aria-labelledby="c09h" data-fx="flip">
+<!-- ===== 09 · TEMARIO (the 12 lessons, in the temario's order: it never changes). Stage 2C: when a row comes into view the real tokens of its title arrive from the edge of the screen and group into it (src/aegis/fx/c09.ts). ===== -->
+<section id="c09" class="sec cx" aria-labelledby="c09h" data-fx="group">
   <div class="sh"><div class="sn">■ {label('09', V.ch09)}</div><div class="sx">{cnt('09')}</div></div>
   <h2 id="c09h" class="hx">{P.indH2}</h2>
   <p class="xsub">{P.indSub}</p>
   <div class="idx">
     {mods.map((m) => (
-      <div class="irow" data-flip={m.n}><div class="in">{m.n}</div><div><div class="ie">{m.eb}</div><div class="ih">{m.h}</div></div><p>{m.d}</p><div><div class="ik">{m.k}</div><div class="ikc">{m.kc}</div></div></div>
+      <div class="irow" data-lesson={m.n}><div class="in">{m.n}</div><div><div class="ie">{m.eb}</div><div class="ih">{m.h}</div></div><p>{m.d}</p><div><div class="ik">{m.k}</div><div class="ikc">{m.kc}</div></div></div>
     ))}
   </div>
 </section>

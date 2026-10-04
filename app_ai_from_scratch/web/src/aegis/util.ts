@@ -3,6 +3,10 @@ export const clamp = (x: number, a = 0, b = 1) => Math.max(a, Math.min(b, x));
 export const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 /** `cur` moved toward `target` by at most `step` (never past it). */
 export const toward = (cur: number, target: number, step: number) => cur + clamp(target - cur, -step, step);
+/** The light of a soft sprite by its distance d from the centre (0 at the centre, 1 at the edge): 1 at the centre, 0.8 at `hard`, 0 at the edge. These are the stops of the radial gradient the page's glows use. */
+export const glowAlpha = (d: number, hard: number) => (d >= 1 ? 0 : d <= hard ? 1 - 0.2 * (d / hard) : 0.8 * (1 - (d - hard) / (1 - hard)));
+/** The same light with a SQUARE falloff, for x, y in -1..1: the distance is the Chebyshev one, max(|x|, |y|), so the glow dies out along the sides of a square and not along a circle. */
+export const squareGlow = (x: number, y: number, hard: number) => glowAlpha(Math.max(Math.abs(x), Math.abs(y)), hard);
 /** A square outline centred on the origin as an indexed triangle list: the outer square of half-side `o` minus the inner one of half-side `i` (8 vertices x, y, z = 0; 8 triangles). */
 export const squareFrame = (o: number, i: number) => ({
   pos: new Float32Array([-o, -o, 0, o, -o, 0, o, o, 0, -o, o, 0, -i, -i, 0, i, -i, 0, i, i, 0, -i, i, 0]),

@@ -14,7 +14,7 @@ import { card as _c, headline } from './hud';
 import { softmax, pctText } from './specimens';
 import { piecesOf, show, tokensFromPage } from './tokens';
 import type { GL } from './engine';
-import { $, $$, clamp, eio, eo, lerp, rng, seg, squareFrame, ss, toward } from './util';
+import { $, $$, clamp, eio, eo, lerp, rng, seg, squareFrame, squareGlow, ss, toward } from './util';
 
 const SP = [0.1, 0.32, 0.56, 0.78, 0.94];          // stage boundaries (progress)
 // The timeline below was authored over a 6.4-screen chapter and ends at p = 0.96, where the panel and the card have faded. The chapter no longer
@@ -63,7 +63,11 @@ export function initLLM(gl: GL) {
   const scene = new THREE.Scene(), cam = new THREE.PerspectiveCamera(40, 1, 0.05, 400);
   const mkTex = (sz: number, hard: number) => { const c = document.createElement('canvas'); c.width = c.height = sz; const x = c.getContext('2d')!, g = x.createRadialGradient(sz / 2, sz / 2, 0, sz / 2, sz / 2, sz / 2);
     g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(hard, 'rgba(255,255,255,.8)'); g.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = g; x.fillRect(0, 0, sz, sz); return new THREE.CanvasTexture(c); };
-  const DOT = mkTex(64, 0.22), GLOWT = mkTex(128, 0.05);
+  // The output node's core is the same light as a dot's (1 at the centre, 0.8 at `hard`, 0 at the edge) with a SQUARE falloff: it sits inside a square outline and a round glow in it read as a circle.
+  const mkSquareTex = (sz: number, hard: number) => { const c = document.createElement('canvas'); c.width = c.height = sz; const x = c.getContext('2d')!, img = x.createImageData(sz, sz), h = sz / 2;
+    for (let j = 0; j < sz; j++) for (let i = 0; i < sz; i++) { const k = (j * sz + i) * 4; img.data[k] = img.data[k + 1] = img.data[k + 2] = 255; img.data[k + 3] = Math.round(255 * squareGlow((i + 0.5 - h) / h, (j + 0.5 - h) / h, hard)); }
+    x.putImageData(img, 0, 0); return new THREE.CanvasTexture(c); };
+  const DOT = mkTex(64, 0.22), GLOWT = mkSquareTex(128, 0.05);
   const uPR = { value: gl.PR }, uTime = { value: 0 }, uCol = { value: new THREE.Color(1, 1, 1) }, uPaper = { value: 0 };
   const V3 = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
   const mats: Array<{ m: ThreeNS.Material & { blending: ThreeNS.Blending }; add: boolean }> = [];

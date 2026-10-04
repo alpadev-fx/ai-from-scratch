@@ -12,7 +12,7 @@ import { piecesOf, show, wordsOf, type TokenFile } from '../src/aegis/tokens.ts'
 import { ANSWERS, CURVE, DIALS, END, NODES, NODE_BUDGET, T, TRACK_NODES, VIZ, WEIGHTS, curveOf, dialAngles, figureInts, stackOf, weightHeights } from '../src/aegis/c05-data.ts';
 import { DEFAULTS, LADDER, WHAT, createRatchet, type Step } from '../src/aegis/quality.ts';
 import { ahead } from '../src/aegis/seq.ts';
-import { squareFrame, toward } from '../src/aegis/util.ts';
+import { glowAlpha, squareFrame, squareGlow, toward } from '../src/aegis/util.ts';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 
 test('guard throws on a city, on plural courses, and lets the tokenizer sentence through', () => {
@@ -812,3 +812,22 @@ test('chapter 01: the data card\'s light moves by transform, not by layout, and 
   assert.equal(left, -width, 'it starts with its right edge on the card\'s left edge');
   assert.ok(Math.abs((k * width) / 100 - (100 + 2 * width)) < 1e-9, `${k} % of a ${width} %-wide band is ${(k * width) / 100} % of the card; the way across is ${100 + 2 * width} %`);
 });
+
+test('chapter 04: the output node\'s core is a light with a SQUARE falloff (the Chebyshev distance) and the stops of a dot\'s, and only the node uses it', () => {
+  const llm = readFileSync(new URL('../src/aegis/llm.ts', import.meta.url), 'utf8').replace(/\/\/.*$/gm, '');
+  assert.ok(/GLOWT = mkSquareTex\(128, 0\.05\)/.test(llm) && /DOT = mkTex\(64, 0\.22\)/.test(llm), 'the node\'s core is the square light; the dots keep their round one');
+  assert.equal((llm.match(/\bGLOWT\b/g) ?? []).length, 2, 'GLOWT is made once and read once: by the node\'s core');
+  assert.ok(/map: GLOWT, color: 0x0A84FF, opacity: 0/.test(llm), 'the core keeps its colour and starts at opacity 0 (the opacity law and the flash are the node\'s own, untouched)');
+  assert.ok(/squareGlow\(\(i \+ 0\.5 - h\) \/ h, \(j \+ 0\.5 - h\) \/ h, hard\)/.test(llm), 'every texel is lit by squareGlow at the centre of the texel');
+  // the stops of the radial gradient it replaces: 1 at the centre, 0.8 at `hard`, 0 at the edge, falling all the way and never rising
+  for (const hard of [0.05, 0.22]) {
+    assert.equal(glowAlpha(0, hard), 1); assert.ok(Math.abs(glowAlpha(hard, hard) - 0.8) < 1e-12); assert.equal(glowAlpha(1, hard), 0); assert.equal(glowAlpha(1.7, hard), 0);
+    let prev = 1; for (let k = 0; k <= 2000; k++) { const v = glowAlpha(k / 2000, hard); assert.ok(v <= prev + 1e-12 && v >= 0, `monotone and in range at ${k / 2000}`); prev = v; }
+  }
+  // square: the light depends on max(|x|, |y|) alone, so it is the same all along a side and in a corner (a circle's corner is dark), and the same in all four quadrants
+  const h = 0.05;
+  assert.equal(squareGlow(0.6, 0, h), squareGlow(0.6, 0.6, h)); assert.equal(squareGlow(0.6, 0.3, h), squareGlow(-0.6, -0.6, h)); assert.equal(squareGlow(0.3, -0.6, h), squareGlow(-0.6, 0.1, h));
+  assert.ok(squareGlow(0.9, 0.9, h) > 0 && Math.hypot(0.9, 0.9) > 1 && glowAlpha(Math.hypot(0.9, 0.9), h) === 0, 'the corner of the sprite is lit by the square falloff and was dark in the round one');
+  assert.equal(squareGlow(1, 0.2, h), 0); assert.equal(squareGlow(0.2, -1, h), 0);                  // it dies out exactly on the sides of the sprite
+});
+

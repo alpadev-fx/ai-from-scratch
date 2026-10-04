@@ -631,7 +631,7 @@ function sortSelfTest(html, lang) {
 
 // ---------- chapter 14: the price, made by its real tokens and rolling up to itself ----------
 // The plan's verb for chapter 14 is «rodar»: when the price's figure comes into view the REAL o200k tokens of the published price («$39.990» is $ 39 . 990, «39,990 COP» is 39 , 990 « COP») are square chips laid
-// over their own characters, the digits of the numeric ones roll up to the price like the wheels of an odometer, the price stands as its tokens, and the real figure comes in under the chips, which fade away
+// over their own characters, the digits of the numeric ones rise into them, each on a wheel of ONE row (its own digit: no figure but the published price is ever legible), the price stands as its tokens, and the real figure comes in under the chips, which fade away
 // (src/aegis/fx/c14.ts), while the 30 segments of the bar light up. The server renders only the figure and the bar as they always were: the published price in ONE text node (the effect measures where each of
 // its characters stands and finds its tokens in the page's own token file, so a price that is not in it would stop the effect at attach, and this gate says so before it ships) and 30 empty segments. The layer, the
 // chips and the wheels are the effect's own. The layer is set in the figure's own typeface (one rule, shared with the figure, so that the wheels are the figure's glyphs), the chips are square accent hairline boxes,
@@ -1516,7 +1516,7 @@ function fxSourceSelfTest(files) {
     ['a custom property of the page set by chapter 13 (--lg)', { ...files, 'c13.ts': files['c13.ts'].replace('export function initC13', "document.body.style.setProperty('--lg', '1px');\nexport function initC13") }, /c13\.ts: sets the custom property --lg/],
     ['a pre-state armed without once() or belowFold() (chapter 14)', { ...files, 'c14.ts': files['c14.ts'].replace('once(pbig, undo', 'go(pbig, undo') }, /c14\.ts: arms a pre-state without asking belowFold/],
     ['a layout property animated (chapter 14, style.width)', { ...files, 'c14.ts': files['c14.ts'].replace('export function initC14', "document.body.style.width = '1px';\nexport function initC14") }, /c14\.ts: sets style\.width/],
-    ['a literal written by the chapter 14 wheels', { ...files, 'c14.ts': files['c14.ts'].replace('s.textContent = strip(w.digit).join', "s.textContent = '0\\n1'; s.textContent = strip(w.digit).join") }, /c14\.ts: writes a string literal into the page/],
+    ['a literal written by the chapter 14 wheels', { ...files, 'c14.ts': files['c14.ts'].replace('s.textContent = String(face(w.digit))', "s.textContent = '0'; s.textContent = String(face(w.digit))") }, /c14\.ts: writes a string literal into the page/],
     ['a literal written by chapter 14 with textContent', { ...files, 'c14.ts': files['c14.ts'].replace('export function initC14', "document.body.textContent = 'x';\nexport function initC14") }, /c14\.ts: writes a string literal into the page/],
     ['a custom property of the page set by chapter 14 (--lg)', { ...files, 'c14.ts': files['c14.ts'].replace('export function initC14', "document.body.style.setProperty('--lg', '1px');\nexport function initC14") }, /c14\.ts: sets the custom property --lg/],
     ['a pre-state armed without once() or belowFold() (chapter 12 loop)', { ...files, 'c12v.ts': files['c12v.ts'].replace('once(box!, undo', 'go(box!, undo') }, /c12v\.ts: arms a pre-state without asking belowFold/],

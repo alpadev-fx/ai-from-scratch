@@ -17,7 +17,7 @@ import { END as C12_END, GEO as C12_GEO, LAP as C12_LAP, LAPS, LAPS_END, NODES a
 import { NODE_BUDGET as C07_BUDGET, ROWS as C07_ROWS, T as C07_T, count as c07Count, fall as c07Fall, nodeCount as c07Nodes, plan as c07Plan } from '../src/aegis/c07-data.ts';
 import { NODE_BUDGET as C09_BUDGET, T as C09_T, chip as c09Chip, flight as c09Flight, nodeCount as c09Nodes, plain as c09Plain, plan as c09Plan, title as c09Title, wrap as c09Wrap } from '../src/aegis/c09-data.ts';
 import { CAP as C13_CAP, NODE_BUDGET as C13_BUDGET, PILE_SEED as C13_SEED, T as C13_T, STAND as C13_STAND, flowOf as c13Flow, nodeCount as c13Nodes, pileIn as c13PileIn, pileOf as c13Pile, plan as c13Plan, standTop as c13StandTop, text as c13Text, unit as c13Unit, unitsOf as c13Units, type Geo as C13Geo, type Rect as C13Rect, type UnitSpec as C13Spec } from '../src/aegis/c13-data.ts';
-import { NODE_BUDGET as C14_BUDGET, PAD as C14_PAD, SEGS as C14_SEGS, T as C14_T, TURN as C14_TURN, boxes as c14Boxes, figure as c14Figure, nodeCount as c14Nodes, overlay as c14Overlay, plan as c14Plan, rows as c14Rows, seg as c14Seg, strip as c14Strip, tokensOf as c14Tokens, travel as c14Travel, wheelsOf as c14Wheels, type Geo as C14Geo } from '../src/aegis/c14-data.ts';
+import { NODE_BUDGET as C14_BUDGET, PAD as C14_PAD, SEGS as C14_SEGS, T as C14_T, below as c14Below, boxes as c14Boxes, face as c14Face, figure as c14Figure, nodeCount as c14Nodes, overlay as c14Overlay, plan as c14Plan, seg as c14Seg, tokensOf as c14Tokens, wheelsOf as c14Wheels, type Geo as C14Geo } from '../src/aegis/c14-data.ts';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 
 test('guard throws on a city, on plural courses, and lets the tokenizer sentence through', () => {
@@ -1622,7 +1622,7 @@ test('chapter 13: the effect writes only transform and opacity, adds no element 
 // ---------- chapter 14: the price made by its real tokens, rolling up to itself ----------
 const c14Price = (lang: 'es' | 'en') => { const text = PRECIO_VISUAL[lang]!, pieces = piecesOf(TOKENS[lang], text); return { text, pieces, tokens: c14Tokens(pieces) }; };
 
-test('chapter 14: the price\'s tokens are its real o200k pieces with their places in the figure, the numeric ones have a wheel per digit, and a wheel rolls once round and on to its digit', () => {
+test('chapter 14: the price\'s tokens are its real o200k pieces with their places in the figure, the numeric ones have a wheel per digit, and a wheel carries ONE row: its own digit (no figure but the price is ever legible)', () => {
   const es = c14Price('es'), en = c14Price('en');
   // if the published price changes, this is the test that says what the roll becomes
   assert.deepEqual(es.tokens.map((t) => [t.text, t.start, t.end, t.digits]), [['$', 0, 1, []], ['39', 1, 3, [3, 9]], ['.', 3, 4, []], ['990', 4, 7, [9, 9, 0]]]);
@@ -1634,34 +1634,31 @@ test('chapter 14: the price\'s tokens are its real o200k pieces with their place
     for (const v of w) assert.equal(x.text[v.at], String(v.digit), 'a wheel stands over its own digit');
     assert.deepEqual(w.map((v) => v.token), x.tokens.flatMap((t, i) => t.digits.map(() => i)), 'and belongs to its own token');
   }
-  for (let d = 0; d <= 9; d++) {
-    const s = c14Strip(d);
-    assert.equal(s.length, C14_TURN + d + 1); assert.equal(c14Travel(d), s.length - 1); assert.equal(s[0], 0, 'a wheel starts at zero'); assert.equal(s[s.length - 1], d, 'and stops on its digit');
-    s.forEach((v, i) => { if (i) assert.equal(v, (s[i - 1]! + 1) % 10, 'the rows count up, nine to zero'); });
-    assert.ok(s.slice(0, 10).join('') === '0123456789', 'once round first');
-  }
-  for (const bad of [-1, 10, 1.5, NaN]) assert.throws(() => c14Strip(bad), /c14:/);
+  for (let d = 0; d <= 9; d++) assert.equal(c14Face(d), d, 'a wheel carries ONE row, its own digit: no 0 to 9 strip that rolls past other figures, no rest state on zeros');
+  for (const bad of [-1, 10, 1.5, NaN, Infinity]) assert.throws(() => c14Face(bad), /c14:/);
   assert.throws(() => c14Tokens([]), /c14:/);
   assert.deepEqual(c14Tokens([['a'], ['12'], [' 3']]).map((t) => t.digits), [[], [1, 2], []], 'a token with a letter or a space in it is a symbol');
-  assert.equal(C14_TURN, 10); assert.equal(C14_SEGS, 30);
+  assert.equal(C14_SEGS, 30);
 });
 
-test('chapter 14: the schedule (the real price, both languages): the wheels set off left to right and roll to their digits easing in and out, the price stands as its tokens, the real figure comes in under the chips and only then do they fade, and the segments light up in order', () => {
+test('chapter 14: the schedule (the real price, both languages): the wheels set off left to right and each rises ONE row into its window, easing out, the price stands as its tokens, the real figure comes in under the chips and only then do they fade, and the segments light up in order', () => {
   for (const lang of ['es', 'en'] as const) {
     const { tokens } = c14Price(lang), P = c14Plan(tokens, C14_SEGS), W = P.wheels;
     W.forEach((w, k) => {
-      assert.ok(Math.abs(w.start - (C14_T.pop + k * C14_T.cascade)) < 1e-12 && Math.abs(w.stop - (w.start + C14_T.spin)) < 1e-12, 'a wheel sets off a cascade after the one on its left and rolls for T.spin');
-      assert.equal(c14Rows(P, k, 0), 0); assert.equal(c14Rows(P, k, w.start), 0, 'zeros until it sets off');
-      assert.ok(Math.abs(c14Rows(P, k, w.stop) - c14Travel(w.digit)) < 1e-9, 'it has travelled to its digit when it stops'); assert.equal(c14Rows(P, k, P.end + 5), c14Travel(w.digit), 'and stays');
-      let prev = 0, prevV = 0, peak = 0, rising = true;
+      assert.ok(Math.abs(w.start - (C14_T.pop + k * C14_T.cascade)) < 1e-12 && Math.abs(w.stop - (w.start + C14_T.spin)) < 1e-12, 'a wheel sets off a cascade after the one on its left and rises for T.spin');
+      assert.equal(c14Below(P, k, 0), 1); assert.equal(c14Below(P, k, w.start), 1, 'its row lies under its window (nothing of it is seen) until it sets off');
+      assert.ok(Math.abs(c14Below(P, k, w.stop)) < 1e-12, 'it is in its window, over its own digit, when it stops'); assert.equal(c14Below(P, k, P.end + 5), 0, 'and stays');
+      let prev = 1, prevV = 0, peak = 0;
       for (let x = w.start; x <= w.stop + 0.004; x += 0.004) {
-        const r = c14Rows(P, k, x), v = r - prev;
-        assert.ok(r >= prev - 1e-9, `wheel ${k} never turns back`);
-        if (x > w.start + 0.0041) { if (rising && v < prevV - 1e-9) rising = false; if (!rising) assert.ok(v <= prevV + 1e-9, `wheel ${k} slows into its stop`); }
+        const r = c14Below(P, k, x), v = prev - r;
+        assert.ok(r >= 0 && r <= 1, `wheel ${k} is never anywhere but between its own row and the one under it (${r}): it can show no other digit`);
+        assert.ok(r <= prev + 1e-12, `wheel ${k} only rises`);
+        if (x > w.start + 0.0041) assert.ok(v <= prevV + 1e-9, `wheel ${k} slows into its stop (an ease out)`);
         peak = Math.max(peak, v); prev = r; prevV = v;
       }
-      assert.ok(peak / 0.004 / 60 < 0.5, `wheel ${k} (a ${w.digit}) never covers half a row a frame at 60 fps (${(peak / 0.004 / 60).toFixed(2)}): no row is skipped between two frames`);
+      assert.ok(peak / 0.004 / 60 < 0.1, `wheel ${k} (a ${w.digit}) never covers a tenth of a row a frame at 60 fps (${(peak / 0.004 / 60).toFixed(3)}): it never jumps`);
     });
+    for (let x = 0; x <= P.end + 0.004; x += 0.004) W.forEach((_, k) => { const r = c14Below(P, k, x); assert.ok(r >= 0 && r <= 1, `at ${x.toFixed(3)} s wheel ${k} is within its own row and the one under it`); });
     assert.ok(W.every((w, k) => !k || (w.start > W[k - 1]!.start && w.stop > W[k - 1]!.stop)), 'left to right');
     assert.ok(Math.abs(P.rest - W[W.length - 1]!.stop) < 1e-12 && Math.abs(P.swapAt - (P.rest + C14_T.hold)) < 1e-12 && Math.abs(P.fadeAt - (P.swapAt + C14_T.swap)) < 1e-12, 'the last wheel stops, the price stands for T.hold, the figure comes in over T.swap');
     const lastSeg = P.seg[P.seg.length - 1]! + C14_T.seg;
@@ -1688,18 +1685,19 @@ test('chapter 14: the schedule (the real price, both languages): the wheels set 
     });
     assert.ok(lastSeg <= P.end, 'the whole bar is lit by the end');
     // the clocks are where the design needs them
-    assert.ok(C14_T.pop >= 0.1 && C14_T.spin >= 0.8 && C14_T.spin <= 1.5 && C14_T.cascade >= 0.03 && C14_T.hold >= 0.25 && C14_T.swap > 0 && C14_T.dissolve >= 0.2 && C14_T.seg >= 0.1 && C14_T.segGap >= 0.01, 'the clocks');
+    assert.ok(C14_T.pop >= 0.1 && C14_T.spin >= 0.4 && C14_T.spin <= 1 && C14_T.cascade >= 0.05 && C14_T.hold >= 0.25 && C14_T.swap > 0 && C14_T.dissolve >= 0.2 && C14_T.seg >= 0.1 && C14_T.segGap >= 0.01, 'the clocks');
   }
   // the rule can fail: a roll that took 4 s to settle would not leave the 2.6 s the whole is allowed
   assert.ok(C14_T.pop + 4 * C14_T.cascade + 4 + C14_T.hold + C14_T.swap + C14_T.dissolve > 2.6);
+  assert.ok(C14_T.pop + 4 * C14_T.cascade + C14_T.spin + C14_T.hold + C14_T.swap + C14_T.dissolve > 2.2, 'about 2.3 s in all, as the roll it replaces: five wheels, the price standing, the figure under the chips');
 });
 
 test('chapter 14: the clocks of one wheel and the geometry of the chips, and what the schedule and the geometry refuse', () => {
   const { tokens } = c14Price('es'), P = c14Plan(tokens, C14_SEGS), k = 1, w = P.wheels[k]!, T = C14_T;
-  const mid = (a: number, b: number) => Math.abs(a - b) < 1e-9, e = (u: number) => u * u * (3 - 2 * u);
-  assert.ok(mid(c14Rows(P, k, w.start + T.spin / 2), c14Travel(w.digit) / 2), 'halfway through its roll a wheel is halfway there (an ease in and out)');
-  assert.ok(mid(c14Rows(P, k, w.start + T.spin * 0.25), c14Travel(w.digit) * e(0.25)), 'a smooth step: slow off the line, slow into its stop');
-  assert.ok(c14Rows(P, k, w.start + T.spin * 0.05) < 0.05 * c14Travel(w.digit), 'it leaves zero slowly: a twentieth of the way through its roll it has covered less than a twentieth of the way');
+  const mid = (a: number, b: number) => Math.abs(a - b) < 1e-9;
+  assert.ok(mid(c14Below(P, k, w.start + T.spin / 2), 0.125), 'halfway through its rise a wheel has an eighth of a row to go (an ease out: quick off the line, slow into its stop)');
+  assert.ok(mid(c14Below(P, k, w.start + T.spin * 0.25), 0.75 ** 3), 'a cubic ease out');
+  assert.ok(1 - c14Below(P, k, w.start + T.spin * 0.05) > 0.1, 'it leaves the line quickly: a twentieth of the way through its rise it has covered more than a tenth of its row');
   assert.ok(mid(c14Figure(P, P.swapAt + T.swap / 2), 0.5) && mid(c14Seg(P, 3, P.seg[3]! + T.seg / 2), 0.5) && mid(c14Overlay(P, P.fadeAt + T.dissolve / 2), 0.5 * 1));
   // fail closed
   assert.throws(() => c14Plan([], C14_SEGS), /c14:/);
@@ -1759,7 +1757,7 @@ test('chapter 14 is square and its class names are its own: no round shape in an
   assert.ok(layer && /position:absolute/.test(layer.body) && /width:0/.test(layer.body) && /height:0/.test(layer.body) && /pointer-events:none/.test(layer.body), 'the layer is a point at the corner of its box, and never takes a click');
   assert.ok(chip && /position:absolute/.test(chip.body) && /box-sizing:border-box/.test(chip.body) && /width:var\(--fx-w\)/.test(chip.body) && /height:var\(--fx-h\)/.test(chip.body) && /padding-top:var\(--fx-p\)/.test(chip.body) && /border:1px solid var\(--ac\)/.test(chip.body) && /background:var\(--panel\)/.test(chip.body) && /white-space:pre/.test(chip.body), 'a chip: a square hairline box in the accent, sized by the effect, its text set on the figure\'s line, its blanks kept (a leading space is the figure\'s own)');
   assert.ok(col && /position:absolute/.test(col.body) && /height:\.9em/.test(col.body) && /clip-path:inset\(0 -\.3em\)/.test(col.body), 'a column is one row of the figure\'s line height, clipped above and below and not at the sides (the tracking is negative)');
-  assert.ok(wheel && /display:block/.test(wheel.body) && /white-space:pre/.test(wheel.body), 'a wheel is a strip of rows, one digit to a line');
+  assert.ok(wheel && /display:block/.test(wheel.body) && !/white-space/.test(wheel.body), 'a wheel is ONE row, a digit on its own: it needs no preserved line breaks (there is no strip of digits to break into rows)');
   assert.ok(!mine.some((r) => /(?:^|[;{\s])content\s*:/.test(r.body)), 'no generated content: a chip\'s text is text in the chip, never typed in the stylesheet');
   const vars = [...new Set(mine.flatMap((r) => [...r.body.matchAll(/var\((--[\w-]+)\)/g)].map((m) => m[1]!)))].sort();
   assert.deepEqual(vars, ['--ac', '--f', '--fx-h', '--fx-p', '--fx-w', '--panel'], 'the page\'s own variables and the effect\'s --fx- ones, nothing else');
@@ -1777,7 +1775,8 @@ test('chapter 14: the effect writes only transform and opacity, adds no element 
   assert.ok(!/\.style\.(?!opacity\b|transform\b)\w+\s*=(?!=)/.test(code), 'it sets only style.opacity and style.transform');
   assert.deepEqual([...code.matchAll(/setProperty\('([^']+)'/g)].map((m) => m[1]), ['--fx-w', '--fx-h', '--fx-p'], 'the only custom properties are the effects\' own, a chip\'s box');
   assert.deepEqual([...new Set([...code.matchAll(/style\.removeProperty\('([^']+)'\)/g)].map((m) => m[1]))], ['opacity'], 'what it gives back is opacity');
-  assert.deepEqual([...code.matchAll(/\.textContent\s*=\s*([^;]+);/g)].map((m) => m[1]), ['t.text', "strip(w.digit).join('\\n')"], 'the only text it writes: a token piece read from the page\'s own token file (as it is, a leading space stays a space: no «·» in its place, whose advance is not the space\'s in every browser), and the digits a wheel passes (counted, never typed)');
+  assert.deepEqual([...code.matchAll(/\.textContent\s*=\s*([^;]+);/g)].map((m) => m[1]), ['t.text', 'String(face(w.digit))'], 'the only text it writes: a token piece read from the page\'s own token file (as it is, a leading space stays a space: no «·» in its place, whose advance is not the space\'s in every browser), and a wheel\'s ONE digit, its own (counted, never typed)');
+  assert.ok(!/join\('\\n'\)|\\n|TURN|travel|strip\(/.test(code) && /const y = \(belowAt\(P!, k, x\) \* rowH\)\.toFixed\(2\);/.test(code), 'a wheel is one row that slides up from below its window by c14-data\'s below(), by a whole row (the window\'s height) and from under it: no strip of digits, no row to roll past, no figure but the price');
   assert.ok(/piecesOf\(tokensFromPage\(\), text\)/.test(code) && /tokensOf\(pieces\)/.test(code) && /wheelsOf\(tokens\)/.test(code), 'the chips are the real pieces of the figure\'s own text');
   assert.deepEqual([...code.matchAll(/\bel\('([a-z]+)', ([^)]+)\)/g)].map((m) => `${m[1]}.${m[2]}`), ["div.'fxk odv'", "div.'fxk odc'", "div.'fxk odw'", "div.'fxk ods'"], 'the elements it adds: its layer, its chips, its columns and its wheels, all marked fxk');
   assert.ok(/layer\.setAttribute\('aria-hidden', 'true'\)/.test(code) && /pbig\.appendChild\(layer\)/.test(code), 'the layer is a decoration (aria-hidden) inside the figure\'s block');

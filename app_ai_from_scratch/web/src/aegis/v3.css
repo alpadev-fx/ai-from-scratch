@@ -822,14 +822,14 @@ html.fxl .ssu[data-t2]::after{content:attr(data-t2)}
 html.fxl .ssu.y::before,html.fxl .ssu.y[data-t2]::after{border-color:var(--ac);color:var(--l1)}
 @media (max-width:480px){html.fxl .ssu::before,html.fxl .ssu[data-t2]::after{padding:0 .35em;font-size:10px}}
 
-/* 14: the price rolls once, when its figure comes up the screen (only if it was below the viewport when the engine attached: [data-fx-s] is on the figure's block while that is pending). What the effect adds is a
-   layer `odv` inside the figure's block (a point with no size at its containing block's corner, out of flow; the rule on `.pbig b` above gives it the figure's own typeface, so the digits it rolls are the figure's
+/* 14: the price is made by its tokens once, when its figure comes up the screen (only if it was below the viewport when the engine attached: [data-fx-s] is on the figure's block while that is pending). What the effect adds is a
+   layer `odv` inside the figure's block (a point with no size at its containing block's corner, out of flow; the rule on `.pbig b` above gives it the figure's own typeface, so the digits it rises are the figure's
    own glyphs), in it one square chip `odc` per token of the price (a hairline box laid over the token's characters; a symbol's text is inside it, blanks kept: a leading space is the figure's own) and one column `odw` per digit (a one-row window) holding the
-   wheel `ods`, a strip of digits that the effect moves with transform alone. The box of a chip is set by the effect from where the figure's characters stand (custom properties --fx-w, --fx-h, --fx-p). */
+   wheel `ods`, ONE row, the digit's own, that the effect slides up into the window with transform alone (never any other digit: no figure but the price is legible). The box of a chip is set by the effect from where the figure's characters stand (custom properties --fx-w, --fx-h, --fx-p). */
 html.fxl .pbig .odv{position:absolute;left:0;top:0;width:0;height:0;overflow:visible;pointer-events:none;z-index:2}
 html.fxl .pbig .odc{position:absolute;left:0;top:0;box-sizing:border-box;width:var(--fx-w);height:var(--fx-h);padding-top:var(--fx-p);border:1px solid var(--ac);background:var(--panel);white-space:pre}
 html.fxl .pbig .odw{position:absolute;left:0;top:0;height:.9em;clip-path:inset(0 -.3em)}
-html.fxl .pbig .ods{display:block;white-space:pre}
+html.fxl .pbig .ods{display:block}
 
 /* 17 · the wordmark: the runners are an extra svg laid over each outline (`.wrs`, added by the effect, with one path `.wr` per contour of the letters): a short bright dash that laps its contour,
    every contour with a phase of its own, so lines are always running somewhere on the mark. Always white on the black plate. The glow is a drop-shadow on that one svg (WebKit does not paint

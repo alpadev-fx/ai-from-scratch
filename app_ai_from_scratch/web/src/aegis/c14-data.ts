@@ -2,30 +2,31 @@
 // one file, so they cannot disagree.
 //
 // What the chapter draws: the published price (the page's own figure, «$39.990» or «39,990 COP») is made by its REAL o200k tokens (src/data/v3-tokens.json), each in a square chip laid over its own
-// characters (a symbol's chip holds the token's own text, a leading space included: it is the figure's own space, so the text stands on the figure's glyphs in any browser). When the figure comes up the screen the chips come in showing zeros and the digits of every numeric token roll up to the price like the wheels of an odometer, left to
-// right, each wheel once round and on to its own digit; the symbols (the «$», the point, the comma, « COP») are already in their chips. The wheels stop, the price stands as its tokens for a moment, and the
-// real figure comes in underneath the chips, which fade away: the figure is the page's own text and is what the reader ends with. Next to it the 30 segments of the bar light up one after the other, a day
-// each. The page's text is never changed and never typed here: the markup is the finished picture. The digits that roll past are an odometer's wheels, not figures: nothing in the roll states a number
-// other than the price.
+// characters (a symbol's chip holds the token's own text, a leading space included: it is the figure's own space, so the text stands on the figure's glyphs in any browser). When the figure comes up the
+// screen the chips come in (the symbols in them, the numeric ones EMPTY) and the digits of every numeric token rise into their chips, left to right, each on a wheel of ONE row: its own digit, which slides up
+// from below its one-row window into the window, over the figure's own digit. The wheels stop, the price stands as its tokens for a moment, and the real figure comes in underneath the chips, which fade
+// away: the figure is the page's own text and is what the reader ends with. Next to it the 30 segments of the bar light up one after the other, a day each. The page's text is never changed and never
+// typed here: the markup is the finished picture.
+//
+// THE HARD RULE of the price: no currency amount other than the published one is ever legible, at any frame. So a wheel never carries a digit that is not the price's own at its place (no 0 to 9 strip that
+// rolls past other figures, no rest state on zeros): it shows its own digit, or nothing. c14-frames.mjs reads every frame of the play and fails on any other digit in a wheel's window (h4).
 //
 // The contract's node counter (v3-fps --nodes) counts every element a chapter ADDS (descendants included) and every element it writes a style on: the layer, one chip per token, one column and one strip
 // per digit, the figure and the 30 segments.
 
 /** Seconds. Every picture of the roll is a pure function of the second it is at (the harness seeks it). */
 export const T = {
-  pop: 0.18,                                                         // the overlay (the price as its tokens, in their chips) comes in over this long, the wheels at zero
-  spin: 1.1,                                                         // every wheel's roll, from zero to its own digit, an ease in and out
-  cascade: 0.07,                                                     // between one wheel's setting off and the next one's, left to right
-  hold: 0.35,                                                        // the wheels have stopped: the price stands as its tokens
+  pop: 0.18,                                                         // the overlay (the price as its tokens, in their chips, the numeric ones empty) comes in over this long
+  spin: 0.7,                                                         // a wheel's rise: ONE row, from below its window up to its own digit, an ease out
+  cascade: 0.12,                                                     // between one wheel's setting off and the next one's, left to right
+  hold: 0.5,                                                         // the wheels have stopped: the price stands as its tokens
   swap: 0.06,                                                        // the real figure comes in underneath the chips, which are still whole
-  dissolve: 0.32,                                                    // the chips fade away over the figure
+  dissolve: 0.4,                                                     // the chips fade away over the figure
   seg: 0.22,                                                         // a segment of the bar lights up over this long
   segLead: 0.1,                                                      // the first segment starts this long after the wheels' first setting off
   segGap: 0.03,                                                      // between one segment and the next
 } as const;
 
-/** Rows a wheel passes before its own digit: once round (ten), so that a wheel of a zero rolls too. */
-export const TURN = 10;
 /** The segments of the bar, one per day of the plan. */
 export const SEGS = 30;
 /** Em of room above and below the figure's line box in a chip (the «$» stands a little taller than the digits; less than the gap to the line under the figure, 6px, at every size). */
@@ -70,13 +71,11 @@ export interface Wheel {
 /** The wheels, left to right: one per digit of a numeric token. */
 export const wheelsOf = (tokens: readonly Token[]) => tokens.flatMap((tk, token) => tk.digits.map((digit, j) => ({ token, at: tk.start + j, digit })));
 
-/** The digits a wheel shows, top to bottom: zero up to nine and again zero up to its own digit; the wheel travels from the first row to the last. */
-export const strip = (digit: number): number[] => {
+/** The ONE row a wheel carries: its own digit, and nothing else (a digit that is not the price's is a figure that is not the price). Fail closed: a value that is not a digit is an error. */
+export const face = (digit: number): number => {
   if (!Number.isInteger(digit) || digit < 0 || digit > 9) throw new Error(`c14: ${digit} is not a digit`);
-  return [...Array.from({ length: TURN }, (_, i) => i), ...Array.from({ length: digit + 1 }, (_, i) => i)];
+  return digit;
 };
-/** Rows a wheel travels in all. */
-export const travel = (digit: number) => TURN + digit;
 
 export interface Plan {
   wheels: Wheel[];
@@ -91,6 +90,7 @@ export interface Plan {
 
 const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
 const smooth = (t: number) => t * t * (3 - 2 * t);
+const easeOut = (t: number) => 1 - (1 - t) ** 3;
 
 /** The schedule. Fail closed: a price with no digit has nothing to roll, and a bar with no segment is not the bar. */
 export function plan(tokens: readonly Token[], segs: number): Plan {
@@ -102,9 +102,9 @@ export function plan(tokens: readonly Token[], segs: number): Plan {
   return { wheels, seg: Array.from({ length: segs }, (_, j) => T.pop + T.segLead + j * T.segGap), rest, swapAt, fadeAt, end: Math.max(fadeAt + T.dissolve, T.pop + T.segLead + (segs - 1) * T.segGap + T.seg) };
 }
 
-/** How far wheel k has travelled at second x, in rows (0 at the start, travel(digit) once it has stopped): it gets up to speed and slows into its stop, an ease in and out (the quickest wheel, a nine, covers
- *  under half a row a frame at 60 fps, so no row is ever skipped between two frames). */
-export const rows = (p: Plan, k: number, x: number) => travel(p.wheels[k]!.digit) * smooth(clamp01((x - p.wheels[k]!.start) / T.spin));
+/** How far below its window wheel k still is at second x, in rows: 1 until it sets off (its row lies entirely under the window: nothing of it is seen), 0 once it has stopped (its digit is in the window, over
+ *  the figure's own), an ease out in between (the quickest it goes is 3 rows over T.spin: under a tenth of a row a frame at 60 fps, it never jumps). It is never anywhere but between its own row and the one under it. */
+export const below = (p: Plan, k: number, x: number) => 1 - easeOut(clamp01((x - p.wheels[k]!.start) / T.spin));
 /** The opacity of the overlay (the chips and their wheels): in over T.pop, whole until the real figure is under it, then away over T.dissolve. */
 export const overlay = (p: Plan, x: number) => smooth(clamp01(x / T.pop)) * (1 - smooth(clamp01((x - p.fadeAt) / T.dissolve)));
 /** The opacity of the real figure: nothing until the wheels have stopped and the price has stood, then in over T.swap, under the chips. */

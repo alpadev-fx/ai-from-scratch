@@ -1,16 +1,18 @@
-// 14 · PRECIO. The price is made by its real tokens and rolls up to itself like an odometer: when the figure comes well up the screen the REAL o200k tokens of the published price («$39.990» is «$», «39», «.»,
-// «990»; «39,990 COP» is «39», «,», «990», « COP») come in as square chips laid over their own characters, showing zeros, and the digits of every numeric token roll up to the price, a wheel to each digit, left to
-// right, each once round and on to its own digit; the symbols are already in their chips, as the token's own text (a leading space stays a space, laid over the figure's own, so every glyph of a chip stands on the
-// figure's glyph in any browser, which a «·» in the space's place would not: its advance is not the space's everywhere). A chip's edges are where its characters begin: its right edge is the left of the next
-// token's first character (a browser's rect of a glyph can be a pixel wider than its advance), so the chips meet exactly. The wheels stop, the price stands as its tokens for a moment, and the real figure comes
-// in underneath the chips, which fade away. Next to it the 30 segments of the bar light up, a day each (c14-data.ts has the clocks, the schedule, the geometry and the node count). The wheels are the figure's own typeface, laid on its own
-// characters (v3.css gives the layer the figure's font), so the roll lands on the very glyphs it hands over to. It plays once, and only if the figure was fully below the viewport when the engine attached
-// (once()): what a reader meets first is the HTML's own final picture, and one who goes past before it played gets that. While it waits only the figure and the 30 segments are transparent (nothing else is
-// touched); the layer, with its chips and wheels, is made when it plays, inside the figure's block (aria-hidden, decoration, out of flow), and removed, with its styles, in the very task it is done. Nothing
-// here changes layout or writes copy: what moves is transform and opacity, every picture is a pure function of the tween position (the harness seeks it), the chips' text is the token pieces the page ships and
-// the wheels' digits are numbers counted here, never a string typed here. The digits that roll past are an odometer's wheels, not figures: nothing in the roll states a number other than the price.
+// 14 · PRECIO. The price is made by its real tokens and rises into place: when the figure comes well up the screen the REAL o200k tokens of the published price («$39.990» is «$», «39», «.», «990»;
+// «39,990 COP» is «39», «,», «990», « COP») come in as square chips laid over their own characters, the symbols already in them, the numeric ones empty, and the digits of the numeric tokens rise into
+// them, left to right, a wheel to each digit; a symbol's chip holds the token's own text (a leading space stays a space, laid over the figure's own, so every glyph of a chip stands on the figure's glyph
+// in any browser, which a «·» in the space's place would not: its advance is not the space's everywhere). A chip's edges are where its characters begin: its right edge is the left of the next token's
+// first character (a browser's rect of a glyph can be a pixel wider than its advance), so the chips meet exactly.
+// THE HARD RULE: no currency amount other than the published price is ever legible, at any frame. A wheel is ONE row, its own digit, which slides up from below its one-row window into it: it shows its own
+// digit or nothing, there is no rest state on zeros and no digit that rolls past (c14-frames.mjs reads every frame and fails on any other digit in a window). The wheels stop, the price stands as its tokens
+// for a moment, and the real figure comes in underneath the chips, which fade away. Next to it the 30 segments of the bar light up, a day each (c14-data.ts has the clocks, the schedule, the geometry and
+// the node count). The wheels are the figure's own typeface, laid on its own characters (v3.css gives the layer the figure's font), so the rise lands on the very glyphs it hands over to. It plays once, and
+// only if the figure was fully below the viewport when the engine attached (once()): what a reader meets first is the HTML's own final picture, and one who goes past before it played gets that. While it
+// waits only the figure and the 30 segments are transparent (nothing else is touched); the layer, with its chips and wheels, is made when it plays, inside the figure's block (aria-hidden, decoration, out of
+// flow), and removed, with its styles, in the very task it is done. Nothing here changes layout or writes copy: what moves is transform and opacity, every picture is a pure function of the tween position
+// (the harness seeks it), the chips' text is the token pieces the page ships and the wheels' digits are numbers counted here, never a string typed here.
 import { gsap } from '../hud';
-import { NODE_BUDGET, SEGS, boxes, figure as figureAt, nodeCount, overlay as overlayAt, plan, rows as rowsAt, seg as segAt, strip, tokensOf, wheelsOf } from '../c14-data';
+import { NODE_BUDGET, SEGS, below as belowAt, boxes, face, figure as figureAt, nodeCount, overlay as overlayAt, plan, seg as segAt, tokensOf, wheelsOf } from '../c14-data';
 import type { Geo, Plan } from '../c14-data';
 import { piecesOf, tokensFromPage } from '../tokens';
 import { $, $$, el } from '../util';
@@ -56,7 +58,7 @@ export function initC14() {
       const o = share(overlayAt(P!, x)), f = share(figureAt(P!, x));
       if (o !== lastO) { lastO = o; layer!.style.opacity = o; }
       if (f !== lastF) { lastF = f; fig.style.opacity = f; }
-      strips.forEach((s, k) => { const y = (-rowsAt(P!, k, x) * rowH).toFixed(2); if (lastR[k] !== y) { lastR[k] = y; s.style.transform = `translate3d(0,${y}px,0)`; } });
+      strips.forEach((s, k) => { const y = (belowAt(P!, k, x) * rowH).toFixed(2); if (lastR[k] !== y) { lastR[k] = y; s.style.transform = `translate3d(0,${y}px,0)`; } });
       segs.forEach((s, j) => { const a = share(segAt(P!, j, x)); if (lastS[j] !== a) { lastS[j] = a; s.style.opacity = a; } });
     };
     /** The chapter as the page has it: no chip, no layer, no inline style, no state. Safe to call at any time, any number of times. */
@@ -77,7 +79,7 @@ export function initC14() {
           chips = tokens.map((t) => { const c = el('div', 'fxk odc'); if (!t.digits.length) c.textContent = t.text; layer!.appendChild(c); return c; });
           cols = wheels.map((w) => {
             const col = el('div', 'fxk odw'), s = el('div', 'fxk ods');
-            s.textContent = strip(w.digit).join('\n'); col.appendChild(s); layer!.appendChild(col); strips.push(s);
+            s.textContent = String(face(w.digit)); col.appendChild(s); layer!.appendChild(col); strips.push(s);
             return col;
           });
           measure(); draw(0);

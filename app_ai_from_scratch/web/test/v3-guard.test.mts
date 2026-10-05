@@ -16,6 +16,8 @@ import { followStep, glowAlpha, rng, squareFrame, squareGlow, toward, type Follo
 import { END as C12_END, GEO as C12_GEO, LAP as C12_LAP, LAPS, LAPS_END, NODES as C12_NODES, NODE_BUDGET as C12_BUDGET, T as C12_T, beat, loopOf, nodeCount, tickAt } from '../src/aegis/c12-data.ts';
 import { NODE_BUDGET as C07_BUDGET, ROWS as C07_ROWS, T as C07_T, count as c07Count, fall as c07Fall, nodeCount as c07Nodes, plan as c07Plan } from '../src/aegis/c07-data.ts';
 import { NODE_BUDGET as C09_BUDGET, T as C09_T, chip as c09Chip, flight as c09Flight, nodeCount as c09Nodes, plain as c09Plain, plan as c09Plan, title as c09Title, wrap as c09Wrap } from '../src/aegis/c09-data.ts';
+import { CAP as C13_CAP, NODE_BUDGET as C13_BUDGET, PILE_SEED as C13_SEED, T as C13_T, STAND as C13_STAND, flowOf as c13Flow, nodeCount as c13Nodes, pileIn as c13PileIn, pileOf as c13Pile, plan as c13Plan, standTop as c13StandTop, text as c13Text, unit as c13Unit, unitsOf as c13Units, type Geo as C13Geo, type Rect as C13Rect, type UnitSpec as C13Spec } from '../src/aegis/c13-data.ts';
+import { NODE_BUDGET as C14_BUDGET, PAD as C14_PAD, SEGS as C14_SEGS, T as C14_T, below as c14Below, boxes as c14Boxes, face as c14Face, figure as c14Figure, nodeCount as c14Nodes, overlay as c14Overlay, plan as c14Plan, seg as c14Seg, tokensOf as c14Tokens, wheelsOf as c14Wheels, type Geo as C14Geo } from '../src/aegis/c14-data.ts';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 
 test('guard throws on a city, on plural courses, and lets the tokenizer sentence through', () => {
@@ -1228,4 +1230,569 @@ test('chapter 09: the effect writes only transform and opacity, adds no node but
   assert.ok(/plain/.test(code) && /P\.top - H\.top < at\.h - LINES/.test(code), 'a title whose chips would stand over the paragraph under it has no chips');
   assert.ok(/onComplete: done/.test(code) && /const clear = \(l: Lesson\) => \{[^}]*s\.chips\.forEach\(\(c\) => c\.remove\(\)\); runs\.delete\(l\);/.test(code), 'the chips are removed in the very task the row is done (clear() is what once() calls then)');
   assert.ok(/const release = \(\) => \{ if \(layer && !layer\.firstChild && ones\.every\(\(o\) => o\.state\(\) === 'static'\)\) \{ layer\.remove\(\);/.test(code), 'the one layer is kept while any row is waiting or playing (a list read row by row makes one layer, not twelve) and goes with the last row');
+});
+
+// ---------- chapter 13: the two lists made by sorting a pile of their real tokens ----------
+const c13Lines = (lang: 'es' | 'en') => {
+  const V = STR[lang].pub.v3;
+  return [...(V.s10Si as unknown as string[]).map((t) => ({ t, list: 'yes' as const })), ...(V.s10No as unknown as string[]).map((t) => ({ t, list: 'no' as const }))].map((l) => ({ ...l, pieces: piecesOf(TOKENS[lang], l.t) }));
+};
+/** A made-up page for the schedule, laid out the way the real one is: the seven lines as units of mono chips (12px mono, 7.22 px a character, 6 px of padding and a 1 px border either side; at 480 px and under 10px mono,
+ *  6.02 px a character and 3.5 px of padding; 3 px between the two chips of a unit), a line's box 24 px per line of words (8 px a character) plus its 35 px of padding and border, the two lists side by side (yes
+ *  left, no right) or stacked, the units of each line as one row (flowOf) inside the line's box (standTop), and the pile parked by pileIn in the block of lines that are not there yet (both lists' lines side by
+ *  side, the yes lines alone when stacked). `park` is that block and `lines` each line's box, the left of its words and its units. */
+function c13Page(lang: 'es' | 'en', width: number, side: boolean): { specs: C13Spec[]; geo: C13Geo; park: C13Rect; lines: Array<{ box: C13Rect; left: number; mid: number; rows: number; units: number[] }> } {
+  const phone = width <= 480, ADV = phone ? 6.0205 : 7.2246, PAD = phone ? 9 : 14, GAP = 3, H = 24, specs: C13Spec[] = [], box: Array<{ w: number; h: number }> = [], rest: Array<{ x: number; y: number }> = [], lineC: Array<[number, number]> = [], rows: Array<{ box: C13Rect; left: number; mid: number; rows: number; units: number[] }> = [];
+  const colW = side ? width / 2 - 126 : width - 118;                                 // the width of a line's words: the column's padding and the line's 34 px of padding-left taken off
+  const lines = c13Lines(lang), liH = lines.map((l) => 24 * Math.max(1, Math.ceil((l.t.length * 8) / colW)) + 35);
+  const yesH = liH.slice(0, 4).reduce((a, h) => a + h, 0), noH = liH.slice(4).reduce((a, h) => a + h, 0);
+  let yTop = 100, nTop = side ? 100 : 100 + yesH + 60;
+  lines.forEach((l, item) => {
+    const left = (side ? (l.list === 'yes' ? 40 : width / 2 + 40) : 20) + 34, top = l.list === 'yes' ? yTop : nTop, ks: number[] = [];
+    if (l.list === 'yes') yTop += liH[item]!; else nTop += liH[item]!;
+    c13Units(l.pieces).forEach((u) => {
+      const chips = l.pieces.slice(u.first, u.last + 1).map((p) => show(p[0])), w = chips.reduce((a, c) => a + c.length * ADV + PAD, 0) + (chips.length - 1) * GAP;
+      ks.push(specs.length); specs.push({ item, chips: chips.length, list: l.list }); box.push({ w, h: H });
+    });
+    // the line's box (padding included) and the middle of its words, then the units as one row of real tokens inside it
+    const liBox: C13Rect = { left: left - 34, right: left + colW, top, bottom: top + liH[item]! }, f = c13Flow(ks.map((k) => box[k]!.w), liBox.right - left), mid = top + liH[item]! / 2, y0 = c13StandTop(liBox, mid, f.rows, H);
+    ks.forEach((k, j) => { rest[k] = { x: left + f.pos[j]![0], y: y0 + f.pos[j]![1] * (H + C13_STAND.rowGap) }; });
+    lineC[item] = [left + 180, mid]; rows[item] = { box: liBox, left, mid, rows: f.rows, units: ks };
+  });
+  const park: C13Rect = side ? { left: 40, top: 100, right: width - 40, bottom: 100 + Math.min(yesH, noH) } : { left: 20, top: 100, right: width - 20, bottom: 100 + yesH };
+  const pile = c13PileIn(park, box, side ? { hx: 150, hy: 110 } : { hx: 90, hy: 110 }, 10_000);
+  return { specs, geo: { pile, box, rest, dist: lineC.map(([x, y]) => Math.hypot(x - pile.x, y - pile.y)) }, park, lines: rows };
+}
+
+test('chapter 13: the units are runs of at most two real tokens (a unit\'s chips are its two pseudo-elements) cut at word boundaries, a longer word cut into runs of two, they join back into each line, and there are 51 (ES) and 45 (EN) of them for 91 and 85 tokens', () => {
+  const totals: Record<string, [number, number]> = { es: [0, 0], en: [0, 0] };
+  for (const lang of ['es', 'en'] as const) for (const l of c13Lines(lang)) {
+    const us = c13Units(l.pieces), w = wordsOf(l.pieces);
+    assert.equal(us[0]!.first, 0); assert.equal(us[us.length - 1]!.last, l.pieces.length - 1);
+    us.forEach((u, i) => {
+      if (i) {
+        assert.equal(u.first, us[i - 1]!.last + 1, 'the units are contiguous, none lost, none twice');
+        // a unit starts in the middle of a word only when that word has more tokens than a unit holds
+        if (w[u.first] === w[us[i - 1]!.last]) assert.ok(l.pieces.filter((_, j) => w[j] === w[u.first]).length > C13_CAP, `${lang}: a unit starts in the middle of a word of ${C13_CAP} tokens or fewer «${l.t}»`);
+      }
+      assert.ok(u.chips >= 1 && u.chips <= C13_CAP, 'a unit has one or two chips, never more than it has pseudo-elements');
+      assert.equal(u.chips, u.last - u.first + 1);
+    });
+    totals[lang]![0] += us.length; totals[lang]![1] += l.pieces.length;
+  }
+  assert.deepEqual(totals, { es: [51, 91], en: [45, 85] }, 'units and tokens in the seven lines (two Spanish words of three tokens are cut into two units each)');
+  // the rule: runs of CAP, cut at word boundaries; a word of more tokens than that is cut into runs of CAP (the only place a word is cut)
+  const P = (...t: string[]): Array<[string]> => t.map((x) => [x]);
+  assert.deepEqual(c13Units(P('Usas', ' Chat', 'G', 'PT')).map((u) => [u.first, u.last]), [[0, 0], [1, 2], [3, 3]]);
+  assert.deepEqual(c13Units(P(' ab', 'c', 'd', 'e', 'f')).map((u) => [u.first, u.last]), [[0, 1], [2, 3], [4, 4]], 'a word of five tokens is three units');
+  assert.deepEqual(c13Units(P(' ab', 'c', 'd', ' e')).map((u) => [u.first, u.last]), [[0, 1], [2, 2], [3, 3]], 'a word of three tokens is cut after two');
+  assert.deepEqual(c13Units(P('a', ' b', ' c')).map((u) => [u.first, u.last]), [[0, 1], [2, 2]]);
+  assert.deepEqual(c13Units(P('a', ' bb', 'x', ' c')).map((u) => [u.first, u.last]), [[0, 0], [1, 2], [3, 3]]);
+  assert.deepEqual(c13Units(P('hola', '.')).map((u) => [u.first, u.last]), [[0, 1]], 'punctuation sticks to the word before it');
+  assert.throws(() => c13Units([]), /c13:/);
+  assert.equal(C13_CAP, 2);
+});
+
+test('chapter 13: the schedule (the real lines, both languages, two stacked widths and two side by side): the pile forms and stands complete and mixed, the line nearest the pile goes first, each unit runs on a straight line to its words and stands over them until the last unit of its line has landed, the chips go out together and only then do the words come in', () => {
+  let cases = 0;
+  for (const lang of ['es', 'en'] as const) for (const [width, side] of [[390, false], [768, false], [1024, true], [1440, true]] as const) {
+    const { specs, geo, park } = c13Page(lang, width, side), P = c13Plan(specs, geo), n = specs.length, items = 7;
+    // the order of the lines: the nearest to the pile first (a permutation: every line has a turn)
+    assert.deepEqual([...P.rank].sort((a, b) => a - b), Array.from({ length: items }, (_, i) => i));
+    for (let i = 0; i < items; i++) for (let j = 0; j < items; j++) if (geo.dist[i]! < geo.dist[j]!) assert.ok(P.rank[i]! < P.rank[j]!, `${lang} ${width}: line ${i} is nearer the pile than line ${j} and goes first`);
+    const within: number[] = [], seen = new Array(items).fill(0); specs.forEach((s, k) => { within[k] = seen[s.item]!++; });
+    const lastLand = Array.from({ length: items }, (_, i) => Math.max(...specs.map((s, k) => (s.item === i ? P.land[k]! : -Infinity)))), lastRel = Math.max(...P.rel);
+    for (let k = 0; k < n; k++) {
+      const rel = C13_T.form + C13_T.hold + P.rank[specs[k]!.item]! * C13_T.item + within[k]! * C13_T.unit;
+      assert.ok(Math.abs(P.rel[k]! - rel) < 1e-12 && Math.abs(P.land[k]! - (rel + C13_T.fly)) < 1e-12, 'a unit runs after the pile has formed and stood, in its line\'s turn, a unit apart in the order the line reads');
+      assert.ok(P.appear[k]! >= 0 && P.appear[k]! <= C13_T.form - C13_T.pop + 1e-12, 'a unit has come into the pile by the end of the formation');
+      assert.ok(Math.abs(P.out[k]! - (lastLand[specs[k]!.item]! + C13_T.stand)) < 1e-12, 'the units of a line go out together: once the last of them has landed and the line has stood as its chips');
+      assert.deepEqual(P.to[k], [geo.rest[k]!.x, geo.rest[k]!.y]);
+      // it comes into the pile at a place inside the pile's ellipse (box centred on a point of it)
+      const cx = P.from[k]![0] + geo.box[k]!.w / 2 - geo.pile.x, cy = P.from[k]![1] + geo.box[k]!.h / 2 - geo.pile.y;
+      assert.ok((cx / geo.pile.hx) ** 2 + (cy / geo.pile.hy) ** 2 <= 1 + 1e-9, 'inside the pile');
+      // and the whole of its box is inside the block the pile is parked in: never over a heading, never over a line that is not that block's
+      assert.ok(P.from[k]![0] >= park.left - 1e-9 && P.from[k]![0] + geo.box[k]!.w <= park.right + 1e-9 && P.from[k]![1] >= park.top - 1e-9 && P.from[k]![1] + geo.box[k]!.h <= park.bottom + 1e-9, `${lang} ${width}: unit ${k} is parked inside the block of lines`);
+    }
+    assert.ok(Math.min(...P.rel) >= C13_T.form + C13_T.hold - 1e-12, 'nothing leaves before the pile has stood');
+    // the pile stands complete between the formation and the first run
+    for (const x of [C13_T.form, C13_T.form + C13_T.hold / 2, C13_T.form + C13_T.hold]) for (let k = 0; k < n; k++) { const u = c13Unit(P, k, x); assert.ok(u.a === 1 && u.x === P.from[k]![0] && u.y === P.from[k]![1], `${lang}: unit ${k} stands whole in the pile at ${x}`); }
+    // the pile is mixed: the two lists alternate along its stacking, and the first half of it is not one list's
+    const order = P.order, runs = order.reduce((m, k, i) => m + (i && specs[k]!.list === specs[order[i - 1]!]!.list ? 0 : 1), 0), half = order.slice(0, Math.floor(n / 2)).filter((k) => specs[k]!.list === 'yes').length / Math.floor(n / 2);
+    assert.ok(runs >= n / 4 && half > 0.3 && half < 0.7, `${lang}: the lists alternate ${runs} times in a pile of ${n}, ${(half * 100).toFixed(0)} % of its first half is yes`);
+    assert.deepEqual(c13Pile(n).order, order); assert.deepEqual([...order].sort((a, b) => a - b), Array.from({ length: n }, (_, k) => k));
+    // every picture, every 4 ms: a straight line from the pile to the words, never back; opacity 0 until it comes in, whole until it nears its words, 0 once it has arrived
+    for (let k = 0; k < n; k++) {
+      const a = P.from[k]!, b = P.to[k]!, d = [b[0] - a[0], b[1] - a[1]], len2 = d[0] * d[0] + d[1] * d[1] || 1;
+      let prevT = 0, prevA = 0, maxA = 0;
+      for (let x = 0; x <= P.end + 0.004; x += 0.004) {
+        const u = c13Unit(P, k, x), p = [u.x - a[0], u.y - a[1]], t = (p[0] * d[0] + p[1] * d[1]) / len2;
+        assert.ok(t >= -1e-9 && t <= 1 + 1e-9 && Math.abs(p[0] * d[1] - p[1] * d[0]) / Math.sqrt(len2) < 1e-6, 'on the line from the pile to its words');
+        assert.ok(t >= prevT - 1e-9, `unit ${k} never runs back`); prevT = t;
+        assert.ok(u.a >= 0 && u.a <= 1, 'opacity is a share');
+        if (x <= P.appear[k]!) assert.equal(u.a, 0, 'unseen until it comes into the pile');
+        if (x >= P.out[k]! + C13_T.fade) assert.equal(u.a, 0, 'gone once its line has stood and its chips have gone out');
+        if (x >= P.appear[k]! + C13_T.pop && x <= P.out[k]!) assert.equal(u.a, 1, 'whole from its coming in until its line has stood as its chips: over its words, it does not fade as it lands');
+        if (x >= P.out[k]!) assert.ok(u.a <= prevA + 1e-12, 'only fading once its line has stood');
+        prevA = u.a; maxA = Math.max(maxA, u.a);
+      }
+      assert.equal(maxA, 1);
+      { const u = c13Unit(P, k, P.land[k]!); assert.ok(Math.abs(u.x - b[0]) < 1e-9 && Math.abs(u.y - b[1]) < 1e-9, 'it arrives at the place of its words'); }
+    }
+    // the words of a line come in once its chips are gone (every unit of the line landed, the line stood, the chips faded out) and no unit is left in the pile, over T.text, never going back
+    for (let i = 0; i < items; i++) {
+      assert.ok(Math.abs(P.text[i]![0] - Math.max(lastLand[i]! + C13_T.stand + C13_T.fade, lastRel)) < 1e-12 && Math.abs(P.text[i]![1] - (P.text[i]![0] + C13_T.text)) < 1e-12, `${lang} ${width}: the words of line ${i} come in after its chips and after the pile`);
+      assert.equal(c13Text(P, i, 0), 0); assert.equal(c13Text(P, i, P.text[i]![0]), 0); assert.equal(c13Text(P, i, P.text[i]![1]), 1); assert.equal(c13Text(P, i, P.end + 3), 1);
+      let prev = 0; for (let x = 0; x <= P.end; x += 0.004) { const t = c13Text(P, i, x); assert.ok(t >= prev - 1e-12 && t >= 0 && t <= 1); prev = t; }
+    }
+    // a chip is never over words that can be read, and no word is read over the pile: while any of a line's words is seen none of its units is, and no word is seen while any unit is still waiting in the pile
+    for (let x = 0; x <= P.end + 0.004; x += 0.002) for (let i = 0; i < items; i++) if (c13Text(P, i, x) > 0) {
+      assert.ok(x >= lastRel - 1e-9, `${lang} ${width}: a word of line ${i} is seen at ${x.toFixed(3)} s while a unit is still in the pile (the last leaves at ${lastRel.toFixed(3)} s)`);
+      specs.forEach((s, k) => { if (s.item === i) assert.equal(c13Unit(P, k, x).a, 0, `${lang} ${width}: unit ${k} is seen at ${x.toFixed(3)} s over the words of its own line`); });
+    }
+    assert.ok(P.end > 1.8 && P.end < 2.3, `${lang} ${width}: it plays for ${P.end.toFixed(2)} s, once`);
+    // the units of a line arrive one after the other in the order it reads
+    for (let k = 1; k < n; k++) if (specs[k]!.item === specs[k - 1]!.item) assert.ok(P.land[k]! > P.land[k - 1]! && P.rel[k]! > P.rel[k - 1]!, `${lang}: unit ${k} arrives after the unit before it in its line`);
+    // the clocks are where the design needs them: a pile that takes a moment to form and stands for a moment, a run long enough to be seen, the words coming in before the first unit lands
+    assert.ok(C13_T.form >= 0.25 && C13_T.hold >= 0.15 && C13_T.fly >= 0.4 && C13_T.fly <= 0.9 && C13_T.item >= 0.05 && C13_T.unit >= 0.01 && C13_T.stand >= 0.05 && C13_T.text >= 0.1 && C13_T.fade >= 0.1 && C13_T.pop >= 0.05 && C13_T.pop <= C13_T.form, 'the clocks');
+    assert.ok(Math.abs(P.end - Math.max(...P.text.map((t) => t[1]))) < 1e-12 && P.end >= Math.max(...P.out) + C13_T.fade, 'it ends when the last line is whole');
+    cases++;
+  }
+  assert.equal(cases, 8);
+  // the rule can fail: a pile that formed in 3 s would not leave the 2.4 s the whole is allowed
+  assert.ok(3 + C13_T.hold + 6 * C13_T.item + 9 * C13_T.unit + C13_T.fly > 2.4);
+});
+
+test('chapter 13: no word is seen while a unit is still in the pile, whatever the order of the lines: a line of one unit that is nearest the pile waits for a pile that empties later', () => {
+  // seven lines: the nearest to the pile (line 0) has ONE unit and its chips are gone long before the last unit of the farthest line (twelve units) has left the pile
+  const specs: C13Spec[] = [], box: Array<{ w: number; h: number }> = [], rest: Array<{ x: number; y: number }> = [];
+  for (let item = 0; item < 7; item++) for (let j = 0; j < (item === 0 ? 1 : 12); j++) { specs.push({ item, chips: 1, list: item < 4 ? 'yes' : 'no' }); box.push({ w: 60, h: 24 }); rest.push({ x: 20 + j * 70, y: 100 + item * 50 }); }
+  const P = c13Plan(specs, { pile: { x: 500, y: 300, hx: 100, hy: 60 }, box, rest, dist: [0, 100, 200, 300, 400, 500, 600] });
+  const lastRel = Math.max(...P.rel), chipsGone = P.out[0]! + C13_T.fade;
+  assert.ok(chipsGone < lastRel, `the chips of line 0 are gone at ${chipsGone.toFixed(3)} s, before the last unit leaves the pile at ${lastRel.toFixed(3)} s: this is the case the rule is for`);
+  assert.ok(Math.abs(P.text[0]![0] - lastRel) < 1e-12, 'so the words of line 0 wait for the pile to empty');
+  for (let i = 1; i < 7; i++) assert.ok(P.text[i]![0] >= lastRel - 1e-12, `and so do the words of line ${i}`);
+  for (let x = 0; x <= P.end; x += 0.002) for (let i = 0; i < 7; i++) if (c13Text(P, i, x) > 0) assert.ok(x >= lastRel - 1e-9, `a word of line ${i} is seen at ${x.toFixed(3)} s while a unit is still in the pile`);
+});
+
+test('chapter 13: the clocks of one unit (its run, its fade, the words) and what the schedule refuses', () => {
+  const { specs, geo } = c13Page('es', 1440, true), P = c13Plan(specs, geo), k = 3, at = (x: number) => c13Unit(P, k, x);
+  const a = P.from[k]!, b = P.to[k]!, mid = (x: number, y: number) => Math.abs(x - y) < 1e-9;
+  assert.deepEqual([at(P.rel[k]! - 0.3).x, at(P.rel[k]! - 0.3).y], a); assert.deepEqual([at(P.rel[k]!).x, at(P.rel[k]!).y], a);
+  assert.ok(mid(at(P.rel[k]! + C13_T.fly / 2).x, (a[0] + b[0]) / 2) && mid(at(P.rel[k]! + C13_T.fly / 2).y, (a[1] + b[1]) / 2), 'halfway through its run it is halfway there (an ease in and out)');
+  assert.ok(Math.hypot(at(P.rel[k]! + C13_T.fly * 0.1).x - a[0], at(P.rel[k]! + C13_T.fly * 0.1).y - a[1]) < 0.1 * Math.hypot(b[0] - a[0], b[1] - a[1]), 'it leaves the pile slowly: a tenth of the way through its run it has covered less than a tenth of the way');
+  const e = (u: number) => u * u * (3 - 2 * u); assert.ok(mid(at(P.rel[k]! + C13_T.fly * 0.25).x, a[0] + (b[0] - a[0]) * e(0.25)), 'a smooth step: slow out of the pile, slow into its place');
+  assert.ok(mid(at(P.appear[k]! + C13_T.pop / 2).a, 0.5) && at(P.appear[k]!).a === 0 && at(P.appear[k]! + C13_T.pop).a === 1, 'it comes into the pile over T.pop');
+  assert.ok(P.out[k]! >= P.land[k]! + C13_T.stand - 1e-12 && at(P.land[k]!).a === 1 && at(P.out[k]!).a === 1, 'it stands over its words, whole, at least T.stand after it lands (longer while the rest of its line lands)');
+  assert.ok(mid(at(P.out[k]! + C13_T.fade / 2).a, 0.5) && at(P.out[k]! + C13_T.fade).a === 0, 'and goes out with its line over T.fade');
+  const t = P.text[2]!; assert.equal(c13Text(P, 2, t[0]), 0); assert.ok(mid(c13Text(P, 2, (t[0] + t[1]) / 2), 0.5)); assert.equal(c13Text(P, 2, t[1]), 1);
+  assert.ok(t[0] >= P.out.filter((_, j) => specs[j]!.item === 2).reduce((m, o) => Math.max(m, o), 0) + C13_T.fade - 1e-12, 'the words of a line begin when its chips have gone');
+  // fail closed: no units, lines that do not count up one at a time, a unit with no chip or with more than the two its pseudo-elements draw, geometry that does not describe the units, a number that is not a number, a pile with no size
+  type MutGeo = { pile: C13Geo['pile']; box: Array<{ w: number; h: number }>; rest: Array<{ x: number; y: number }>; dist: number[] };
+  const bad = (f: (s: C13Spec[], g: MutGeo) => [C13Spec[], C13Geo]) => assert.throws(() => c13Plan(...f(specs.map((x) => ({ ...x })), { ...geo, box: [...geo.box], rest: [...geo.rest], dist: [...geo.dist] })), /c13:/);
+  assert.throws(() => c13Plan([], { pile: geo.pile, box: [], rest: [], dist: [] }), /c13:/);
+  assert.throws(() => c13Plan([], geo), /c13:/);
+  bad((s, g) => { s[0]!.item = 1; return [s, g]; });
+  bad((s, g) => { s[s.length - 1]!.item = 9; return [s, g]; });
+  bad((s, g) => { s[2]!.chips = 0; return [s, g]; });
+  bad((s, g) => { s[2]!.chips = 1.5; return [s, g]; });
+  bad((s, g) => { s[2]!.chips = C13_CAP + 1; return [s, g]; });
+  bad((s, g) => [s, { ...g, box: g.box.slice(1) }]);
+  bad((s, g) => [s, { ...g, rest: g.rest.slice(1) }]);
+  bad((s, g) => [s, { ...g, dist: g.dist.slice(1) }]);
+  bad((s, g) => { g.rest[1] = { x: NaN, y: 0 }; return [s, g]; });
+  bad((s, g) => { g.box[1] = { w: 0, h: 24 }; return [s, g]; });
+  bad((s, g) => { g.dist[1] = Infinity; return [s, g]; });
+  bad((s, g) => [s, { ...g, pile: { ...g.pile, hx: 0 } }]);
+  bad((s, g) => [s, { ...g, pile: { ...g.pile, y: NaN } }]);
+  assert.doesNotThrow(() => c13Plan(specs, geo));
+  assert.equal(C13_SEED, 13);
+});
+
+test('chapter 13: the units of a line stand as one row of real tokens, left to right, wrapped at the text\'s width, never one over another: flowOf, whatever the widths', () => {
+  const G = C13_STAND.gap;
+  // the rule on a case that can be done by hand: three units of 100 px in a row 250 px wide, 3 px apart
+  assert.deepEqual(c13Flow([100, 100, 100], 250), { pos: [[0, 0], [100 + G, 0], [0, 1]], rows: 2 });
+  assert.deepEqual(c13Flow([100, 147], 250).pos, [[0, 0], [100 + G, 0]], 'a unit that exactly fills what is left of the row stays in it');
+  assert.deepEqual(c13Flow([100, 148], 250).pos, [[0, 0], [0, 1]], 'and one px more opens the next row');
+  assert.deepEqual(c13Flow([250], 250), { pos: [[0, 0]], rows: 1 }, 'a unit as wide as the row has the row to itself');
+  assert.deepEqual(c13Flow([60, 250, 60], 250).pos, [[0, 0], [0, 1], [0, 2]], 'and the units either side of it have rows of their own');
+  // the rule on thousands of rows: no two units of a line overlap, every unit is inside the row, a row's first unit is at its left, the gap is kept, and a unit opens a new row only when it did not fit
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let t = 0; t < 400; t++) {
+    const maxW = 150 + Math.floor(rnd() * 500), n = 1 + Math.floor(rnd() * 14), ws = Array.from({ length: n }, () => 20 + rnd() * Math.min(140, maxW - 20)), f = c13Flow(ws, maxW);
+    assert.equal(f.pos.length, n); assert.equal(f.rows, f.pos[n - 1]![1] + 1);
+    f.pos.forEach(([x, row], i) => {
+      assert.ok(x >= 0 && x + ws[i]! <= maxW + 0.01, `trial ${t}: unit ${i} stands inside the row`);
+      if (i && row === f.pos[i - 1]![1]) assert.ok(x >= f.pos[i - 1]![0] + ws[i - 1]! + G - 1e-9, `trial ${t}: unit ${i} keeps ${G} px from the unit before it`);
+      if (i && row !== f.pos[i - 1]![1]) { assert.equal(row, f.pos[i - 1]![1] + 1); assert.equal(x, 0, 'a row opens at its left'); assert.ok(f.pos[i - 1]![0] + ws[i - 1]! + G + ws[i]! > maxW + 0.01, `trial ${t}: unit ${i} opened a row only because it did not fit`); }
+      for (let j = 0; j < i; j++) if (f.pos[j]![1] === row) assert.ok(f.pos[j]![0] + ws[j]! <= x + 1e-9, `trial ${t}: units ${j} and ${i} of a row do not overlap`);
+    });
+  }
+  // fail closed: no unit, a row with no width, a unit with no width or one that is not a number, one wider than the row
+  assert.throws(() => c13Flow([], 250), /c13:/);
+  for (const bad of [0, -5, NaN, Infinity]) assert.throws(() => c13Flow([100], bad), /c13:/);
+  for (const bad of [0, -5, NaN, Infinity]) assert.throws(() => c13Flow([100, bad], 250), /c13:/);
+  assert.throws(() => c13Flow([100, 251], 250), /wider than the 250 px/);
+  assert.equal(C13_STAND.gap, 3, 'the gap between two units is the gap between the two chips of one');
+});
+
+test('chapter 13: a line\'s rows are centred on its words and kept inside the line\'s own box, with a margin: standTop, and a block that does not fit the box is refused with the numbers', () => {
+  const box = { top: 1000, bottom: 1083 }, H = (rows: number) => rows * 24 + (rows - 1) * C13_STAND.rowGap, e = C13_STAND.edge;
+  assert.equal(c13StandTop(box, 1041.5, 1, 24), 1041.5 - 12, 'one row is centred on the middle of the words');
+  assert.equal(c13StandTop(box, 1041.5, 2, 24), 1041.5 - H(2) / 2, 'and so is a block of two');
+  assert.equal(c13StandTop(box, 1000, 2, 24), 1000 + e, 'a block that would reach over the top of the box is put back inside it, edge px from it');
+  assert.equal(c13StandTop(box, 1083, 2, 24), 1083 - e - H(2), 'and over the bottom likewise');
+  assert.equal(c13StandTop(box, 1041.5, 3, 24), 1000 + e + (83 - 2 * e - H(3)) / 2 , 'three rows (76 px) in the 83 px box of a line of two lines of words: 2 px of margin either side and 1.5 px to move');
+  for (const rows of [1, 2, 3]) for (const mid of [900, 1000, 1041.5, 1083, 1200]) { const t = c13StandTop(box, mid, rows, 24); assert.ok(t >= box.top + e - 1e-9 && t + H(rows) <= box.bottom - e + 1e-9, `${rows} row(s) around ${mid} stay inside the box`); }
+  // the block that does not fit: four rows (102 px) in the 83 px box of two lines of words, and the exact limit
+  assert.throws(() => c13StandTop(box, 1041.5, 4, 24), /4 row\(s\) of units \(102 px\) do not fit the 83 px box/);
+  assert.doesNotThrow(() => c13StandTop({ top: 0, bottom: H(3) + 2 * e }, 40, 3, 24));
+  assert.throws(() => c13StandTop({ top: 0, bottom: H(3) + 2 * e - 0.5 }, 40, 3, 24), /c13:/);
+  for (const bad of [NaN, Infinity]) { assert.throws(() => c13StandTop({ top: bad, bottom: 1083 }, 1041, 1, 24), /c13:/); assert.throws(() => c13StandTop(box, bad, 1, 24), /c13:/); assert.throws(() => c13StandTop(box, 1041, 1, bad), /c13:/); }
+  for (const rows of [0, -1, 1.5, NaN]) assert.throws(() => c13StandTop(box, 1041, rows, 24), /c13:/);
+  assert.throws(() => c13StandTop(box, 1041, 1, 0), /c13:/);
+});
+
+test('chapter 13: on the real lines (both languages, four widths) every unit that has landed is inside its own line\'s box, in a row that starts at the text\'s left, and no two units of a line overlap', () => {
+  for (const lang of ['es', 'en'] as const) for (const [width, side] of [[390, false], [768, false], [1024, true], [1440, true]] as const) {
+    const { specs, geo, lines } = c13Page(lang, width, side);
+    lines.forEach((ln, i) => {
+      ln.units.forEach((k, j) => {
+        const r = geo.rest[k]!, b = geo.box[k]!;
+        assert.ok(r.x >= ln.left - 1e-9 && r.x + b.w <= ln.box.right + 0.01, `${lang} ${width} line ${i}: unit ${j} is inside the width of its line`);
+        assert.ok(r.y >= ln.box.top + C13_STAND.edge - 1e-9 && r.y + b.h <= ln.box.bottom - C13_STAND.edge + 1e-9, `${lang} ${width} line ${i}: unit ${j} is inside the box of its line, ${C13_STAND.edge} px from its edges`);
+        for (let m = 0; m < j; m++) { const o = geo.rest[ln.units[m]!]!, ob = geo.box[ln.units[m]!]!; assert.ok(o.x + ob.w <= r.x + 1e-9 || r.x + b.w <= o.x + 1e-9 || o.y + ob.h <= r.y + 1e-9 || r.y + b.h <= o.y + 1e-9, `${lang} ${width} line ${i}: units ${m} and ${j} overlap`); }
+      });
+      assert.equal(geo.rest[ln.units[0]!]!.x, ln.left, `${lang} ${width} line ${i}: the row starts at the text's left`);
+      assert.equal(ln.units.length, specs.filter((s) => s.item === i).length);
+    });
+  }
+});
+
+test('chapter 13: the band where a line\'s rows do not fit its box (EN, 327 to 331 px wide): line 5 needs four rows (102 px) in the 83 px box of two lines of words and is refused with the numbers, one px either side it is not', () => {
+  // Line 5 of the English list («You want AI to decide for you…»): its 8 units on a phone as the page draws them (exact widths, Chromium, 10px chips: not typed by hand, read from the page by the review's c13-unitw.mjs) and the
+  // geometry of its box from 326 to 332 px wide, read from the static page by c13-line-dump.mjs: the box is the viewport less 78 px wide, the text starts 34 px in, and a line of words is 24 px with 35 px of padding.
+  const widths = [69.172, 57.125, 87.25, 51.125, 63.156, 57.141, 87.234, 69.188];
+  const geo = (w: number) => { const lines = w <= 326 ? 3 : 2, h = 24 * lines + 35; return { room: w - 112, box: { top: 0, bottom: h }, mid: 17 + (24 * lines) / 2 }; };
+  const stand = (w: number) => { const g = geo(w), f = c13Flow(widths, g.room); return { rows: f.rows, top: c13StandTop(g.box, g.mid, f.rows, 24), h: g.box.bottom }; };
+  for (const w of [327, 328, 329, 330, 331]) {
+    assert.equal(c13Flow(widths, geo(w).room).rows, 4, `${w} px: the 8 units need four rows in a row ${geo(w).room} px wide (the first three are 69 + 57 + 87 px, 3 px apart: 219.55 px)`);
+    assert.throws(() => stand(w), /c13: 4 row\(s\) of units \(102 px\) do not fit the 83 px box of their line \(4 px to spare\)/, `${w} px: refused, with the numbers`);
+  }
+  // one px either side the same line fits: at 326 px its words take three lines (a 107 px box: four rows, 102 px, 1 px to move) and at 332 px the rows are three (76 px in 83)
+  const a = stand(326), z = stand(332);
+  assert.equal(a.rows, 4); assert.equal(z.rows, 3);
+  assert.ok(a.top >= 2 && a.top + 102 <= a.h - 2 + 1e-9 && z.top >= 2 && z.top + 76 <= z.h - 2 + 1e-9, 'and they stand inside their box, 2 px from its edges');
+  // it is the box that refuses, not the flow: the same four rows in the 107 px box of three lines of words are what the page has at 326 px
+  assert.equal(c13Flow(widths, geo(327).room).rows, c13Flow(widths, geo(326).room).rows);
+  // what the effect does with the refusal (fail open: no state left, the lists whole, one warning that carries the error, so the numbers) is in the source, and the browser check of it is the review's fallback cell (331 px EN)
+  const code = readFileSync(new URL('../src/aegis/fx/c13.ts', import.meta.url), 'utf8').replace(/\/\/.*$/gm, '');
+  assert.ok(/console\.warn\('\[v3\] chapter 13 is off:', e\); done\(\);/.test(code), 'the refusal is the effect\'s own warning, with the error (the numbers) in it, and the lists are given back');
+  assert.ok(/top = standTop\(box, mid, f\.rows, rowH\)/.test(code), 'and it is the effect\'s standTop that refuses (a block that does not fit the box is never drawn)');
+});
+
+test('chapter 13: the pile is parked in the block of lines that are not there yet, never over a heading: as big as it can be there and no bigger, centred on the block (or higher, to stay in view), and a block no larger than a unit is refused', () => {
+  const boxes = [{ w: 60, h: 24 }, { w: 130, h: 24 }, { w: 90, h: 24 }], pref = { hx: 150, hy: 110 };
+  // a block with room to spare: the preferred size, centred on it
+  let p = c13PileIn({ left: 100, top: 200, right: 1100, bottom: 700 }, boxes, pref, 10_000);
+  assert.deepEqual(p, { x: 600, y: 450, hx: 150, hy: 110 });
+  // a narrow, short block: the pile is what the block allows, so that the whole of the widest and the tallest box stays inside it (the half-size of the block less half the box)
+  p = c13PileIn({ left: 20, top: 400, right: 370, bottom: 560 }, boxes, pref, 10_000);
+  assert.deepEqual(p, { x: 195, y: 480, hx: (350 - 130) / 2, hy: (160 - 24) / 2 });
+  for (const park of [{ left: 20, top: 400, right: 370, bottom: 560 }, { left: 40, top: 100, right: 700, bottom: 316 }, { left: 0, top: 0, right: 400, bottom: 300 }]) for (const lowest of [10_000, 350, 100, -50]) {
+    const q = c13PileIn(park, boxes, pref, lowest);
+    // the whole box of any unit centred on any point of the ellipse is inside the block (the extremes: the four points of the ellipse, the widest and the tallest box)
+    assert.ok(q.x - q.hx - 130 / 2 >= park.left - 1e-9 && q.x + q.hx + 130 / 2 <= park.right + 1e-9 && q.y - q.hy - 24 / 2 >= park.top - 1e-9 && q.y + q.hy + 24 / 2 <= park.bottom + 1e-9, `${JSON.stringify(park)} at ${lowest}: the pile stays in the block`);
+    assert.ok(q.hx > 0 && q.hy > 0 && q.hx <= pref.hx && q.hy <= pref.hy, 'it is never bigger than asked');
+  }
+  // in view: the block's centre is below the lowest y a pile may be centred on, so the pile goes up, as far as the block's top allows and no further
+  p = c13PileIn({ left: 0, top: 100, right: 800, bottom: 900 }, boxes, pref, 400);
+  assert.equal(p.y, 400);
+  p = c13PileIn({ left: 0, top: 100, right: 800, bottom: 900 }, boxes, pref, 50);
+  assert.equal(p.y, 100 + 12 + 110, 'but never above the block: its top plus half a box plus the pile\'s half-height');
+  // fail closed: a block no larger than the biggest unit (either way), a box that is not a size, no boxes, a size or a number that is not one
+  const ok = { left: 0, top: 0, right: 400, bottom: 300 };
+  for (const bad of [{ ...ok, right: 130 }, { ...ok, right: 100 }, { ...ok, bottom: 24 }, { ...ok, bottom: 10 }, { ...ok, left: NaN }, { ...ok, top: Infinity }]) assert.throws(() => c13PileIn(bad, boxes, pref, 10_000), /c13:/);
+  assert.throws(() => c13PileIn(ok, [], pref, 10_000), /c13:/);
+  assert.throws(() => c13PileIn(ok, [{ w: 0, h: 24 }], pref, 10_000), /c13:/);
+  assert.throws(() => c13PileIn(ok, [{ w: 60, h: NaN }], pref, 10_000), /c13:/);
+  assert.throws(() => c13PileIn(ok, boxes, { hx: 0, hy: 110 }, 10_000), /c13:/);
+  assert.throws(() => c13PileIn(ok, boxes, { hx: 150, hy: NaN }, 10_000), /c13:/);
+  assert.throws(() => c13PileIn(ok, boxes, pref, NaN), /c13:/);
+  // the real pages, both languages and four widths: every parked unit is inside its block, so the headings above and below it are never under a chip
+  for (const lang of ['es', 'en'] as const) for (const [width, side] of [[390, false], [768, false], [1024, true], [1440, true]] as const) {
+    const { geo, park, specs } = c13Page(lang, width, side), P = c13Plan(specs, geo);
+    P.from.forEach(([x, y], k) => assert.ok(x >= park.left && x + geo.box[k]!.w <= park.right && y >= park.top && y + geo.box[k]!.h <= park.bottom, `${lang} ${width}: unit ${k} is parked inside the block of lines`));
+  }
+});
+
+test('chapter 13: a pass adds one layer and one element per unit and writes a style on those and on the seven lines (59 and 53 of the contract\'s 80: a unit\'s chips are pseudo-elements, no node), and the markup is the two lists as they were: nothing added to it', () => {
+  assert.equal(C13_BUDGET, 80, 'the budget of the contract');
+  for (const [lang, units, tokens] of [['es', 51, 91], ['en', 45, 85]] as const) {
+    const us = c13Lines(lang).reduce((m, l) => m + c13Units(l.pieces).length, 0);
+    assert.equal(us, units); assert.equal(c13Nodes(us, 7), units + 8); assert.ok(c13Nodes(us, 7) <= C13_BUDGET, `${lang}: ${us} units, 7 lines and the layer`);
+    // the reason for units whose chips are pseudo-elements: the contract's counter counts every element ADDED, so an element per token (and 7 lines and the layer) is over the budget
+    assert.ok(c13Nodes(tokens, 7) > C13_BUDGET, `${lang}: ${tokens} tokens as one element each (and 7 lines and the layer) would be ${c13Nodes(tokens, 7)}`);
+    // and one per unit with a chip element inside it is over it too (the counter finds the chips as descendants of the added unit)
+    assert.ok(us + tokens + 7 + 1 > C13_BUDGET, `${lang}: a unit element with a chip element in it per token would be ${us + tokens + 8}`);
+  }
+  const page = readFileSync(new URL('../src/pages/v3.astro', import.meta.url), 'utf8'), a = page.indexOf('<section id="c13"'), b = page.indexOf('<section id="c14"'), sec = page.slice(a, b);
+  assert.ok(a > 0 && b > a, 'chapter 13 is where this test looks for it');
+  assert.ok(/data-fx="separate"/.test(sec) && !/split-in/.test(sec), 'the effect\'s name, and the old one is gone');
+  assert.ok(/<div class="pcol yes" data-col="yes"><h2>\{V\.s10TituloSi\}<\/h2><ul>\{V\.s10Si\.map\(\(x\) => \(<li>\{x\}<\/li>\)\)\}<\/ul><\/div>/.test(sec), 'the yes column: its heading and one plain <li> per line (the effect reads each line\'s one text node)');
+  assert.ok(/<div class="pcol no" data-col="no"><h2>\{V\.s10TituloNo\}<\/h2><ul>\{V\.s10No\.map\(\(x\) => \(<li>\{x\}<\/li>\)\)\}<\/ul><\/div>/.test(sec), 'and the no column');
+  assert.ok(/<div class="para">/.test(sec), 'the two columns are in one block');
+  assert.ok(!/\bssu\b|\bsst\b|\bssv\b|fxk|data-t[12]/.test(sec), 'the units, their chips (pseudo-elements read from data-t1 and data-t2) and their layer are the effect\'s: the server renders none of them');
+  assert.ok(!/<circle|<svg|<img|<canvas|border-radius/.test(sec), 'nothing round, no image');
+  for (const lang of ['es', 'en'] as const) { const V = STR[lang].pub.v3; assert.equal(V.s10Si.length, 4); assert.equal(V.s10No.length, 3); }
+});
+
+test('chapter 13 is square and its class names are its own: no round shape in an `ssv` or `ssu` rule or in the pseudo-elements that are a unit\'s chips, their text is 10px or more at every width and is read from the unit\'s own data attributes, and every rule of them hangs on html.fxl', () => {
+  const css = readFileSync(new URL('../src/aegis/v3.css', import.meta.url), 'utf8').replace(/\/\*(?!!)[\s\S]*?\*\//g, '');
+  const NAMES = /\.ssv(?![\w-])|\.ssu(?![\w-])|\.sst(?![\w-])/;
+  const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ sel: m[1]!.trim(), body: m[2]! })), mine = rules.filter((r) => r.sel.split(',').some((x) => NAMES.test(x)));
+  assert.equal(mine.length, 7, 'the layer, the unit, the chips, the first chip\'s text, the second chip\'s text, the yes list\'s chips, and the chips on a narrow phone');
+  const round = (b: string) => /border-radius\s*:\s*(?!0(?:px)?\s*(?:;|$))|clip-path\s*:\s*(?:circle|ellipse)/i.test(b);
+  for (const r of mine) {
+    assert.ok(!round(r.body), `«${r.sel}» is round`);
+    assert.ok(r.sel.split(',').every((x) => x.trim().startsWith('html.fxl ')), `«${r.sel}» is not keyed to html.fxl (it would outlive dispose())`);
+    assert.ok(!/transition|animation|will-change|filter|box-shadow|text-shadow/.test(r.body), `«${r.sel}» has a transition, an animation or an effect of its own`);
+  }
+  const sized = (b: string) => { const m = /(?:^|;)font(?:-size)?\s*:[^;]*?(\d+(?:\.\d+)?)px/.exec(b); return m ? parseFloat(m[1]!) : null; };
+  const BOTH = 'html.fxl .ssu::before,html.fxl .ssu[data-t2]::after';
+  const chips = mine.find((r) => r.sel === BOTH && /height:24px/.test(r.body)), narrow = mine.find((r) => r.sel === BOTH && r !== chips);
+  const first = mine.find((r) => r.sel === 'html.fxl .ssu::before'), second = mine.find((r) => r.sel === 'html.fxl .ssu[data-t2]::after'), yes = mine.find((r) => r.sel === 'html.fxl .ssu.y::before,html.fxl .ssu.y[data-t2]::after');
+  assert.ok(chips && sized(chips.body) === 12 && /height:24px/.test(chips.body) && /white-space:nowrap/.test(chips.body) && /box-sizing:border-box/.test(chips.body) && /border:1px solid var\(--hair\)/.test(chips.body), 'a chip: 12px mono, 24px tall including its hairline border (a pseudo-element does not get the page\'s border-box reset), never wrapping');
+  assert.ok(narrow && sized(narrow.body) === 10 && /padding:0 \.35em/.test(narrow.body), 'on a phone: 10px, padded tighter');
+  assert.ok(css.includes('@media (max-width:480px){' + BOTH + '{'), 'at 480px and under');
+  assert.ok(first && first.body === 'content:attr(data-t1)' && second && second.body === 'content:attr(data-t2)', 'the text of a chip is read from its unit\'s own data attributes, nothing is typed in the stylesheet, and a second chip exists only on a unit that has one');
+  assert.deepEqual(mine.flatMap((r) => [...r.body.matchAll(/content\s*:\s*([^;]+)/g)].map((m) => m[1]!.trim())), ['attr(data-t1)', 'attr(data-t2)'], 'no other generated content');
+  assert.ok(yes && /border-color:var\(--ac\)/.test(yes.body), 'the yes list\'s chips are outlined in the accent');
+  for (const r of mine) { const z = sized(r.body); if (z !== null) assert.ok(z >= 10, `«${r.sel}» sets its text at ${z}px`); }
+  const layer = mine.find((r) => /\.ssv$/.test(r.sel)), unit = mine.find((r) => r.sel === 'html.fxl .ssu');
+  assert.ok(layer && /position:absolute/.test(layer.body) && /width:0/.test(layer.body) && /height:0/.test(layer.body) && /pointer-events:none/.test(layer.body), 'the layer is a point at the corner of its box, and never takes a click');
+  assert.ok(unit && /position:absolute/.test(unit.body) && /display:flex/.test(unit.body) && /gap:3px/.test(unit.body), 'a unit is its chips side by side, 3px apart');
+  const stray = (t: string) => [...t.matchAll(/([^{}]+)\{([^{}]*)\}/g)].flatMap((m) => m[1]!.split(',').map((x) => x.trim())).filter((x) => NAMES.test(x));
+  const FIRST = 'html.fxl .ssu::before', SECOND = 'html.fxl .ssu[data-t2]::after';
+  assert.deepEqual(stray(css), ['html.fxl .ssv', 'html.fxl .ssu', FIRST, SECOND, FIRST, SECOND, 'html.fxl .ssu.y::before', 'html.fxl .ssu.y[data-t2]::after', FIRST, SECOND], 'no other rule of the stylesheet styles an `ssv`, `ssu` or `sst`');
+  const page = readFileSync(new URL('../src/pages/v3.astro', import.meta.url), 'utf8');
+  assert.ok(!/class="[^"]*\b(?:ssv|ssu|sst)\b/.test(page), 'and the page uses none of the classes: they are the effect\'s');
+  assert.ok(!/html\.fxl \.para\s*\{|html\.fxl #c13\s*\{|html\.fxl \.pcol/.test(css), 'the lists are not positioned or restyled by the stylesheet (the effect measures the corner of the layer, wherever the page puts it)');
+  // the rule can fail
+  assert.deepEqual(stray('.sst{padding:8px}.x .ssv{y:1}.foo{z:1}.sstx{a:1}'), ['.sst', '.x .ssv']);
+  assert.ok(round('border-radius:50%;width:1px') && round('clip-path:circle(50%)') && !round('border:1px solid red'));
+});
+
+test('chapter 13: the effect writes only transform and opacity, adds no element but its units and their layer (the chips are pseudo-elements), writes no copy but a token\'s own text into a data attribute, plays once on c13-data\'s clocks, gives the lists back whole when anything fails, and is registered', () => {
+  const src = readFileSync(new URL('../src/aegis/fx/c13.ts', import.meta.url), 'utf8'), code = src.replace(/\/\/.*$/gm, '');
+  assert.ok(!/\.style\.(?!opacity\b|transform\b)\w+\s*=(?!=)/.test(code), 'it sets only style.opacity and style.transform');
+  assert.ok(!/setProperty\(/.test(code), 'it sets no custom property');
+  assert.deepEqual([...new Set([...code.matchAll(/style\.removeProperty\('([^']+)'\)/g)].map((m) => m[1]))], ['opacity'], 'what it gives back is the lines\' opacity');
+  assert.deepEqual([...code.matchAll(/\.textContent\s*=\s*([^;]+);/g)].map((m) => m[1]), [], 'it writes no text node');
+  assert.deepEqual([...code.matchAll(/setAttribute\(([^,]+), ([^)]+)\)/g)].map((m) => `${m[1]}=${m[2]}`), ["'aria-hidden'='true'", '`data-t${i + 1}`=t'], 'the only attributes it sets: the layer is aria-hidden, and the text of a chip is a token piece read from the page\'s own token file');
+  assert.ok(/piecesOf\(map, t\)/.test(code) && /pieces\.slice\(u\.first, u\.last \+ 1\)\.map\(\(p\) => show\(p\[0\]\)\)/.test(code) && /tokensFromPage\(\)/.test(code) && /unitsOf\(pieces\)/.test(code), 'the chips are the real pieces, a leading space shown as «·» by show(), grouped by c13-data\'s unitsOf');
+  assert.ok(/\bus = unitsOf\(pieces\);/.test(code) && /chips: us\.map\(/.test(code) && /const mine = lines\.map\(\(_, i\) => specs\.flatMap\(\(s, k\) => \(s\.item === i \? \[k\] : \[\]\)\)\);/.test(code), 'every unit of a line is kept (none cut off, none sampled): the chips are made from all of the line\'s units, and each line\'s units are all of the specs that belong to it');
+  assert.ok(/import \{[^}]*\bflowOf\b[^}]*\bstandTop\b[^}]*\} from '\.\.\/c13-data'|import \{[^}]*\bSTAND\b[^}]*\bflowOf\b[^}]*\} from '\.\.\/c13-data'/.test(src) && /flowOf\(ks\.map\(\(k\) => size\[k\]!\.w\), box\.right - left\)/.test(code) && /standTop\(box, mid, f\.rows, rowH\)/.test(code) && /rowH = Math\.max\(\.\.\.ks\.map\(\(k\) => size\[k\]!\.h\)\)/.test(code), 'each line\'s units land as one row: flowOf over the widths of the line\'s units, wrapped at the right of the line\'s box less the text\'s left, as tall as the tallest of them, and standTop inside the line\'s box');
+  assert.ok(/rest\[k\] = \{ x: left \+ f\.pos\[j\]!\[0\] - O\.left, y: top \+ f\.pos\[j\]!\[1\] \* \(rowH \+ STAND\.rowGap\) - O\.top \}/.test(code) && !/ranges|EDGE|setStart\(lines/.test(code), 'a unit\'s resting place is its slot in its line\'s row, not the x of its own words');
+  assert.ok(/rg\.selectNodeContents\(l\.node\);/.test(code) && /need\(rs\.length > 0, 'a line has no place: its words are not drawn'\)/.test(code) && /const left = Math\.min\(\.\.\.rs\.map\(\(q\) => q\.left\)\), mid = \(Math\.min\(\.\.\.rs\.map\(\(q\) => q\.top\)\) \+ Math\.max\(\.\.\.rs\.map\(\(q\) => q\.bottom\)\)\) \/ 2, box = l\.li\.getBoundingClientRect\(\);/.test(code), 'a line\'s row starts at the left of its words and is centred on their middle (a Range over its text node), and a line whose words are not drawn is refused');
+  assert.deepEqual([...code.matchAll(/\bel\('([a-z]+)', ([^)]+)\)/g)].map((m) => `${m[1]}.${m[2]!.replace(/\$\{[^}]*\}/g, '$')}`), ["div.'fxk ssv'", 'div.`fxk ssu $`'], 'the elements it adds: its layer and its units, marked fxk, and nothing inside a unit (the contract\'s counter finds every descendant of what is added)');
+  assert.ok(/layer\.setAttribute\('aria-hidden', 'true'\)/.test(code), 'and the layer is a decoration (aria-hidden)');
+  assert.ok(/import \{[^}]*\bCAP\b[^}]*\} from '\.\.\/c13-data'/.test(src) && /need\(lines\.every\(\(l\) => l\.chips\.every\(\(c\) => c\.length >= 1 && c\.length <= CAP\)\)/.test(code), 'it refuses a unit with no chip or with more than the pseudo-elements it has');
+  assert.ok(!/innerHTML|innerText|insertAdjacent|\.prepend\(|cloneNode|replaceWith|createElement|createTextNode/.test(code), 'it moves no node and writes no markup');
+  assert.ok(!/canvas|drawImage|fetch\(|\.webp|\.gif|\.apng/i.test(code), 'no footage, no sprite, no animated image');
+  assert.ok(/import \{[^}]*\bplan\b[^}]*\} from '\.\.\/c13-data'/.test(src) && /duration: P!\.end\b/.test(code) && /x: P!\.end\b/.test(code), 'it plays for the end of c13-data\'s plan');
+  assert.ok(/import \{[^}]*\bpileIn\b[^}]*\} from '\.\.\/c13-data'/.test(src) && /\bpile = pileIn\(park, size, /.test(code) && /yesLines = yes && \$<HTMLElement>\('ul', yes\)/.test(code) && /noLines = no && \$<HTMLElement>\('ul', no\)/.test(code), 'the pile is parked by pileIn in the block of lines of the lists (their ul), under the headings');
+  assert.ok(/const park: Rect = side \? \{ left: Math\.min\(uy\.left, un\.left\), top: Math\.max\(uy\.top, un\.top\), right: Math\.max\(uy\.right, un\.right\), bottom: Math\.min\(uy\.bottom, un\.bottom\) \} : \{ left: uy\.left, top: uy\.top, right: uy\.right, bottom: uy\.bottom \};/.test(code), 'the block is the band where both lists have lines when they are side by side, the yes list\'s lines alone when they are stacked (the no list\'s heading is under them)');
+  assert.ok(/uy = yesLines\.getBoundingClientRect\(\), un = noLines\.getBoundingClientRect\(\)/.test(code), 'the block is measured on the two lists of lines (their ul), not on the columns that hold the headings');
+  assert.ok(/pile: \{ x: cx - O\.left, y: cy - O\.top, hx: pile\.hx, hy: pile\.hy \}/.test(code) && !/B\.top \+ B\.height \/ 2|N\.left :/.test(code), 'and the plan is given the pile that was parked, not one at the middle of the block or on the border between the columns');
+  assert.ok(/nodeCount\(specs\.length, lines\.length\) <= NODE_BUDGET/.test(code), 'it refuses more nodes than the contract allows');
+  assert.ok(/once\(para, undo/.test(code) && /REG\['c13:sort'\]/.test(code) && /margin:/.test(code), 'a play-once effect that asks once(), and shows itself to the review hooks');
+  assert.ok(/CHAPTERS[^\n]*\['c13', initC13\]/.test(readFileSync(new URL('../src/aegis/fx/index.ts', import.meta.url), 'utf8')), 'the effect is registered in the list of chapters');
+  assert.ok(/arm: \(\) => \{ para\.dataset\.fxS = 'arm'; lines\.forEach\(\(l\) => \{ l\.li\.style\.opacity = '0'; \}\); \}/.test(code), 'waiting, only the seven lines are transparent');
+  assert.ok(/catch \(e\) \{ off\(e\); \}/.test(code) && /const off = \(e: unknown\) => \{ console\.warn\([^;]*; done\(\); \}/.test(code), 'a failure is a warning and the lists given back whole');
+  assert.ok(/onWidth\(\(\) => \{ if \(o\.state\(\) === 'run'\) o\.clear\(\); \}\)/.test(code), 'a width change gives back a sorting that is playing');
+  assert.ok(/layer && layer\.remove\(\)/.test(code) && /onComplete: done/.test(code), 'the chips and the layer go in the very task it is done');
+  assert.ok(/pileOf\(specs\.length\)\.order\.forEach\(\(k\) => layer!\.appendChild\(boxes\[k\]!\)\)/.test(code), 'the units are stacked in the pile\'s own order');
+  assert.ok(/Y\.right <= N\.left \+ 1 && Math\.abs\(Y\.top - N\.top\) < 2/.test(code) && /\{ hx: clamp\(B\.width \* 0\.14, 90, 150\), hy: clamp\(B\.height \* 0\.22, 70, 110\) \}, innerHeight \* 0\.72\)/.test(code), 'the lists are side by side or stacked as the page lays them out, the pile is asked for the size it has always had, and it is always in view');
+  assert.ok(/createRange\(\)/.test(code) && /getClientRects\(\)/.test(code), 'each unit\'s place is where its words are (a Range over them)');
+  assert.ok(/const size = boxes\.map\(\(b\) => \{ const q = b\.getBoundingClientRect\(\); return \{ w: q\.width, h: q\.height \}; \}\)/.test(code) && !/offsetWidth|offsetHeight/.test(code), 'every unit is measured as it is drawn, exact, never in whole pixels (offsetWidth rounds a 10px chip down by up to half a pixel): a row is never wider than the text and two units are never closer than the gap');
+});
+
+// ---------- chapter 14: the price made by its real tokens, rolling up to itself ----------
+const c14Price = (lang: 'es' | 'en') => { const text = PRECIO_VISUAL[lang]!, pieces = piecesOf(TOKENS[lang], text); return { text, pieces, tokens: c14Tokens(pieces) }; };
+
+test('chapter 14: the price\'s tokens are its real o200k pieces with their places in the figure, the numeric ones have a wheel per digit, and a wheel carries ONE row: its own digit (no figure but the price is ever legible)', () => {
+  const es = c14Price('es'), en = c14Price('en');
+  // if the published price changes, this is the test that says what the roll becomes
+  assert.deepEqual(es.tokens.map((t) => [t.text, t.start, t.end, t.digits]), [['$', 0, 1, []], ['39', 1, 3, [3, 9]], ['.', 3, 4, []], ['990', 4, 7, [9, 9, 0]]]);
+  assert.deepEqual(en.tokens.map((t) => [t.text, t.start, t.end, t.digits]), [['39', 0, 2, [3, 9]], [',', 2, 3, []], ['990', 3, 6, [9, 9, 0]], [' COP', 6, 10, []]]);
+  for (const x of [es, en]) {
+    assert.equal(x.tokens.map((t) => t.text).join(''), x.text, 'the tokens are the figure');
+    const w = c14Wheels(x.tokens);
+    assert.deepEqual(w.map((v) => v.digit), [3, 9, 9, 9, 0]);
+    for (const v of w) assert.equal(x.text[v.at], String(v.digit), 'a wheel stands over its own digit');
+    assert.deepEqual(w.map((v) => v.token), x.tokens.flatMap((t, i) => t.digits.map(() => i)), 'and belongs to its own token');
+  }
+  for (let d = 0; d <= 9; d++) assert.equal(c14Face(d), d, 'a wheel carries ONE row, its own digit: no 0 to 9 strip that rolls past other figures, no rest state on zeros');
+  for (const bad of [-1, 10, 1.5, NaN, Infinity]) assert.throws(() => c14Face(bad), /c14:/);
+  assert.throws(() => c14Tokens([]), /c14:/);
+  assert.deepEqual(c14Tokens([['a'], ['12'], [' 3']]).map((t) => t.digits), [[], [1, 2], []], 'a token with a letter or a space in it is a symbol');
+  assert.equal(C14_SEGS, 30);
+});
+
+test('chapter 14: the schedule (the real price, both languages): the five wheels set off together and each rises ONE row into its window, easing out, the price stands as its tokens, the real figure comes in under the chips and only then do they fade, and the segments light up in order', () => {
+  for (const lang of ['es', 'en'] as const) {
+    const { tokens } = c14Price(lang), P = c14Plan(tokens, C14_SEGS), W = P.wheels;
+    W.forEach((w, k) => {
+      assert.ok(w.start === C14_T.pop && Math.abs(w.stop - (w.start + C14_T.spin)) < 1e-12, 'a wheel sets off when the overlay is whole (not a stagger after the one on its left) and rises for T.spin');
+      assert.equal(c14Below(P, k, 0), 1); assert.equal(c14Below(P, k, w.start), 1, 'its row lies under its window (nothing of it is seen) until it sets off');
+      assert.ok(Math.abs(c14Below(P, k, w.stop)) < 1e-12, 'it is in its window, over its own digit, when it stops'); assert.equal(c14Below(P, k, P.end + 5), 0, 'and stays');
+      let prev = 1, prevV = 0, peak = 0;
+      for (let x = w.start; x <= w.stop + 0.004; x += 0.004) {
+        const r = c14Below(P, k, x), v = prev - r;
+        assert.ok(r >= 0 && r <= 1, `wheel ${k} is never anywhere but between its own row and the one under it (${r}): it can show no other digit`);
+        assert.ok(r <= prev + 1e-12, `wheel ${k} only rises`);
+        if (x > w.start + 0.0041) assert.ok(v <= prevV + 1e-9, `wheel ${k} slows into its stop (an ease out)`);
+        peak = Math.max(peak, v); prev = r; prevV = v;
+      }
+      assert.ok(peak / 0.004 / 60 < 0.1, `wheel ${k} (a ${w.digit}) never covers a tenth of a row a frame at 60 fps (${(peak / 0.004 / 60).toFixed(3)}): it never jumps`);
+    });
+    for (let x = 0; x <= P.end + 0.004; x += 0.004) W.forEach((_, k) => { const r = c14Below(P, k, x); assert.ok(r >= 0 && r <= 1, `at ${x.toFixed(3)} s wheel ${k} is within its own row and the one under it`); });
+    assert.equal(C14_T.cascade, 0, 'no stagger: a prefix of the price («$39.99», the last digit still to come) is a number that is not the price');
+    assert.ok(W.every((w) => w.start === W[0]!.start && w.stop === W[0]!.stop), 'all together: no wheel sets off after another');
+    for (let x = 0; x <= P.end + 0.004; x += 0.004) W.forEach((_, k) => assert.equal(c14Below(P, k, x), c14Below(P, 0, x), `at ${x.toFixed(3)} s wheel ${k} is at the same rise as the first: the only number that is ever legible is the whole price`));
+    assert.ok(Math.abs(P.rest - W[W.length - 1]!.stop) < 1e-12 && Math.abs(P.swapAt - (P.rest + C14_T.hold)) < 1e-12 && Math.abs(P.fadeAt - (P.swapAt + C14_T.swap)) < 1e-12, 'the last wheel stops, the price stands for T.hold, the figure comes in over T.swap');
+    const lastSeg = P.seg[P.seg.length - 1]! + C14_T.seg;
+    assert.ok(Math.abs(P.end - Math.max(P.fadeAt + C14_T.dissolve, lastSeg)) < 1e-12 && P.end > 2 && P.end < 2.6, `${lang}: it plays for ${P.end.toFixed(2)} s, once`);
+    // the overlay: not there at 0, whole from T.pop, whole until the figure is whole under it, gone at the end, never coming back
+    assert.equal(c14Overlay(P, 0), 0); assert.ok(Math.abs(c14Overlay(P, C14_T.pop / 2) - 0.5) < 1e-12 && c14Overlay(P, C14_T.pop) === 1);
+    let prevO = 0, prevF = 0;
+    for (let x = 0; x <= P.end + 0.004; x += 0.004) {
+      const o = c14Overlay(P, x), f = c14Figure(P, x);
+      assert.ok(o >= 0 && o <= 1 && f >= 0 && f <= 1, 'opacities are shares');
+      if (x <= P.swapAt) assert.equal(f, 0, 'the real figure waits until the price has stood');
+      if (x >= P.fadeAt) assert.equal(f, 1, 'and is whole before a chip fades');
+      if (x >= C14_T.pop && x <= P.fadeAt) assert.equal(o, 1, 'the chips are whole from T.pop until then');
+      if (x >= C14_T.pop) assert.ok(Math.abs((1 - (1 - o) * (1 - f)) - 1) < 1e-12, 'the price is never less than whole after it has come in: no dip while one fades over the other');
+      if (x > P.fadeAt) assert.ok(o <= prevO + 1e-12, 'once fading, never back'); if (x > P.swapAt) assert.ok(f >= prevF - 1e-12);
+      prevO = o; prevF = f;
+    }
+    assert.equal(c14Overlay(P, P.end + 1), 0); assert.equal(c14Figure(P, P.end + 1), 1);
+    // the segments: one after the other, in order, each 0 -> 1, the whole bar before the end
+    P.seg.forEach((t, j) => {
+      assert.equal(P.seg.length, C14_SEGS); assert.ok(j === 0 ? t >= C14_T.pop : t > P.seg[j - 1]!, 'in order');
+      assert.equal(c14Seg(P, j, t), 0); assert.equal(c14Seg(P, j, t + C14_T.seg), 1); assert.equal(c14Seg(P, j, P.end + 1), 1);
+      let prev = 0; for (let x = t; x <= t + C14_T.seg; x += 0.004) { const a = c14Seg(P, j, x); assert.ok(a >= prev - 1e-12); prev = a; }
+    });
+    assert.ok(lastSeg <= P.end, 'the whole bar is lit by the end');
+    // the clocks are where the design needs them
+    assert.ok(C14_T.pop >= 0.1 && C14_T.spin >= 0.4 && C14_T.spin <= 1.2 && C14_T.cascade === 0 && C14_T.hold >= 0.25 && C14_T.swap > 0 && C14_T.dissolve >= 0.2 && C14_T.seg >= 0.1 && C14_T.segGap >= 0.01, 'the clocks');
+  }
+  // the rule can fail: a roll that took 4 s to settle would not leave the 2.6 s the whole is allowed
+  assert.ok(C14_T.pop + 4 + C14_T.hold + C14_T.swap + C14_T.dissolve > 2.6);
+  assert.ok(C14_T.pop + C14_T.spin + C14_T.hold + C14_T.swap + C14_T.dissolve > 2.2, 'about 2.3 s in all, as the roll it replaces: the five wheels rising together, the price standing, the figure under the chips');
+});
+
+test('chapter 14: the clocks of one wheel and the geometry of the chips, and what the schedule and the geometry refuse', () => {
+  const { tokens } = c14Price('es'), P = c14Plan(tokens, C14_SEGS), k = 1, w = P.wheels[k]!, T = C14_T;
+  const mid = (a: number, b: number) => Math.abs(a - b) < 1e-9;
+  assert.ok(mid(c14Below(P, k, w.start + T.spin / 2), 0.125), 'halfway through its rise a wheel has an eighth of a row to go (an ease out: quick off the line, slow into its stop)');
+  assert.ok(mid(c14Below(P, k, w.start + T.spin * 0.25), 0.75 ** 3), 'a cubic ease out');
+  assert.ok(1 - c14Below(P, k, w.start + T.spin * 0.05) > 0.1, 'it leaves the line quickly: a twentieth of the way through its rise it has covered more than a tenth of its row');
+  assert.ok(mid(c14Figure(P, P.swapAt + T.swap / 2), 0.5) && mid(c14Seg(P, 3, P.seg[3]! + T.seg / 2), 0.5) && mid(c14Overlay(P, P.fadeAt + T.dissolve / 2), 0.5 * 1));
+  // fail closed
+  assert.throws(() => c14Plan([], C14_SEGS), /c14:/);
+  assert.throws(() => c14Plan(c14Tokens([['$'], ['.']]), C14_SEGS), /c14:/, 'a price with no digit has nothing to roll');
+  assert.throws(() => c14Plan(tokens, 0), /c14:/); assert.throws(() => c14Plan(tokens, 2.5), /c14:/);
+  { const long = c14Plan(tokens, 200); assert.ok(long.end >= long.seg[199]! + T.seg - 1e-12 && long.end > P.end, 'a longer bar ends the plan later: it is over when the last segment is lit, whatever the bar'); }
+  assert.doesNotThrow(() => c14Plan(tokens, C14_SEGS));
+  // the geometry: a made-up figure 68px high in its font, 4 tokens, 5 digits
+  const FS = 68, H = FS * 0.9, cw = [30, 36, 18, 36], tl = cw.map((_, i) => 40 + cw.slice(0, i).reduce((a, b) => a + b, 0)), tr = tl.map((l, i) => l + cw[i]!);
+  const dig = [{ l: tl[1]!, r: tl[1]! + 18 }, { l: tl[1]! + 18, r: tr[1]! }, { l: tl[3]!, r: tl[3]! + 12 }, { l: tl[3]! + 12, r: tl[3]! + 24 }, { l: tl[3]! + 24, r: tr[3]! }];
+  const geo: C14Geo = { fig: { y: 120, h: H, fs: FS }, tok: tl.map((l, i) => ({ l, r: tr[i]! })), dig };
+  const B = c14Boxes(tokens, geo), pad = C14_PAD * FS;
+  assert.equal(B.chips.length, 4); assert.equal(B.cols.length, 5);
+  B.chips.forEach((c, i) => {
+    assert.ok(mid(c.x, tl[i]! - 1) && mid(c.w, cw[i]! + 2), 'a chip is its token\'s characters and the border on each side');
+    assert.ok(mid(c.y, 120 - pad - 1) && mid(c.h, H + 2 * pad + 2) && mid(c.pad, pad), 'a little taller than the figure\'s line, so the «$» stands inside it');
+    if (i) assert.ok(mid(c.x, B.chips[i - 1]!.x + B.chips[i - 1]!.w - 2), 'the chips touch: the border of one is the border of the next');
+  });
+  B.cols.forEach((c, j) => { assert.ok(mid(c.x, dig[j]!.l) && mid(c.y, 120), 'a column is where its digit stands, on the figure\'s line'); });
+  assert.ok(pad + 1 < 6, 'the chip is clear of the line under the figure (6px under it at every size)');
+  assert.ok(C14_PAD >= 0.05 && pad > 3, 'and over it by enough for the «$» (it stands a little taller than the digits) to be inside the chip: at least 0.05 em');
+  const bad = (f: (g: { fig: { y: number; h: number; fs: number }; tok: Array<{ l: number; r: number }>; dig: Array<{ l: number; r: number }> }) => void) => { const g = { fig: { ...geo.fig }, tok: geo.tok.map((t) => ({ ...t })), dig: geo.dig.map((d) => ({ ...d })) }; f(g); assert.throws(() => c14Boxes(tokens, g), /c14:/); };
+  bad((g) => { g.tok.pop(); }); bad((g) => { g.dig.pop(); }); bad((g) => { g.tok[1]!.l = NaN; }); bad((g) => { g.dig[2]!.r = Infinity; }); bad((g) => { g.dig[0]!.r = g.dig[0]!.l; }); bad((g) => { g.tok[0]!.r = g.tok[0]!.l - 1; });
+  bad((g) => { g.fig.h = 0; }); bad((g) => { g.fig.fs = NaN; }); bad((g) => { g.fig.y = Infinity; });
+});
+
+test('chapter 14: a pass adds one layer, a chip per token and a column and a wheel per digit and writes a style on those, on the figure and on the 30 segments (46 of the contract\'s 80), and the markup is the price block as it was: nothing added to it', () => {
+  assert.equal(C14_BUDGET, 80, 'the budget of the contract');
+  assert.equal(c14Nodes(1, 1, 1), 1 + 1 + 2 + 1 + 1, 'the layer, a chip, a column and a wheel, the figure, a segment');
+  for (const lang of ['es', 'en'] as const) {
+    const { tokens } = c14Price(lang), n = c14Nodes(tokens.length, c14Wheels(tokens).length, C14_SEGS);
+    assert.equal(n, 46, `${lang}: 4 chips, 5 wheels, 30 segments`); assert.ok(n <= C14_BUDGET);
+    assert.ok(c14Nodes(tokens.length, c14Wheels(tokens).length, C14_SEGS) < c14Nodes(tokens.length + 7, c14Wheels(tokens).length, C14_SEGS), 'a count that grows with what is added');
+  }
+  const page = readFileSync(new URL('../src/pages/v3.astro', import.meta.url), 'utf8'), a = page.indexOf('<section id="c14"'), b = page.indexOf('<section id="c15"'), sec = page.slice(a, b);
+  assert.ok(a > 0 && b > a, 'chapter 14 is where this test looks for it');
+  assert.ok(/data-fx="odometer"/.test(sec), 'the effect\'s name');
+  assert.ok(/<div class="pbig"><b data-odo>\{precioBig\}<\/b><span>\{P\.preUnidad\}<\/span><\/div>/.test(sec), 'the figure: the published price in one text node, with its unit next to it');
+  assert.ok(/<div class="segbar" aria-hidden="true" data-segbar>\{Array\.from\(\{ length: (\d+) \}, \(\) => \(<i><\/i>\)\)\}<\/div>/.exec(sec)?.[1] === String(C14_SEGS), 'the bar: one empty segment per day, 30 of them');
+  assert.ok(!/\bodv\b|\bodc\b|\bodw\b|\bods\b|fxk/.test(sec), 'the layer, the chips and the wheels are the effect\'s: the server renders none of them');
+  assert.ok(!/<circle|<canvas|<img|border-radius/.test(sec.replace(/<svg[\s\S]*?<\/svg>/g, '')), 'nothing round, no image');
+});
+
+test('chapter 14 is square and its class names are its own: no round shape in an `odv`, `odc`, `odw` or `ods` rule, the figure\'s typeface is shared with the layer (so the wheels are the figure\'s own glyphs), the custom properties are the effects\' own, and every rule of them hangs on html.fxl', () => {
+  const css = readFileSync(new URL('../src/aegis/v3.css', import.meta.url), 'utf8').replace(/\/\*(?!!)[\s\S]*?\*\//g, '');
+  const NAMES = /\.odv(?![\w-])|\.odc(?![\w-])|\.odw(?![\w-])|\.ods(?![\w-])/;
+  const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ sel: m[1]!.trim(), body: m[2]! })), mine = rules.filter((r) => r.sel.split(',').some((x) => NAMES.test(x)));
+  assert.equal(mine.length, 5, 'the figure\'s typeface shared with the layer, the layer, the chip, the column and the wheel');
+  const round = (b: string) => /border-radius\s*:\s*(?!0(?:px)?\s*(?:;|$))|clip-path\s*:\s*(?:circle|ellipse)/i.test(b);
+  const shared = mine.find((r) => r.sel === '.pbig b,html.fxl .pbig .odv'), others = mine.filter((r) => r !== shared);
+  for (const r of mine) { assert.ok(!round(r.body), `«${r.sel}» is round`); assert.ok(!/transition|animation|will-change|filter|box-shadow|text-shadow/.test(r.body), `«${r.sel}» has a transition, an animation or an effect of its own`); }
+  for (const r of others) assert.ok(r.sel.split(',').every((x) => x.trim().startsWith('html.fxl .pbig ')), `«${r.sel}» is not keyed to html.fxl inside the figure's block (it would outlive dispose())`);
+  assert.ok(shared && /font:700 clamp\((\d+)px,5vw,(\d+)px\)\/\.9 var\(--f\)/.test(shared.body) && /letter-spacing:-\.055em/.test(shared.body) && /white-space:nowrap/.test(shared.body), 'the figure and the layer are set in the same face, size, line height and tracking');
+  assert.ok(+(/clamp\((\d+)px/.exec(shared!.body)?.[1] ?? 0) >= 10, 'and the text is 10px or more at every width');
+  assert.ok(!/\.pbig b\{/.test(css), 'the figure\'s rule is the shared one: there is no second copy of its typeface to drift');
+  const layer = others.find((r) => /\.odv$/.test(r.sel)), chip = others.find((r) => /\.odc$/.test(r.sel)), col = others.find((r) => /\.odw$/.test(r.sel)), wheel = others.find((r) => /\.ods$/.test(r.sel));
+  assert.ok(layer && /position:absolute/.test(layer.body) && /width:0/.test(layer.body) && /height:0/.test(layer.body) && /pointer-events:none/.test(layer.body), 'the layer is a point at the corner of its box, and never takes a click');
+  assert.ok(chip && /position:absolute/.test(chip.body) && /box-sizing:border-box/.test(chip.body) && /width:var\(--fx-w\)/.test(chip.body) && /height:var\(--fx-h\)/.test(chip.body) && /padding-top:var\(--fx-p\)/.test(chip.body) && /border:1px solid var\(--ac\)/.test(chip.body) && /background:var\(--panel\)/.test(chip.body) && /white-space:pre/.test(chip.body), 'a chip: a square hairline box in the accent, sized by the effect, its text set on the figure\'s line, its blanks kept (a leading space is the figure\'s own)');
+  assert.ok(col && /position:absolute/.test(col.body) && /height:\.9em/.test(col.body) && /clip-path:inset\(0 -\.3em\)/.test(col.body), 'a column is one row of the figure\'s line height, clipped above and below and not at the sides (the tracking is negative)');
+  assert.ok(wheel && /display:block/.test(wheel.body) && !/white-space/.test(wheel.body), 'a wheel is ONE row, a digit on its own: it needs no preserved line breaks (there is no strip of digits to break into rows)');
+  assert.ok(!mine.some((r) => /(?:^|[;{\s])content\s*:/.test(r.body)), 'no generated content: a chip\'s text is text in the chip, never typed in the stylesheet');
+  const vars = [...new Set(mine.flatMap((r) => [...r.body.matchAll(/var\((--[\w-]+)\)/g)].map((m) => m[1]!)))].sort();
+  assert.deepEqual(vars, ['--ac', '--f', '--fx-h', '--fx-p', '--fx-w', '--panel'], 'the page\'s own variables and the effect\'s --fx- ones, nothing else');
+  const stray = (t: string) => [...t.matchAll(/([^{}]+)\{([^{}]*)\}/g)].flatMap((m) => m[1]!.split(',').map((x) => x.trim())).filter((x) => NAMES.test(x));
+  assert.deepEqual(stray(css), ['html.fxl .pbig .odv', 'html.fxl .pbig .odv', 'html.fxl .pbig .odc', 'html.fxl .pbig .odw', 'html.fxl .pbig .ods'], 'no other rule of the stylesheet styles an `odv`, `odc`, `odw` or `ods`');
+  const page = readFileSync(new URL('../src/pages/v3.astro', import.meta.url), 'utf8');
+  assert.ok(!/class="[^"]*\b(?:odv|odc|odw|ods)\b/.test(page), 'and the page uses none of the classes: they are the effect\'s');
+  // the rule can fail
+  assert.deepEqual(stray('.odc{padding:8px}.x .odv{y:1}.foo{z:1}.odcx{a:1}'), ['.odc', '.x .odv']);
+  assert.ok(round('border-radius:50%;width:1px') && round('clip-path:circle(50%)') && !round('clip-path:inset(0 -.3em)'));
+});
+
+test('chapter 14: the effect writes only transform and opacity, adds no element but its layer, chips, columns and wheels, writes no copy but a token\'s own text and the digits it counts, plays once on c14-data\'s clocks, gives the price back whole when anything fails, and is registered', () => {
+  const src = readFileSync(new URL('../src/aegis/fx/c14.ts', import.meta.url), 'utf8'), code = src.replace(/\/\/.*$/gm, '');
+  assert.ok(!/\.style\.(?!opacity\b|transform\b)\w+\s*=(?!=)/.test(code), 'it sets only style.opacity and style.transform');
+  assert.deepEqual([...code.matchAll(/setProperty\('([^']+)'/g)].map((m) => m[1]), ['--fx-w', '--fx-h', '--fx-p'], 'the only custom properties are the effects\' own, a chip\'s box');
+  assert.deepEqual([...new Set([...code.matchAll(/style\.removeProperty\('([^']+)'\)/g)].map((m) => m[1]))], ['opacity'], 'what it gives back is opacity');
+  assert.deepEqual([...code.matchAll(/\.textContent\s*=\s*([^;]+);/g)].map((m) => m[1]), ['t.text', 'String(face(w.digit))'], 'the only text it writes: a token piece read from the page\'s own token file (as it is, a leading space stays a space: no «·» in its place, whose advance is not the space\'s in every browser), and a wheel\'s ONE digit, its own (counted, never typed)');
+  assert.ok(!/join\('\\n'\)|\\n|TURN|travel|strip\(/.test(code) && /const y = \(belowAt\(P!, k, x\) \* rowH\)\.toFixed\(2\);/.test(code), 'a wheel is one row that slides up from below its window by c14-data\'s below(), by a whole row (the window\'s height) and from under it: no strip of digits, no row to roll past, no figure but the price');
+  assert.ok(/piecesOf\(tokensFromPage\(\), text\)/.test(code) && /tokensOf\(pieces\)/.test(code) && /wheelsOf\(tokens\)/.test(code), 'the chips are the real pieces of the figure\'s own text');
+  assert.deepEqual([...code.matchAll(/\bel\('([a-z]+)', ([^)]+)\)/g)].map((m) => `${m[1]}.${m[2]}`), ["div.'fxk odv'", "div.'fxk odc'", "div.'fxk odw'", "div.'fxk ods'"], 'the elements it adds: its layer, its chips, its columns and its wheels, all marked fxk');
+  assert.ok(/layer\.setAttribute\('aria-hidden', 'true'\)/.test(code) && /pbig\.appendChild\(layer\)/.test(code), 'the layer is a decoration (aria-hidden) inside the figure\'s block');
+  assert.ok(!/innerHTML|innerText|insertAdjacent|\.prepend\(|cloneNode|replaceWith|createElement|createTextNode/.test(code), 'it moves no node and writes no markup');
+  assert.ok(!/canvas|drawImage|fetch\(|\.webp|\.gif|\.apng/i.test(code), 'no footage, no sprite, no animated image');
+  assert.ok(/import \{[^}]*\bplan\b[^}]*\} from '\.\.\/c14-data'/.test(src) && /duration: P!\.end\b/.test(code) && /x: P!\.end\b/.test(code), 'it plays for the end of c14-data\'s plan');
+  assert.ok(/nodeCount\(tokens\.length, wheels\.length, segs\.length\) <= NODE_BUDGET/.test(code) && /segs\.length === SEGS/.test(code), 'it refuses more nodes than the contract allows, and a bar that is not 30 segments');
+  assert.ok(/once\(pbig, undo/.test(code) && /REG\['c14:roll'\]/.test(code) && /margin:/.test(code), 'a play-once effect that asks once(), and shows itself to the review hooks');
+  assert.ok(/CHAPTERS[^\n]*\['c14', initC14\]/.test(readFileSync(new URL('../src/aegis/fx/index.ts', import.meta.url), 'utf8')), 'the effect is registered in the list of chapters');
+  assert.ok(/arm: \(\) => \{ pbig\.dataset\.fxS = 'arm'; fig\.style\.opacity = '0'; segs\.forEach\(\(s\) => \{ s\.style\.opacity = '0'; \}\); \}/.test(code), 'waiting, only the figure and the 30 segments are transparent');
+  assert.ok(/catch \(e\) \{ off\(e\); \}/.test(code) && /const off = \(e: unknown\) => \{ console\.warn\([^;]*; done\(\); \}/.test(code), 'a failure is a warning and the price given back whole');
+  assert.ok(/onWidth\(\(\) => \{ if \(o\.state\(\) === 'run'\) o\.clear\(\); \}\)/.test(code), 'a width change gives back a roll that is playing');
+  assert.ok(/layer && layer\.remove\(\)/.test(code) && /onComplete: done/.test(code), 'the layer goes in the very task it is done');
+  assert.ok(/createRange\(\)/.test(code) && /getClientRects\(\)/.test(code) && /fig\.childNodes\.length === 1/.test(code), 'each character\'s place is where the figure draws it (a Range over its one text node)');
+  assert.ok(/tok: tokens\.map\(\(t, i\) => \(\{ l: rect\(t\.start, t\.start \+ 1\)\.l, r: i \+ 1 < tokens\.length \? rect\(t\.end, t\.end \+ 1\)\.l : rect\(t\.end - 1, t\.end\)\.r \}\)\)/.test(code) && !/\bshow\(/.test(code), 'a chip ends where the next token\'s first character begins (a browser\'s rect of a glyph can be a pixel wider than its advance, so the chips would overlap by more than their borders), and the last one at the right of its last character');
+  assert.ok(/fig\.style\.removeProperty\('opacity'\); segs\.forEach\(\(s\) => s\.style\.removeProperty\('opacity'\)\)/.test(code), 'and the figure and the segments are given back with no inline style');
 });

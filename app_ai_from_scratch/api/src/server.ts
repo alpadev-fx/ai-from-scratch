@@ -33,6 +33,7 @@ import {
   leagueDay,
 } from './chat-brake.ts';
 import { clientIp } from './brake.ts';
+import { isInternalPath, privatePeerChecker } from './internal-edge.ts';
 import { authThrottle } from './auth-throttle.ts';
 import { entitlementMailKind, mailer } from './mail.ts';
 import { mailLang, renderEmailHtml } from '../../design/saas-emails/templates.ts';
@@ -136,12 +137,20 @@ app.addHook('onRequest', async (req, reply) => {
   }
 });
 
+// Internal routes are shut unless the TCP peer is on the private network (LED-3059).
+// The old guard keyed on `cf-ray` and so let a direct hit on the public railway.app
+// hostname straight through. Policy and the reasons for each choice: internal-edge.ts.
+const privatePeer = privatePeerChecker();
 app.addHook('onRequest', async (req, reply) => {
-  if (!req.headers['cf-ray']) return;
-  const path = req.url.split('?')[0]!.replace(/^\/api\/v\d+\//, '/api/');
-  if (/^\/api\/(interno|internal)(\/|$)/.test(path)) {
-    return reply.code(404).send({ error: 'not_found' });
-  }
+  if (!isInternalPath(req.url)) return;
+  // cf-ray is a DENY signal only: a client that adds it just gets itself refused,
+  // and it still covers traffic web proxies in (peer = web, which is private).
+  // It is never what lets a request in.
+  const viaEdge = Boolean(req.headers['cf-ray']);
+  const peer = req.socket.remoteAddress;
+  if (!viaEdge && privatePeer(peer)) return;
+  req.log.warn({ peer, viaEdge, path: req.url.split('?')[0] }, 'internal route refused');
+  return reply.code(404).send({ error: 'not_found' });
 });
 
 // ---------- auth boundary ----------
